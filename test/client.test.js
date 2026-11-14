@@ -159,3 +159,30 @@ test('the connected home offers recent ideas before searching', () => {
     React.useState = original
   }
 })
+
+test('an unresponsive folder picker releases the panel and ignores a late selection', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  const { ctx, registrations } = mount()
+  let resolvePicker
+  ctx.remote = { directoryPicker: { pick: () => new Promise(resolve => { resolvePicker = resolve }) } }
+  ctx.inject = (_services, callback) => callback(ctx)
+  const changes = []
+  const original = React.useState
+  let index = 0
+  React.useState = value => [index++ === 1 ? false : value, next => changes.push(next)]
+  t.after(() => { React.useState = original })
+
+  loadModule().factory(requireStub).apply(ctx)
+  const page = registrations.find(item => item.name === 'main').component
+  const connect = page().children[1].children[0].children.find(item => item?.props?.onPick)
+  const pending = connect.props.onPick()
+  t.mock.timers.tick(60000)
+  await Promise.resolve()
+  await Promise.resolve()
+  assert.ok(changes.some(value => value instanceof Error && value.message.includes('手动输入路径')))
+  assert.equal(changes.at(-1), '')
+
+  resolvePicker({ ok: true, value: '/late-selection' })
+  await pending
+  assert.ok(!changes.includes('connect'))
+})
