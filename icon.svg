@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36" role="img" aria-label="Grove">
+  <g fill="#2f7d5b">
+    <circle cx="18" cy="14" r="6.4"/>
+    <circle cx="12.9" cy="17.4" r="4.7"/>
+    <circle cx="23.1" cy="17.4" r="4.7"/>
+  </g>
+  <path d="M16.9 20.2h2.2v8.1a1.1 1.1 0 0 1-2.2 0z" fill="#8a6a4a"/>
+</svg>
