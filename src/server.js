@@ -6,6 +6,7 @@ import { captureInspiration, findInspirations, readInspiration } from './modules
 import { startResearch, listResearch, saveResearch } from './modules/research.js'
 import { importSource, saveEvidence, openSource } from './modules/evidence.js'
 import { listReports, confirmReport, readReport } from './modules/reports.js'
+import { runResearchModel } from './modules/model-research.js'
 import { Vault } from './vault.js'
 
 export const routes = {
@@ -13,6 +14,8 @@ export const routes = {
   config: '/api/grove/config',
   connection: '/api/grove/connection',
   capture: '/api/grove/capture',
+  model: '/api/grove/model',
+  findings: '/api/grove/findings',
   reports: '/api/grove/reports',
   parsers: '/api/grove/parsers',
   sources: '/api/grove/sources',
@@ -200,6 +203,60 @@ export function registerRoutes(ctx, options) {
         }
         const query = typeof input?.query === 'string' ? input.query.trim() : ''
         return json({ notes: (await findInspirations(vault, query)).slice(0, 50) })
+      } catch (error) {
+        return failure(error)
+      }
+    })
+    route(routes.model, ['GET', 'POST'], async request => {
+      if (request.method === 'GET') return json({ enabled: options.modelConfig?.enabled === true, endpoint: options.modelConfig?.endpoint, name: options.modelConfig?.name })
+      try {
+        const input = await readJson(request)
+        const model = input?.enabled === false ? { enabled: false } :
+          { enabled: true, endpoint: input?.endpoint, name: input?.name }
+        if (model.enabled) {
+          if (typeof model.endpoint !== 'string' || typeof model.name !== 'string' || !model.name.trim() ||
+            model.name.length > 200 || model.endpoint.length > 2048) throw coded('invalid-body', 'Enter the model endpoint and name')
+          const url = new URL(model.endpoint)
+          if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) {
+            throw coded('invalid-body', 'Use an HTTPS endpoint without embedded credentials')
+          }
+          if (input.test === true) {
+            const provider = options.model?.(model)
+            if (!provider) throw coded('invalid-body', 'Set GROVE_MODEL_KEY for the host')
+            const reply = await provider.investigate({ question: 'Confirm the connection. Return JSON.', materials: [], history: [] })
+            if (typeof reply?.text !== 'string' || !Array.isArray(reply.citations) || reply.citations.length) {
+              throw coded('invalid-body', 'The model did not return the expected format')
+            }
+            return json({ ok: true })
+          }
+        }
+        const editor = ctx.get?.('configEditor')
+        const entry = ctx.fiber?.entry
+        if (!entry || typeof editor?.edit !== 'function') throw coded('save-unavailable', 'This profile cannot save model settings')
+        setTimeout(() => {
+          editor.edit(entry, current => ({ ...current, model }))
+            .catch(error => console.warn(`[grove] could not save model settings: ${error.message}`))
+        }, delay)
+        return json({ pending: true })
+      } catch (error) {
+        return failure(error)
+      }
+    })
+    route(routes.findings, ['POST'], async request => {
+      try {
+        const { path } = options.current()
+        if (!path) throw coded('not-configured', 'Grove has no vault yet')
+        const store = new Vault(path)
+        const input = await readJson(request)
+        const findings = (await store.list()).filter(({ meta }) => meta.type === 'finding' &&
+          meta.links?.some(link => link.kind === 'related' && link.id === input?.id))
+        if (input?.action === 'list') return json({ findings })
+        const question = typeof input?.question === 'string' ? input.question.trim() : ''
+        if (!question || question.length > 1000 || !Array.isArray(input.materials) || input.materials.length > 20 ||
+          !Number.isSafeInteger(input.version) || input.version < 1) throw coded('invalid-body', 'Enter a research question and select evidence')
+        const provider = options.modelConfig?.enabled ? options.model?.(options.modelConfig) : null
+        if (!provider) throw coded('not-configured', 'Configure and enable a model first')
+        return json(await runResearchModel(store, provider, { ...input, question, history: input.includeHistory === true ? findings.map(({ meta, body }) => ({ question: meta.title, text: body })).slice(-8) : [] }))
       } catch (error) {
         return failure(error)
       }

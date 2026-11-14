@@ -22,7 +22,7 @@ async function draftFile(vault, id, write = false) {
 
 export async function propose(vault, input) {
   const { type, title, body, origin } = input
-  if (!types.includes(type) || ['research', 'evidence', 'source', 'report'].includes(type)) throw new Error('Unsupported proposal type')
+  if (!types.includes(type) || ['research', 'evidence', 'source', 'report', 'finding'].includes(type)) throw new Error('Unsupported proposal type')
   if (typeof body !== 'string' || !body.trim() || Buffer.byteLength(body) > 128 * 1024) throw new Error('Invalid proposal body')
   if (title && (typeof title !== 'string' || title.length > 300)) throw new Error('Invalid proposal title')
   if (origin && (typeof origin !== 'string' || origin.length > 2000)) throw new Error('Invalid proposal origin')

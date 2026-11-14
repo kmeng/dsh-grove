@@ -3,6 +3,7 @@ import { test } from 'node:test'
 import { mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { runResearchModel } from '../src/modules/model-research.js'
 import { Vault } from '../src/vault.js'
 import { documentParsers } from '../src/adapters/parsers/documents.js'
 import { importSource, saveEvidence, openSource } from '../src/modules/evidence.js'
@@ -24,6 +25,13 @@ test('an excerpt keeps its original document version after another import', asyn
   }
   const old = await importMarkdown('Context\n\nOld passage')
   const excerpt = await saveEvidence(store, old.meta, 1)
+  const investigation = { id: research.meta.id, version: 1, question: 'Why shade?', materials: [excerpt.meta], history: [] }
+  await assert.rejects(runResearchModel(store, { investigate: async () => ({ text: 'Claim', citations: ['invented'] }) }, investigation), /unapproved citations/)
+  const finding = await runResearchModel(store, { investigate: async ({ materials }) => {
+    assert.deepEqual(materials, [{ id: excerpt.meta.id, version: 1, text: 'Old passage' }])
+    return { text: 'Observed shade', citations: [excerpt.meta.id] }
+  } }, investigation)
+  assert.equal(finding.meta.links[1].id, excerpt.meta.id)
   const report = await confirmReport(store, { research: research.meta.id, body: 'Finding', evidence: [excerpt.meta] })
   await confirmReport(store, { research: research.meta.id, id: report.meta.id, version: 1, body: 'Revised', evidence: [] })
   const historical = await readReport(store, report.meta.id, 1)

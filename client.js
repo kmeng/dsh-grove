@@ -22,6 +22,8 @@ window.__ModuleLoader__.load({
     var CONNECTION = '/api/grove/connection'
     var CONFIG = '/api/grove/config'
     var CAPTURE = '/api/grove/capture'
+    var MODEL = '/api/grove/model'
+    var FINDINGS = '/api/grove/findings'
     var PARSERS = '/api/grove/parsers'
     var REPORTS = '/api/grove/reports'
     var SOURCES = '/api/grove/sources'
@@ -29,6 +31,16 @@ window.__ModuleLoader__.load({
     var INSPIRATIONS = '/api/grove/inspirations'
 
     var ZH = {
+      'model.title': '研究模型',
+      'model.enabled': '启用 AI 深挖',
+      'model.endpoint': 'HTTPS 模型接口',
+      'model.name': '模型名称',
+      'model.test': '测试连接',
+      'model.apply': '应用模型设置',
+      'model.tested': '连接通过。',
+      'model.ask': '请 AI 深挖',
+      'model.question': '想往哪儿深挖？',
+      'model.scope': '仅发送勾选的摘录和本研究先前的发现。',
       'parsers.title': '资料解析设置',
       'parsers.pdf': '启用文本 PDF 解析',
       'parsers.apply': '应用设置',
@@ -115,6 +127,16 @@ window.__ModuleLoader__.load({
     }
 
     var EN = {
+      'model.title': 'Research model',
+      'model.enabled': 'Enable AI research',
+      'model.endpoint': 'HTTPS model endpoint',
+      'model.name': 'Model name',
+      'model.test': 'Test connection',
+      'model.apply': 'Apply model settings',
+      'model.tested': 'Connection verified.',
+      'model.ask': 'Ask AI to investigate',
+      'model.question': 'What should we investigate?',
+      'model.scope': 'Only selected excerpts and earlier findings in this study are sent.',
       'parsers.title': 'Parser settings',
       'parsers.pdf': 'Enable text PDF parsing',
       'parsers.apply': 'Apply settings',
@@ -527,6 +549,106 @@ window.__ModuleLoader__.load({
       )
     }
 
+    function ModelSettings() {
+      var [config, setConfig] = useState(null)
+      var [busy, setBusy] = useState(false)
+      var [message, setMessage] = useState('')
+      var [error, setError] = useState(null)
+
+      function change(key, value) {
+        setConfig(function (current) { return Object.assign({}, current, { [key]: value }) })
+        setMessage('')
+      }
+
+      async function submit(event) {
+        event.preventDefault()
+        var test = event.nativeEvent.submitter?.value === 'test'
+        setBusy(true)
+        setError(null)
+        setMessage('')
+        try {
+          await api(MODEL, Object.assign({}, config, { test: test }))
+          if (test) { setMessage(T('model.tested')); return }
+          for (var attempt = 0; attempt < 12; attempt++) {
+            await new Promise(function (resolve) { setTimeout(resolve, 400) })
+            var current = await api(MODEL).catch(function () { return null })
+            if (current && current.enabled === config.enabled &&
+              (!current.enabled || (current.name === config.name && current.endpoint === config.endpoint))) {
+              setMessage(T('research.saved'))
+              return
+            }
+          }
+          throw new Error(T('parsers.failed'))
+        } catch (problem) { setError(problem) }
+        finally { setBusy(false) }
+      }
+
+      return h('details', { className: 'gr-card', onToggle: function (event) {
+        if (event.currentTarget.open && !config) api(MODEL).then(setConfig, setError)
+      } },
+      h('summary', null, T('model.title')),
+      error ? h('p', { role: 'alert' }, messageOf(error)) : null,
+      config ? h('form', { onSubmit: submit },
+        h('label', null, h('input', { type: 'checkbox', checked: config.enabled, disabled: busy,
+          onChange: function (event) { change('enabled', event.target.checked) } }), T('model.enabled')),
+        config.enabled ? h(React.Fragment, null,
+          h('label', null, T('model.endpoint'), h('input', { type: 'url', className: 'gr-input', value: config.endpoint || '',
+            required: true, disabled: busy, onChange: function (event) { change('endpoint', event.target.value) } })),
+          h('label', null, T('model.name'), h('input', { className: 'gr-input', value: config.name || '',
+            required: true, disabled: busy, onChange: function (event) { change('name', event.target.value) } })),
+          h('p', { className: 'gr-meta' }, 'GROVE_MODEL_KEY')) : null,
+        h('div', { className: 'gr-row' },
+          config.enabled ? h('button', { className: 'gr-btn', value: 'test', disabled: busy }, T('model.test')) : null,
+          h('button', { className: 'gr-btn', value: 'apply', disabled: busy }, T('model.apply'))),
+        h('p', { role: 'status' }, message)) : null)
+    }
+
+    function ResearchFindings(props) {
+      var [question, setQuestion] = useState(props.title)
+      var [findings, setFindings] = useState([])
+      var [evidence, setEvidence] = useState([])
+      var [selected, setSelected] = useState([])
+      var [busy, setBusy] = useState(false)
+      var [error, setError] = useState(null)
+
+      function load(event) {
+        if (!event.currentTarget.open) return
+        api(FINDINGS, { action: 'list', id: props.id }).then(function (result) { setFindings(result.findings) }, setError)
+        api(REPORTS, { action: 'list', research: props.id }).then(function (result) { setEvidence(result.evidence) }, setError)
+      }
+
+      async function ask(event) {
+        event.preventDefault()
+        setBusy(true)
+        setError(null)
+        try {
+          var finding = await api(FINDINGS, { id: props.id, version: props.version, question: question,
+            includeHistory: true, materials: evidence.filter(function (item) { return selected.includes(item.id) }).map(function (item) {
+              return { id: item.id, version: item.version }
+            }) })
+          setFindings(function (items) { return items.concat(finding) })
+          setQuestion('')
+        } catch (problem) { setError(problem) }
+        finally { setBusy(false) }
+      }
+
+      return h('details', { className: 'gr-card', onToggle: load },
+        h('summary', null, T('model.ask')),
+        error ? h('p', { role: 'alert' }, messageOf(error)) : null,
+        findings.map(function (item) {
+          return h('article', { key: item.meta.id }, h('h3', null, item.meta.title), h('pre', { className: 'gr-code' }, item.body))
+        }),
+        h('form', { onSubmit: ask },
+          h('label', null, T('model.question'), h('textarea', { className: 'gr-textarea', value: question,
+            required: true, maxLength: 1000, onChange: function (event) { setQuestion(event.target.value) } })),
+          h('p', { className: 'gr-meta' }, T('model.scope')),
+          evidence.map(function (item) {
+            return h('label', { key: item.id }, h('input', { type: 'checkbox', checked: selected.includes(item.id),
+              onChange: function (event) { setSelected(event.target.checked ? selected.concat(item.id) : selected.filter(function (id) { return id !== item.id })) } }), item.title)
+          }),
+          h('button', { className: 'gr-btn', disabled: busy }, T('model.ask'))))
+    }
+
     function ParserSettings() {
       var [enabled, setEnabled] = useState(null)
       var [pending, setPending] = useState(false)
@@ -815,7 +937,9 @@ window.__ModuleLoader__.load({
           h('div', { className: 'gr-row' },
             h('button', { className: 'gr-btn', disabled: busy }, T('research.save')),
             h('span', { role: 'status' }, saved ? T('research.saved') : ''))),
+        h(ModelSettings),
         h(ParserSettings),
+        selected ? h(ResearchFindings, { key: 'findings:' + selected.meta.id, id: selected.meta.id, title: selected.meta.title, version: selected.meta.version }) : null,
         selected ? h(ResearchSources, { key: selected.meta.id, id: selected.meta.id }) : null,
         selected ? h(ResearchReports, { key: 'report:' + selected.meta.id, id: selected.meta.id }) : null,
         studies.map(function (note) {
