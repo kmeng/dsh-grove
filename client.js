@@ -33,6 +33,8 @@ window.__ModuleLoader__.load({
     var INSPIRATIONS = '/api/grove/inspirations'
 
     var ZH = {
+      's0.pickerUnavailable': '这个宿主暂时无法打开文件夹选择器。可以手动输入路径。',
+      's0.pickerFailed': '没能打开文件夹选择器。{message}',
       'asset.knowledge': '知识库',
       'asset.works': '作品',
       'asset.title': '标题',
@@ -98,24 +100,19 @@ window.__ModuleLoader__.load({
       'idea.version': '历史版本',
       panel: 'Grove',
       menu: '知林',
-      subtitle: '把探索留在自己的 vault 里。',
+      subtitle: '记灵感，做研究',
       'status.connected': '已连接',
       'status.disconnected': '未连接',
       'status.readonly': '只读',
       'status.checking': '正在读取…',
-      's0.title': '先连接你的 Obsidian vault',
-      's0.body': 'Grove 只读写 vault 里的 Grove/ 文件夹，不读其他笔记。连接后，Harness 里的对话就能落成可回看、可修订的 Markdown。',
-      's0.step1': '连接 vault',
-      's0.step2': '写下第一条灵感',
-      's0.step3': '回到会话继续探索',
+      's0.title': '连接 Obsidian 笔记库',
+      's0.body': '选一下你在 Obsidian 里打开的笔记库文件夹，连好就能记下第一个灵感。',
       's0.pick': '选择文件夹',
       's0.manual': '手动输入路径',
       's0.placeholder': '/Users/你/Obsidian Vault',
       's0.connect': '连接',
       's0.cancel': '取消',
-      's0.hint': '路径会保存到当前 profile 的插件配置；之后可在插件页里修改。',
       's0.stale': '原来的 vault 已不可用：{path}。请重新选择，或把它移回原位。',
-      's0.noVault': '这个文件夹里没有 .obsidian。如果它不是 vault 根目录，仍可继续连接。',
       's1.change': '更换 vault',
       'type.inspiration': '灵感',
       'type.question': '问题',
@@ -127,9 +124,7 @@ window.__ModuleLoader__.load({
       'type.output': '成果',
       'type.exploration': '探索',
       'type.research': '研究',
-      'foot.privacy': 'Grove 只读写 vault 的 Grove/ 文件夹，不读其他笔记。',
-      'foot.confirm': 'AI 起草的草稿要你在终端确认后才落盘。',
-      'foot.data': '数据是你的 Markdown，随时可以备份或迁移。',
+      'foot.privacy': '灵感和研究保存在笔记库的 Grove/ 文件夹里。',
       'err.invalid-path': '路径无效，请填写绝对路径。',
       'err.not-directory': '这个路径不是文件夹。',
       'err.symlink': '这个路径是符号链接，请选择真实目录。',
@@ -146,6 +141,8 @@ window.__ModuleLoader__.load({
     }
 
     var EN = {
+      's0.pickerUnavailable': 'This host cannot open a folder picker. You can enter the path manually.',
+      's0.pickerFailed': 'Could not open the folder picker. {message}',
       'asset.knowledge': 'Knowledge',
       'asset.works': 'Works',
       'asset.title': 'Title',
@@ -211,24 +208,19 @@ window.__ModuleLoader__.load({
       'idea.version': 'History',
       panel: 'Grove',
       menu: 'Grove',
-      subtitle: 'Keep what you explore in your own vault.',
+      subtitle: 'Capture ideas and do research',
       'status.connected': 'Connected',
       'status.disconnected': 'Not connected',
       'status.readonly': 'Read only',
       'status.checking': 'Reading…',
       's0.title': 'Connect your Obsidian vault',
-      's0.body': 'Grove reads and writes only the Grove/ folder inside your vault, never other notes. Once connected, conversations in Harness can become Markdown you can revisit and revise.',
-      's0.step1': 'Connect a vault',
-      's0.step2': 'Capture a first idea',
-      's0.step3': 'Go back to the conversation',
+      's0.body': 'Choose the folder you open as a vault in Obsidian. Once it’s connected, you can jot down your first idea.',
       's0.pick': 'Choose folder',
       's0.manual': 'Enter a path',
       's0.placeholder': '/Users/you/Obsidian Vault',
       's0.connect': 'Connect',
       's0.cancel': 'Cancel',
-      's0.hint': 'The path is saved in this profile’s plugin configuration and can be changed later from the Plugins page.',
       's0.stale': 'The previous vault is no longer usable: {path}. Choose it again, or move it back.',
-      's0.noVault': 'This folder has no .obsidian. You can still connect if it is a vault root.',
       's1.change': 'Change vault',
       'type.inspiration': 'Inspiration',
       'type.question': 'Question',
@@ -240,9 +232,7 @@ window.__ModuleLoader__.load({
       'type.output': 'Output',
       'type.exploration': 'Exploration',
       'type.research': 'Research',
-      'foot.privacy': 'Grove reads and writes only the vault’s Grove/ folder, never other notes.',
-      'foot.confirm': 'Content drafted by AI is saved only after you confirm it in the terminal.',
-      'foot.data': 'Your data is Markdown you can back up or move at any time.',
+      'foot.privacy': 'Your ideas and research are saved in the Grove/ folder inside your vault.',
       'err.invalid-path': 'That path is not valid. Use an absolute path.',
       'err.not-directory': 'That path is not a folder.',
       'err.symlink': 'That path is a symlink. Choose a real directory.',
@@ -259,7 +249,7 @@ window.__ModuleLoader__.load({
     }
 
     var boundT = null
-    var services = { workspace: null }
+    var services = { picker: null }
 
     function T(key, vars) {
       if (boundT) {
@@ -383,25 +373,26 @@ window.__ModuleLoader__.load({
         })
       }
 
-      function pickFolder() {
-        var workspace = services.workspace
-        if (!workspace || typeof workspace.pickDirectory !== 'function') {
-          setManual(true)
+      async function pickFolder() {
+        if (busy) return
+        var picker = services.picker
+        if (!picker) {
+          setError(new Error(T('s0.pickerUnavailable')))
           return
         }
+        setError(null)
         setBusy('pick')
-        Promise.resolve(workspace.pickDirectory()).then(function (path) {
-          if (!path) {
-            if (mounted.current) setBusy('')
-            return
-          }
+        var path
+        try {
+          var result = await picker.pick()
+          if (!result.ok) throw new Error(result.error.message)
+          path = result.value
+        } catch (problem) {
+          if (mounted.current) setError(new Error(T('s0.pickerFailed', { message: messageOf(problem) })))
+        } finally {
           if (mounted.current) setBusy('')
-          connect(path)
-        }, function () {
-          if (!mounted.current) return
-          setBusy('')
-          setManual(true)
-        })
+        }
+        if (mounted.current && path) return connect(path)
       }
 
       function submitManual() {
@@ -521,11 +512,6 @@ window.__ModuleLoader__.load({
         props.stale ? h('div', { className: 'gr-err' }, T('s0.stale', { path: props.stale })) : null,
         h('div', { className: 'gr-h2' }, T('s0.title')),
         h('div', { className: 'gr-body' }, T('s0.body')),
-        h('div', { className: 'gr-steps' },
-          h('div', { className: 'gr-step' }, h('b', null, '1'), T('s0.step1')),
-          h('div', { className: 'gr-step' }, h('b', null, '2'), T('s0.step2')),
-          h('div', { className: 'gr-step' }, h('b', null, '3'), T('s0.step3')),
-        ),
         props.manual
           ? h('div', { className: 'gr-row' },
             h('input', {
@@ -544,7 +530,6 @@ window.__ModuleLoader__.load({
               ? h('button', { className: 'gr-btn gr-btn-ghost gr-btn-sm', disabled: props.busy !== '', onClick: props.onCancel }, T('s0.cancel'))
               : null,
           ),
-        h('div', { className: 'gr-meta' }, T('s0.hint')),
       )
     }
 
@@ -1146,8 +1131,6 @@ window.__ModuleLoader__.load({
     function Footer() {
       return h('div', { className: 'gr-foot' },
         h('div', null, T('foot.privacy')),
-        h('div', null, T('foot.confirm')),
-        h('div', null, T('foot.data')),
       )
     }
 
@@ -1199,9 +1182,6 @@ window.__ModuleLoader__.load({
       '.gr-err{color:var(--dsw-alias-state-error-primary);font-size:12px;white-space:pre-wrap}',
       '.gr-ok{color:var(--dsw-alias-state-success-primary)}',
       '.gr-path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;background:var(--dsw-alias-bg-layer-2);border:1px solid var(--dsw-alias-border-l1);border-radius:6px;padding:2px 6px;word-break:break-all}',
-      '.gr-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}',
-      '.gr-step{border:1px solid var(--dsw-alias-border-l1);border-radius:10px;padding:12px;font-size:12px;color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-bg-base)}',
-      '.gr-step b{display:block;color:var(--dsw-alias-label-primary);font-size:12px;margin-bottom:2px}',
       '.gr-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:10px}',
       '.gr-stat{border:1px solid var(--dsw-alias-border-l1);border-radius:10px;padding:12px;background:var(--dsw-alias-bg-base);min-width:0}',
       '.gr-stat b{display:block;font-size:20px;font-weight:600;line-height:1.2}',
@@ -1213,7 +1193,7 @@ window.__ModuleLoader__.load({
       '.gr-itemtitle{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
       '.gr-code{white-space:pre-wrap;word-break:break-word;background:var(--dsw-alias-bg-layer-2);border:1px solid var(--dsw-alias-border-l1);border-radius:8px;padding:10px 12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;line-height:1.6;margin:0}',
       '.gr-foot{border-top:1px solid var(--dsw-alias-border-l1);padding-top:12px;color:var(--dsw-alias-label-secondary);font-size:12px;display:flex;flex-direction:column;gap:4px}',
-      '@media (max-width:560px){.gr-inner{padding:18px 14px 32px}.gr-head{flex-wrap:wrap}.gr-steps{grid-template-columns:1fr}.gr-stats{grid-template-columns:repeat(2,1fr)}.gr-stat:last-child:nth-child(odd){grid-column:1/-1}.gr-btn{align-self:stretch;justify-content:center}}',
+      '@media (max-width:560px){.gr-inner{padding:18px 14px 32px}.gr-head{flex-wrap:wrap}.gr-stats{grid-template-columns:repeat(2,1fr)}.gr-stat:last-child:nth-child(odd){grid-column:1/-1}.gr-btn{align-self:stretch;justify-content:center}}',
       '@media (prefers-reduced-motion:reduce){.gr-btn{transition:none}}',
     ].join('\n')
 
@@ -1230,10 +1210,16 @@ window.__ModuleLoader__.load({
           console.warn('[grove] locale registration failed', error)
         }
       }
-      try {
-        services.workspace = ctx.get('uiWorkspace')
-      } catch (error) {
-        services.workspace = null
+      if (typeof ctx.inject === 'function') {
+        ctx.inject(['remote', 'remote.directoryPicker'], function (scoped) {
+          var picker = scoped.remote.directoryPicker
+          scoped.effect(function () {
+            services.picker = picker
+            return function () {
+              if (services.picker === picker) services.picker = null
+            }
+          }, 'grove: directory picker')
+        })
       }
       var slots = ctx.slots
       if (!slots || typeof slots.inject !== 'function' || typeof slots.register !== 'function') {
