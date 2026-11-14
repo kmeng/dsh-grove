@@ -59,7 +59,6 @@ window.__ModuleLoader__.load({
 
       's0.pickerUnavailable': '这个宿主暂时无法打开文件夹选择器。可以手动输入路径。',
       's0.pickerFailed': '没能打开文件夹选择器。{message}',
-      's0.pickerTimeout': '文件夹选择器还没有回应。可以重试，或手动输入路径。',
       'asset.knowledge': '知识库',
       'asset.works': '作品',
       'asset.title': '标题',
@@ -191,7 +190,6 @@ window.__ModuleLoader__.load({
       'research.start': 'Start research',
       's0.pickerUnavailable': 'This host cannot open a folder picker. You can enter the path manually.',
       's0.pickerFailed': 'Could not open the folder picker. {message}',
-      's0.pickerTimeout': 'The folder picker has not responded. Try again or enter the path manually.',
       'asset.knowledge': 'Knowledge',
       'asset.works': 'Works',
       'asset.title': 'Title',
@@ -461,22 +459,13 @@ window.__ModuleLoader__.load({
         setError(null)
         setBusy('pick')
         var path
-        var timer
         try {
-          var timeout = new Promise(function (resolve) {
-            timer = setTimeout(function () { resolve(null) }, 60000)
-          })
-          var result = await Promise.race([picker.pick(), timeout])
-          if (result === null) {
-            if (mounted.current) setError(new Error(T('s0.pickerTimeout')))
-            return
-          }
+          var result = await picker.pick()
           if (!result.ok) throw new Error(result.error.message)
           path = result.value
         } catch (problem) {
           if (mounted.current) setError(new Error(T('s0.pickerFailed', { message: messageOf(problem) })))
         } finally {
-          clearTimeout(timer)
           if (mounted.current) setBusy('')
         }
         if (mounted.current && path) return connect(path)
