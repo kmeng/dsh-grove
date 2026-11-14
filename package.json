@@ -27,13 +27,14 @@
     "docs/preview.svg"
   ],
   "engines": {
-    "node": ">=22",
+    "node": ">=22.13.0",
     "dsh": ">=0.2.2-rc.1 <0.3.0"
   },
   "scripts": {
     "test": "node --test"
   },
   "dependencies": {
+    "pdfjs-dist": "6.5.438",
     "yaml": "2.9.1"
   },
   "devDependencies": {

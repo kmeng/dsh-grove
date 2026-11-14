@@ -4,7 +4,7 @@ import { lstat, realpath, mkdir, open, link, unlink, readdir } from 'node:fs/pro
 import { isAbsolute, join } from 'node:path'
 import { parse, stringify } from 'yaml'
 
-export const types = ['inspiration', 'question', 'concept', 'theory', 'claim', 'evidence', 'method', 'output', 'exploration', 'research']
+export const types = ['inspiration', 'question', 'concept', 'theory', 'claim', 'evidence', 'method', 'output', 'exploration', 'research', 'source']
 export const stages = ['question', 'framework', 'evidence', 'analysis', 'judgment', 'validation', 'expression', 'review']
 const relations = ['related', 'derived', 'supports', 'refutes', 'qualifies']
 const validId = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/
@@ -130,6 +130,13 @@ export class Vault {
     if (type === 'evidence') {
       meta.source = required(input.source, 'source')
       meta.locator = required(input.locator, 'locator')
+    }
+    if (input.links !== undefined) {
+      meta.links = await Promise.all(input.links.map(async link => {
+        if (!relations.includes(link.kind)) throw new Error('Invalid relationship')
+        const target = await this.get(link.id, link.version)
+        return { kind: link.kind, id: target.meta.id, version: target.meta.version }
+      }))
     }
     const path = await this.folder(true)
     await publish(path, join(path, `${id}.v1.md`), encode(meta, body))
