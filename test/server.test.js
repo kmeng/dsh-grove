@@ -224,3 +224,52 @@ test('a question alone creates a research project with optional notes', async t 
   assert.equal(revised.status, 200)
   assert.equal((await new Vault(path).get(meta.id, 1)).body, '')
 })
+
+test('inspiration discovery is opt-in and research preserves exact origin through reports', async t => {
+  const path = await fixture(t)
+  const store = new Vault(path)
+  const first = await store.create({ type: 'inspiration', body: 'Shade and wind changed how it felt.' })
+  const other = await store.create({ type: 'inspiration', body: 'The breezy side felt cooler.' })
+  const updated = await store.update(first.meta.id, 1, { body: 'New observations.' })
+  const { ctx, registered } = host()
+  const modelConfig = { enabled: true }
+  let calls = 0
+  registerRoutes(ctx, { current: () => ({ path }), modelConfig, model: () => ({
+    discover: async ({ inspiration, candidates }) => {
+      calls++
+      assert.equal(inspiration, first.body)
+      assert.deepEqual(candidates, [{ number: 1, text: other.body }])
+      return { matches: [
+        { number: 9, reason: 'Invented source' },
+        { number: 1, reason: 'Wind is another explanation.', question: 'How can we separate wind from shade?' },
+        { number: 1, reason: 'Duplicate' },
+      ] }
+    },
+  }) })
+  const call = async (route, data) => {
+    const response = await registered.get(route).fetch(request(route, data))
+    const value = await response.json()
+    assert.equal(response.status, 200, JSON.stringify(value))
+    return value
+  }
+  const ref = { id: first.meta.id, version: 1 }
+  const discover = { ...ref, action: 'discover' }
+  assert.deepEqual(await call(routes.inspirations, discover), { enabled: false, matches: [] })
+  assert.equal(calls, 0)
+  modelConfig.inspirationLinks = true
+  const { matches } = await call(routes.inspirations, discover)
+  assert.deepEqual(matches.map(({ id, version }) => ({ id, version })), [{ id: other.meta.id, version: 1 }])
+  const study = await call(routes.research, { question: matches[0].question, inspirations: [{ ...ref, excerpt: 'Shade and wind' }, matches[0]] })
+  assert.deepEqual(study.meta.links[0], { kind: 'derived', ...ref, excerpt: 'Shade and wind' })
+  const report = await call(routes.reports, { action: 'confirm', research: study.meta.id, body: 'Compare the two conditions separately.' })
+  const knowledge = await call(routes.knowledge, { action: 'save', title: 'Compare separately', type: 'method', body: 'Control the wind.',
+    report: { id: report.meta.id, version: report.meta.version } })
+  const work = await call(routes.works, { action: 'save', title: 'Field guide', body: 'Measure both.', basis: { id: knowledge.meta.id, version: 1 } })
+  const detail = await call(routes.inspirations, { ...ref, version: updated.meta.version, action: 'detail' })
+  assert.equal(detail.studies[0].id, study.meta.id)
+  assert.equal(detail.studies[0].reports[0].summary, report.body)
+  assert.equal(detail.studies[0].knowledge[0].id, knowledge.meta.id)
+  assert.equal(detail.studies[0].works[0].id, work.meta.id)
+  assert.equal((await call(routes.inspirations, { id: other.meta.id, action: 'detail' })).studies[0].id, study.meta.id)
+  assert.deepEqual((await call(routes.research, { question: 'Independent topic' })).meta.links, [])
+})

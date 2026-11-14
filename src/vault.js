@@ -141,7 +141,15 @@ export class Vault {
     return Promise.all(links.map(async link => {
       if (!relations.includes(link.kind)) throw new Error('Invalid relationship')
       const target = await this.get(link.id, link.version)
-      return { kind: link.kind, id: target.meta.id, version: target.meta.version }
+      const resolved = { kind: link.kind, id: target.meta.id, version: target.meta.version }
+      if (link.excerpt !== undefined) {
+        if (link.kind !== 'derived' || target.meta.type !== 'inspiration' ||
+          typeof link.excerpt !== 'string' || !link.excerpt.trim() || !target.body.includes(link.excerpt)) {
+          throw new Error('Choose an excerpt from the referenced inspiration')
+        }
+        resolved.excerpt = link.excerpt
+      }
+      return resolved
     }))
   }
 
