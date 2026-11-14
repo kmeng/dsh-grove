@@ -1,6 +1,6 @@
 # Grove（知林）
 
-![Grove：让每次对话长成可追溯的知识资产](brand/exports/readme-header-1600x480.png)
+![Grove：让每次对话长成可追溯的知识资产](brand/exports/readme-header-1600x480.zh.png)
 
 Grove 是 DeepSeek Harness 的个人知识成长插件。用 Obsidian vault 保存灵感、问题、知识资产和研究证据。探索是常态，研究是选择，成果自然生长。
 
@@ -67,7 +67,7 @@ grove update RESEARCH_ID --version 3 --stage review --status closed
 
 ## 品牌资产
 
-标志、锁定组合、色板、字体与导出图都在 [`brand/`](brand/README.md)，规范见 [`brand/VI.md`](brand/VI.md)。根目录的 `icon.svg` 与 `brand/mark.svg` 保持字节一致，由测试保证。
+标志、锁定组合、色板、字体与导出图都在 [`brand/`](brand/README.md)，规范见 [`brand/VI.md`](brand/VI.md)（中文）与 [`brand/VI.en.md`](brand/VI.en.md)（English）。根目录的 `icon.svg` 与 `brand/mark.svg` 保持字节一致，由测试保证。
 
 ## 从源代码验证
 
