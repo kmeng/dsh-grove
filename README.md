@@ -34,6 +34,7 @@ Grove 是连接 DeepSeek Harness 和 Obsidian 的插件。当前版本把自由�
 | --- | --- |
 | Desktop | **Plugins → Add plugin**，选择本仓库目录；按目录安装会装成 `link:`，改完代码重启宿主即生效 |
 | 会话里 | 让 agent 调用 `plugin_manager` 的 `install_bundle`，`target` 传目录绝对路径 |
+| npm | `dsh plugin --profile <profile> add dsh-grove`（0.1.2 起已发布到 npm） |
 | CLI | `dsh plugin --profile <profile> add <目录或 tgz>`。Desktop 的 profile 由 App 管理，命令行装进 `profiles/web` 不会出现在 Desktop |
 
 装完在 **Plugins** 页确认 Grove 这一条出现，并在新会话里让模型调用 `grove_role`——工具真的注册上才算装好。
