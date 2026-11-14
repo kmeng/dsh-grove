@@ -150,8 +150,15 @@ test('brand assets stay out of the npm package, and icon.svg mirrors the master'
     'brand/exports/icon-180-tile.png': [180, 180],
     'brand/exports/icon-512.png': [512, 512],
     'brand/exports/icon-1024.png': [1024, 1024],
-    'brand/exports/social-preview-1280x640.png': [1280, 640],
-    'brand/exports/readme-header-1600x480.png': [1600, 480],
+    'brand/exports/logo-light.png': [528, 160],
+    'brand/exports/logo-dark.png': [528, 160],
+    'brand/exports/logo-zh.png': [608, 160],
+    'brand/exports/logo-zh-primary.png': [632, 160],
+    'brand/exports/social-preview-1280x640.zh.png': [1280, 640],
+    'brand/exports/social-preview-1280x640.en.png': [1280, 640],
+    'brand/exports/readme-header-1600x480.zh.png': [1600, 480],
+    'brand/exports/readme-header-1600x480.en.png': [1600, 480],
+    'brand/exports/overview.png': [1600, 1180],
   }
   for (const [path, [width, height]] of Object.entries(expected)) {
     const png = await readFile(join(root, path))
@@ -159,9 +166,29 @@ test('brand assets stay out of the npm package, and icon.svg mirrors the master'
     assert.deepEqual([png.readUInt32BE(16), png.readUInt32BE(20)], [width, height], `${path} size`)
   }
 
-  for (const file of ['mark.svg', 'mark-on-dark.svg', 'mark-mono.svg', 'logo-light.svg', 'logo-dark.svg', 'logo-zh.svg']) {
+  for (const file of ['mark.svg', 'mark-on-dark.svg', 'mark-mono.svg', 'logo-light.svg', 'logo-dark.svg', 'logo-zh.svg', 'logo-zh-primary.svg']) {
     const svg = await readFile(join(root, 'brand', file), 'utf8')
     assert.match(svg, /^<svg\b[^>]*>/, `${file} must be an svg element`)
     assert.match(svg.trim(), /<\/svg>$/, `${file} must be closed`)
   }
+})
+
+test('each layout ships in both languages, and the english one carries no CJK copy', async () => {
+  for (const base of ['social-preview', 'readme-header']) {
+    const en = await readFile(join(root, 'brand', 'src', `${base}.en.html`), 'utf8')
+    const zh = await readFile(join(root, 'brand', 'src', `${base}.zh.html`), 'utf8')
+    // 品牌名「知林」可以出现，其余中文不行
+    assert.doesNotMatch(en.replaceAll('知 林', '').replaceAll('知林', ''), /[\u4e00-\u9fff]/, `${base}.en.html must not contain Chinese copy`)
+    assert.match(zh, /[\u4e00-\u9fff]/, `${base}.zh.html must carry Chinese copy`)
+  }
+})
+
+test('the english VI is a full translation, not a stub', async () => {
+  const zh = await readFile(join(root, 'brand', 'VI.md'), 'utf8')
+  const en = await readFile(join(root, 'brand', 'VI.en.md'), 'utf8')
+  for (const token of ['#1B3A2E', '#2F7D5B', '#5FA37E', '#C98A3B', '#B87A2C', '#8F5F1D', '#F7F4EC', '#C3D3C9']) {
+    assert.ok(zh.includes(token), `VI.md is missing ${token}`)
+    assert.ok(en.includes(token), `VI.en.md is missing ${token}`)
+  }
+  assert.ok(en.length > zh.length * 0.6, 'VI.en.md looks truncated')
 })
