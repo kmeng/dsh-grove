@@ -2,15 +2,27 @@
 
 ![Grove 知林，积累可回看、可修正的知识](brand/exports/readme-header-1600x480.zh.png)
 
-Grove 是一个连接 DeepSeek Harness 与 Obsidian 的个人知识成长插件。它让你从一个念头或问题开始，与 AI 自由讨论，把值得留下的内容存进自己的 Obsidian vault，并在需要时追踪研究证据。
+[简体中文](README.md) · [English](README.en.md)
 
-## 愿景与设计原则
+[![MIT 许可](https://img.shields.io/badge/license-MIT-2F7D5B?style=flat-square)](LICENSE)
+[![DeepSeek Harness 0.2.2-rc.1 至 0.3.0 之前](https://img.shields.io/badge/dsh-%3E%3D0.2.2--rc.1_%3C0.3.0-1B3A2E?style=flat-square)](package.json)
+[![Node.js 22 或更高](https://img.shields.io/badge/Node.js-22%2B-2F7D5B?style=flat-square&logo=nodedotjs&logoColor=white)](package.json)
 
-**帮助人积累可回看、可修正的知识，在长期探索中形成自己的判断。** 今天记下的疑问，几个月后可能和一篇新读到的论文连起来。以前的判断也可以随新证据修订，并保留当时的依据。Grove 源于个人知识与认知成长系统（PKGS）的构想。当前插件从自由探索、自主保存和基础研究做起，让过去的思考能成为下一次探索的起点。
+## 个人知识与认知成长
 
-- **探索是常态，研究是选择，成果自然生长。** 可以从模糊的念头聊起，随时停下。值得保留的内容可以记成灵感或开放问题，由你决定何时深究、是否形成成果。
-- **让判断有据可查，也有修正的余地。** 记录证据的出处和定位，并把支持、反驳或限定的证据连到具体版本。新的证据可以改变判断，旧版本仍可回看。
-- **AI 是思考伙伴，判断和知识由人掌握。** AI 可以追问、提出不同解释、帮你起草。你决定采纳什么、保存什么、分享什么。知识以 Markdown 保存在自己的 Obsidian vault 中，可以阅读、编辑和迁移。
+**PKGS（Personal Knowledge & Growth System）是一套面向个人长期成长的方法。** 它把思想探索、知识学习、证据研究、创造和反思接起来。过去读懂的东西可以解释今天遇到的问题，今天形成的判断也可以因明天发现的证据而改变。长期积累的是能重新调用的知识，以及理解、判断、研究和表达的能力。
+
+这套方法可以用纸笔、Markdown 或自己熟悉的工具实践。[PKGS 方法指南](docs/PKGS.zh.md)从设计依据讲到日常操作，包括如何孵化问题、建立知识关联、开展研究、记录观点的变化，以及怎样与 AI 分工。
+
+- **思想探索**从一个观察、困惑或联想开始。你可以随时停下，也可以留一个开放问题以后接着想。研究和产出都由你选择。
+- **知识成长**从用自己的话解释开始。把概念、例子和疑问连起来，在应用和回顾中检验理解。
+- **研究与创造**从值得核查的问题开始。保留来源、反例和判断的不同版本，需要时把形成的认识写成文章、报告或方案。复盘所得可以成为下一轮探索的起点。
+
+AI 可以追问、比较解释、查找反例和协助表达。你决定相信什么、留下什么以及和谁分享。
+
+## Grove 如何实践这套方法
+
+Grove 是连接 DeepSeek Harness 和 Obsidian 的插件。当前版本把自由对话、自主保存和基础证据研究接在一起。你可以从会话挑出值得保留的内容，把它保存成自己 vault 里的 Markdown，并用版本和双链回看问题、证据与判断的关联。指南里的学习、反思和完整研究方法可以手工实践。
 
 ## 安装 v0.1.1
 
@@ -69,7 +81,7 @@ grove update RESEARCH_ID --version 3 --stage review --status closed
 
 ## 数据和卸载
 
-`Grove/` 内的版本文件使用 YAML 属性、Markdown 正文和 Obsidian 双链。Grove 不读 vault 中其他笔记。复制整个 `Grove/` 文件夹即可备份或迁移，点号开头的草稿文件也会随整目录迁移。可在 Obsidian 阅读及编辑正文，保留文件名和 Grove 元数据。要保留更改前的版本，使用 `grove update`。本版证据使用用户填写的来源标识与定位，附件管理、自动会话定位和专用插件界面留待后续版本。
+`Grove/` 内的版本文件使用 YAML 属性、Markdown 正文和 Obsidian 双链。Grove 不读 vault 中其他笔记。复制整个 `Grove/` 文件夹即可备份或迁移，点号开头的草稿文件也会随整目录迁移。可在 Obsidian 阅读及编辑正文，保留文件名和 Grove 元数据。要保留更改前的版本，使用 `grove update`。本版证据使用用户填写的来源标识与定位。当前能力的边界见[插件详情](docs/DETAIL.zh.md)。
 
 用 `npx --yes @deepseek-ai/dsh@0.2.2-rc.3 plugin --profile grove remove dsh-grove` 卸载宿主插件。数据留在 vault，终端命令可通过 `npm uninstall --global dsh-grove` 单独卸载。
 
