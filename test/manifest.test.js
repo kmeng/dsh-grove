@@ -66,6 +66,14 @@ test('dsh packages the plugin imports are declared as peer and dev', async () =>
   }
 })
 
+test('bin paths do not start with ./ so npm keeps them', async () => {
+  // npm 11.13 在发布时会把以 ./ 开头的 bin 判为无效并丢弃，装出来的包就没有 grove 命令。
+  for (const [name, target] of Object.entries(manifest.bin ?? {})) {
+    assert.doesNotMatch(target, /^\.\//, `bin[${name}] must not start with ./`)
+    assert.ok(await isFile(target), `bin[${name}] points at a missing file`)
+  }
+})
+
 test('bundle patch loads and inserts this package', async () => {
   const patchPath = manifest.dsh?.bundle?.patch
   assert.equal(typeof patchPath, 'string')
