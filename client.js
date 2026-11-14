@@ -33,6 +33,12 @@ window.__ModuleLoader__.load({
     var INSPIRATIONS = '/api/grove/inspirations'
 
     var ZH = {
+      'idea.recent': '最近灵感',
+      'idea.recentEmpty': '还没有灵感，先叮一下吧。',
+      'idea.results': '搜索结果',
+      'idea.query': '搜索灵感',
+      'model.optional': '无需配置模型，也能记录、导入资料、整理证据和写报告。想请 AI 深挖时，再配置研究模型。',
+      'model.setup': '先在「研究模型」里启用并配置模型。',
       's0.pickerUnavailable': '这个宿主暂时无法打开文件夹选择器。可以手动输入路径。',
       's0.pickerFailed': '没能打开文件夹选择器。{message}',
       'asset.knowledge': '知识库',
@@ -141,6 +147,12 @@ window.__ModuleLoader__.load({
     }
 
     var EN = {
+      'idea.recent': 'Recent ideas',
+      'idea.recentEmpty': 'Your first idea will show up here.',
+      'idea.results': 'Search results',
+      'idea.query': 'Search ideas',
+      'model.optional': 'Record ideas, import sources, collect evidence, and write reports without a model. Set up a research model when you want AI help.',
+      'model.setup': 'Enable and configure a model under Research model first.',
       's0.pickerUnavailable': 'This host cannot open a folder picker. You can enter the path manually.',
       's0.pickerFailed': 'Could not open the folder picker. {message}',
       'asset.knowledge': 'Knowledge',
@@ -327,6 +339,22 @@ window.__ModuleLoader__.load({
         setSeed(draft || null)
         setPage(destination)
       }
+      var [recent, setRecent] = useState(null)
+      var [recentError, setRecentError] = useState(null)
+      var [recentRevision, setRecentRevision] = useState(0)
+      var vault = status?.usable ? status.vault : null
+
+      useEffect(function () {
+        if (!vault || page !== 'home') return
+        var active = true
+        setRecentError(null)
+        api(INSPIRATIONS, {}).then(function (data) {
+          if (active) setRecent(data.notes.slice(0, 5))
+        }, function (problem) {
+          if (active) setRecentError(problem)
+        })
+        return function () { active = false }
+      }, [vault, page, recentRevision])
       var mounted = useRef(true)
 
       useEffect(function () {
@@ -360,6 +388,8 @@ window.__ModuleLoader__.load({
           if (!mounted.current) return
           setStatus(next)
           navigate('home')
+          setRecent(null)
+          setQuery('')
           setNotes(null)
           setSelected(null)
           setSaved(false)
@@ -424,6 +454,7 @@ window.__ModuleLoader__.load({
           if (!mounted.current) return
           setDraft('')
           setSaved(true)
+          setRecentRevision(function (revision) { return revision + 1 })
           setNotes(null)
           setSelected(null)
         }, function (problem) {
@@ -471,6 +502,8 @@ window.__ModuleLoader__.load({
                     draft: draft, busy: busy, saved: saved, onSave: saveIdea,
                     onDraft: function (value) { setDraft(value); setSaved(false) },
                     query: query, notes: notes, selected: selected, onQuery: setQuery,
+                    recent: recent, recentError: recentError,
+                    onRetryRecent: function () { setRecentRevision(function (revision) { return revision + 1 }) },
                     onSearch: function () {
                       requestNotes({ query: query }, function (data) { setNotes(data.notes); setSelected(null) })
                     },
@@ -555,31 +588,42 @@ window.__ModuleLoader__.load({
           h('button', { className: 'gr-btn gr-btn-ghost', disabled: !!props.busy, onClick: props.onResearch }, T('research.title')),
           h('button', { className: 'gr-btn gr-btn-ghost', disabled: !!props.busy, onClick: props.onKnowledge }, T('asset.knowledge')),
           h('button', { className: 'gr-btn gr-btn-ghost', disabled: !!props.busy, onClick: props.onWorks }, T('asset.works'))),
-        h('details', { className: 'gr-card' },
-          h('summary', null, T('idea.find')),
-          h('form', { className: 'gr-row', onSubmit: function (event) {
-            event.preventDefault()
-            props.onSearch()
-          } },
-          h('input', { className: 'gr-input', type: 'search', 'aria-label': T('idea.find'),
-            value: props.query, onChange: function (event) { props.onQuery(event.target.value) } }),
-          h('button', { className: 'gr-btn gr-btn-sm', disabled: !!props.busy }, T('idea.search'))),
-          props.notes && props.notes.length === 0 ? h('p', null, T('idea.empty')) : null,
-          (props.notes || []).map(function (note) {
-            return h('div', { key: note.id },
-              h('button', { className: 'gr-btn gr-btn-ghost', disabled: !!props.busy,
-                onClick: function () { props.onSelect(note.id, note.version) } }, note.title))
-          }),
-          selected ? h('article', { className: 'gr-card' },
-            h('div', { className: 'gr-h2' }, selected.meta.title),
-            h('pre', { className: 'gr-code' }, selected.body),
-            h('label', null, T('idea.version'), ' ',
+        h('section', { className: 'gr-card' },
+          h('h2', { className: 'gr-h2' }, T('idea.recent')),
+          props.recentError ? h(ErrorNote, { error: props.recentError, onRetry: props.onRetryRecent }) :
+            props.recent === null ? h('p', { className: 'gr-meta' }, T('loading')) :
+              props.recent.length ? inspirationList(props.recent, props) : h('p', { className: 'gr-meta' }, T('idea.recentEmpty')),
+          h('details', { className: 'gr-idea-search' },
+            h('summary', null, T('idea.find')),
+            h('form', { className: 'gr-search-row', onSubmit: function (event) {
+              event.preventDefault()
+              props.onSearch()
+            } },
+            h('input', { className: 'gr-input', type: 'search', 'aria-label': T('idea.query'),
+              placeholder: T('idea.query'), value: props.query, onChange: function (event) { props.onQuery(event.target.value) } }),
+            h('button', { className: 'gr-btn', disabled: !!props.busy }, T('idea.search'))),
+            props.notes ? h('div', { className: 'gr-stack' },
+              h('h3', { className: 'gr-h2' }, T('idea.results')),
+              props.notes.length ? inspirationList(props.notes, props) : h('p', { className: 'gr-meta' }, T('idea.empty'))) : null),
+          selected ? h('article', { className: 'gr-stack gr-idea-reader' },
+            selected.body.trim() === selected.meta.title ? null : h('h3', { className: 'gr-h2' }, selected.meta.title),
+            h('p', { className: 'gr-prose' }, selected.body),
+            selected.versions.length > 1 ? h('label', { className: 'gr-row' }, T('idea.version'),
               h('select', { value: selected.meta.version, disabled: !!props.busy,
                 onChange: function (event) { props.onSelect(selected.meta.id, Number(event.target.value)) } },
-                selected.versions.map(function (version) { return h('option', { key: version, value: version }, 'v' + version) }))),
-          ) : null,
-        ),
+                selected.versions.map(function (version) { return h('option', { key: version, value: version }, 'v' + version) }))) : null,
+          ) : null),
+
       )
+    }
+
+    function inspirationList(items, props) {
+      return h('ul', { className: 'gr-records' }, items.map(function (item) {
+        return h('li', { key: item.id },
+          h('button', { className: 'gr-btn gr-btn-ghost', disabled: !!props.busy,
+            'aria-pressed': props.selected?.meta.id === item.id,
+            onClick: function () { props.onSelect(item.id, item.version) } }, item.title || item.id))
+      }))
     }
 
     function ModelSettings() {
@@ -642,16 +686,19 @@ window.__ModuleLoader__.load({
       var [evidence, setEvidence] = useState([])
       var [selected, setSelected] = useState([])
       var [busy, setBusy] = useState(false)
+      var [modelEnabled, setModelEnabled] = useState(null)
       var [error, setError] = useState(null)
 
       function load(event) {
         if (!event.currentTarget.open) return
+        api(MODEL).then(function (result) { setModelEnabled(result.enabled === true) }, setError)
         api(FINDINGS, { action: 'list', id: props.id }).then(function (result) { setFindings(result.findings) }, setError)
         api(REPORTS, { action: 'list', research: props.id }).then(function (result) { setEvidence(result.evidence) }, setError)
       }
 
       async function ask(event) {
         event.preventDefault()
+        if (!modelEnabled || busy) return
         setBusy(true)
         setError(null)
         try {
@@ -674,7 +721,8 @@ window.__ModuleLoader__.load({
               api(REPORTS, { action: 'draft', research: props.id, id: item.meta.id, version: item.meta.version }).then(props.onDraft, setError)
             } }, T('report.review')))
         }),
-        h('form', { onSubmit: ask },
+        modelEnabled === false ? h('p', { className: 'gr-body' }, T('model.setup')) : null,
+        modelEnabled ? h('form', { className: 'gr-stack', onSubmit: ask },
           h('label', null, T('model.question'), h('textarea', { className: 'gr-textarea', value: question,
             required: true, maxLength: 1000, onChange: function (event) { setQuestion(event.target.value) } })),
           h('p', { className: 'gr-meta' }, T('model.scope')),
@@ -682,7 +730,7 @@ window.__ModuleLoader__.load({
             return h('label', { key: item.id }, h('input', { type: 'checkbox', checked: selected.includes(item.id),
               onChange: function (event) { setSelected(event.target.checked ? selected.concat(item.id) : selected.filter(function (id) { return id !== item.id })) } }), item.title)
           }),
-          h('button', { className: 'gr-btn', disabled: busy }, T('model.ask'))))
+          h('button', { className: 'gr-btn', disabled: busy }, T('model.ask'))) : null)
     }
 
     function ParserSettings() {
@@ -1008,10 +1056,10 @@ window.__ModuleLoader__.load({
           h('button', { className: 'gr-btn', disabled: busy, onClick: start }, T('asset.new'))),
         error ? h('p', { role: 'alert' }, messageOf(error)) : null,
         h('p', { role: 'status' }, message),
-        items.map(function (entry) {
+        items.length ? h('div', { className: 'gr-stack' }, items.map(function (entry) {
           return h('button', { key: entry.meta.id, className: 'gr-btn gr-btn-ghost', disabled: busy,
             onClick: function () { run(function () { return read(entry.meta.id, entry.meta.version) }) } }, entry.meta.title)
-        }),
+        })) : null,
         draft ? h('form', { className: 'gr-card', onSubmit: save },
           selected ? h('h3', null, selected.meta.title) : h('label', null, T('asset.title'),
             h('input', { className: 'gr-input', value: title, maxLength: 300, required: true, onChange: function (event) { setTitle(event.target.value) } })),
@@ -1109,15 +1157,16 @@ window.__ModuleLoader__.load({
           h('div', { className: 'gr-row' },
             h('button', { className: 'gr-btn', disabled: busy }, T('research.save')),
             h('span', { role: 'status' }, saved ? T('research.saved') : ''))),
+        h('p', { className: 'gr-body' }, T('model.optional')),
         h(ModelSettings),
         h(ParserSettings),
         selected ? h(ResearchFindings, { key: 'findings:' + selected.meta.id, id: selected.meta.id, title: selected.meta.title, version: selected.meta.version, onDraft: setReportDraft }) : null,
         selected ? h(ResearchSources, { key: selected.meta.id, id: selected.meta.id }) : null,
         selected ? h(ResearchReports, { key: 'report:' + selected.meta.id, id: selected.meta.id, onNavigate: props.onNavigate, draft: reportDraft, onDiscard: function () { setReportDraft(null) } }) : null,
-        studies.map(function (note) {
+        studies.length ? h('div', { className: 'gr-stack' }, studies.map(function (note) {
           return h('button', { key: note.meta.id, className: 'gr-btn gr-btn-ghost', disabled: busy,
             onClick: function () { select(note) } }, note.meta.title)
-        }),
+        })) : null,
       )
     }
 
@@ -1167,6 +1216,21 @@ window.__ModuleLoader__.load({
       '.gr-dot{width:6px;height:6px;border-radius:50%;background:var(--dsw-alias-state-idle-primary)}',
       '.gr-dot-ok{background:var(--dsw-alias-state-success-primary)}',
       '.gr-card{background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l1);border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:12px;box-sizing:border-box}',
+      '.gr-card :is(h2,h3,p),.gr-inner>.gr-body{margin:0}',
+      '.gr-stack{display:flex;flex-direction:column;gap:12px;min-width:0}',
+      '.gr-root details.gr-card{display:block}',
+      '.gr-root details[open]>summary~*,.gr-root details[open]>summary~*+*{margin-top:12px}',
+      '.gr-card form:not(.gr-row):not(.gr-search-row){display:flex;flex-direction:column;align-items:flex-start;gap:12px}',
+      '.gr-card form>label:not(.gr-row){display:block;width:100%;overflow-wrap:anywhere}',
+      '.gr-card label>:is(.gr-input,.gr-textarea){margin-top:6px}',
+      '.gr-card select{background:var(--dsw-alias-bg-layer-2);color:inherit;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;padding:4px 8px;font:inherit}',
+      '.gr-card button,.gr-stack button{max-width:100%;overflow-wrap:anywhere;text-align:left}',
+      '.gr-search-row{display:flex;gap:8px;align-items:center}.gr-search-row input{flex:1;min-width:0}',
+      '.gr-records{display:grid;gap:8px;list-style:none;margin:0;padding:0}',
+      '.gr-records button{width:100%;justify-content:flex-start}',
+      '.gr-records button[aria-pressed=true]{background:var(--dsw-alias-bg-layer-2)}',
+      '.gr-idea-search,.gr-idea-reader{border-top:1px solid var(--dsw-alias-border-l1);padding-top:12px}',
+      '.gr-prose{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.6}',
       '.gr-h2{font-size:15px;font-weight:600;line-height:1.4}',
       '.gr-body{color:var(--dsw-alias-label-secondary);font-size:13px}',
       '.gr-meta{font-size:12px;color:var(--dsw-alias-label-secondary)}',

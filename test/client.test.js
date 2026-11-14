@@ -138,3 +138,24 @@ test('the folder button uses the host picker and cancellation leaves manual entr
     React.useState = original
   }
 })
+
+test('the connected home offers recent ideas before searching', () => {
+  const { ctx, registrations } = mount()
+  const original = React.useState
+  let slot = 0
+  React.useState = value => [slot++ === 0 ? { configured: true, usable: true, vault: '/fixture' } : value, () => {}]
+  try {
+    loadModule().factory(requireStub).apply(ctx)
+    const page = registrations.find(item => item.name === 'main').component
+    const home = page().children[1].children[0].children.find(item => item?.props?.onSearch)
+    const fixture = { id: 'test', title: '先前的灵感', version: 1 }
+    const tree = home.type({ ...home.props, recent: [fixture] })
+    function contains(node, text) {
+      return node === text || (Array.isArray(node) ? node : node?.children ?? []).some(child => contains(child, text))
+    }
+    assert.ok(contains(tree, '最近灵感'))
+    assert.ok(contains(tree, fixture.title))
+  } finally {
+    React.useState = original
+  }
+})
