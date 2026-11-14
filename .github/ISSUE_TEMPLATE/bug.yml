@@ -1,0 +1,25 @@
+name: Bug
+description: 缺陷修复
+labels: [bug]
+body:
+  - type: textarea
+    id: symptom
+    attributes:
+      label: 现象
+      description: 期望什么、实际什么、怎么复现
+    validations:
+      required: true
+  - type: textarea
+    id: root-cause
+    attributes:
+      label: 根因
+      description: 修根因不修症状；写清楚为什么会这样
+    validations:
+      required: true
+  - type: textarea
+    id: regression
+    attributes:
+      label: 回归测试
+      description: 哪个测试先失败、修复后转绿
+    validations:
+      required: true

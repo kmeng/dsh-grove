@@ -1,0 +1,31 @@
+name: Story
+description: 一个能跑通闭环的任务
+labels: []
+body:
+  - type: textarea
+    id: background
+    attributes:
+      label: 背景
+      description: 为什么现在要做这件事
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 验收标准
+      description: 每条都要能被一条命令或一次目视证明
+      placeholder: |
+        1. ...
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: 不做
+      description: 明确排除的范围，避免验收时扯皮
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 关闭证据
+      description: 关闭时填：跑了什么、结果如何
