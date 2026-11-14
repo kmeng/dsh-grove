@@ -1,0 +1,32 @@
+:root {
+  /* 品牌色：文字与图形各自有可用的对比度，见 VI.md 的对比度表 */
+  --grove-ink: #1B3A2E;
+  --grove-ink-soft: #40514A;
+  --grove-ink-muted: #5A6B61;
+  --grove-paper: #F7F4EC;
+  --grove-green: #2F7D5B;
+  --grove-green-light: #5FA37E;
+  --grove-green-pale: #8FC7A9;
+  --grove-amber: #C98A3B;
+  --grove-amber-strong: #B87A2C;
+  --grove-amber-text: #8F5F1D;
+  --grove-line: #C3D3C9;
+
+  --grove-font-latin: "SF Pro Display", "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --grove-font-cjk: "PingFang SC", "Source Han Sans SC", "Noto Sans CJK SC", sans-serif;
+  --grove-font-mono: "SF Mono", "SFMono-Regular", Menlo, monospace;
+
+  --grove-radius-sm: 6px;
+  --grove-radius-md: 10px;
+  --grove-radius-pill: 999px;
+
+  /* 4 的倍数 */
+  --grove-space-1: 4px;
+  --grove-space-2: 8px;
+  --grove-space-3: 12px;
+  --grove-space-4: 16px;
+  --grove-space-6: 24px;
+  --grove-space-8: 32px;
+  --grove-space-12: 48px;
+  --grove-space-16: 64px;
+}
