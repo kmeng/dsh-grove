@@ -7,7 +7,9 @@ import { Vault, stages, types } from './vault.js'
 import { backupVault, restoreVault } from './adapters/storage/obsidian/backup.js'
 import { accept, discard, preview } from './proposals.js'
 
-const usage = `Grove v0.1 · set GROVE_VAULT to an absolute Obsidian vault path
+import manifest from '../package.json' with { type: 'json' }
+
+const usage = `Grove v${manifest.version} · set GROVE_VAULT to an absolute Obsidian vault path
   grove backup ABSOLUTE_DESTINATION
   grove restore ABSOLUTE_BACKUP --destination ABSOLUTE_VAULT
   grove capture --body 'idea'
