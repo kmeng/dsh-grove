@@ -2,6 +2,7 @@
 import { parseArgs } from 'node:util'
 import { createInterface } from 'node:readline/promises'
 import { readFile } from 'node:fs/promises'
+import { captureInspiration } from './modules/inspirations.js'
 import { Vault, stages, types } from './vault.js'
 import { backupVault, restoreVault } from './adapters/storage/obsidian/backup.js'
 import { accept, discard, preview } from './proposals.js'
@@ -44,7 +45,7 @@ async function main() {
   const body = values.file === undefined ? values.body : await readFile(values.file, 'utf8')
   const version = values.version === undefined ? undefined : Number(values.version)
   switch (command) {
-    case 'capture': return print(await vault.create({ ...values, body, type: 'inspiration' }))
+    case 'capture': return print(await captureInspiration(vault, { ...values, body }))
     case 'add': return print(await vault.create({ ...values, body, type: id }))
     case 'list': return print((await vault.list(values.query)).map(({ meta }) => meta))
     case 'show': return print(await vault.get(id, version))
