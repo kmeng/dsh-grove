@@ -5,7 +5,7 @@ import { isAbsolute, join, resolve } from 'node:path'
 import { captureInspiration, findInspirations, readInspiration } from './modules/inspirations.js'
 import { startResearch, listResearch, saveResearch } from './modules/research.js'
 import { importSource, saveEvidence, openSource } from './modules/evidence.js'
-import { listReports, confirmReport, readReport } from './modules/reports.js'
+import { listReports, confirmReport, readReport, draftFromFinding } from './modules/reports.js'
 import { runResearchModel } from './modules/model-research.js'
 import { Vault } from './vault.js'
 
@@ -291,6 +291,9 @@ export function registerRoutes(ctx, options) {
           const evidence = notes.filter(({ meta }) => meta.type === 'evidence' &&
             meta.links?.some(link => link.kind === 'derived' && sources.has(link.id))).map(({ meta }) => meta)
           return json({ reports: await listReports(store, input.research), evidence })
+        }
+        if (input?.action === 'draft' && Number.isSafeInteger(input.version) && input.version > 0) {
+          return json(await draftFromFinding(store, input.research, input.id, input.version))
         }
         if (input?.action === 'read') return json(await readReport(store, input.id, input.version))
         if (input?.action === 'confirm' && typeof input.body === 'string' && input.body.trim() &&

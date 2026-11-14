@@ -7,7 +7,7 @@ import { runResearchModel } from '../src/modules/model-research.js'
 import { Vault } from '../src/vault.js'
 import { documentParsers } from '../src/adapters/parsers/documents.js'
 import { importSource, saveEvidence, openSource } from '../src/modules/evidence.js'
-import { confirmReport, readReport } from '../src/modules/reports.js'
+import { confirmReport, readReport, draftFromFinding } from '../src/modules/reports.js'
 import { startResearch } from '../src/modules/research.js'
 
 test('an excerpt keeps its original document version after another import', async t => {
@@ -32,6 +32,9 @@ test('an excerpt keeps its original document version after another import', asyn
     return { text: 'Observed shade', citations: [excerpt.meta.id] }
   } }, investigation)
   assert.equal(finding.meta.links[1].id, excerpt.meta.id)
+  const draft = await draftFromFinding(store, research.meta.id, finding.meta.id, 1)
+  assert.deepEqual(draft.evidence, [{ id: excerpt.meta.id, version: 1 }])
+  assert.equal(draft.body, 'Observed shade')
   const report = await confirmReport(store, { research: research.meta.id, body: 'Finding', evidence: [excerpt.meta] })
   await confirmReport(store, { research: research.meta.id, id: report.meta.id, version: 1, body: 'Revised', evidence: [] })
   const historical = await readReport(store, report.meta.id, 1)
