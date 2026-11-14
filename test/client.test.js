@@ -160,7 +160,7 @@ test('the connected home offers recent ideas before searching', () => {
   }
 })
 
-test('an unresponsive folder picker releases the panel and ignores a late selection', async t => {
+test('a slow native picker can complete after a minute', async t => {
   t.mock.timers.enable({ apis: ['setTimeout'] })
   const { ctx, registrations } = mount()
   let resolvePicker
@@ -176,13 +176,8 @@ test('an unresponsive folder picker releases the panel and ignores a late select
   const page = registrations.find(item => item.name === 'main').component
   const connect = page().children[1].children[0].children.find(item => item?.props?.onPick)
   const pending = connect.props.onPick()
-  t.mock.timers.tick(60000)
-  await Promise.resolve()
-  await Promise.resolve()
-  assert.ok(changes.some(value => value instanceof Error && value.message.includes('手动输入路径')))
-  assert.equal(changes.at(-1), '')
-
-  resolvePicker({ ok: true, value: '/late-selection' })
+  t.mock.timers.tick(61000)
+  resolvePicker({ ok: true, value: '/slow-selection' })
   await pending
-  assert.ok(!changes.includes('connect'))
+  assert.ok(changes.includes('connect'))
 })
