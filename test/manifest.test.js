@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { readFile, stat } from 'node:fs/promises'
-import { dirname, join, sep } from 'node:path'
+import { dirname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
 import semver from 'semver'
@@ -191,4 +191,40 @@ test('the english VI is a full translation, not a stub', async () => {
     assert.ok(en.includes(token), `VI.en.md is missing ${token}`)
   }
   assert.ok(en.length > zh.length * 0.6, 'VI.en.md looks truncated')
+})
+
+test('documentation links resolve', async () => {
+  const docs = [
+    'AGENTS.md',
+    'docs/development/README.md',
+    'docs/development/ISSUE_HIERARCHY.md',
+    'docs/development/DEFINITION_OF_DONE.md',
+    'docs/development/REVIEW_CHECKLIST.md',
+    'docs/development/DECISIONS.md',
+    'docs/development/HANDOFF.md',
+    'README.md',
+    'docs/journal/README.md',
+    'brand/README.md',
+    'brand/README.en.md',
+  ]
+  const missing = []
+  for (const file of docs) {
+    const text = await readFile(join(root, file), 'utf8')
+    for (const match of text.matchAll(/\]\(([^)\s]+)\)/g)) {
+      const target = match[1]
+      if (/^(https?:|mailto:|#)/.test(target)) continue
+      const path = resolve(dirname(join(root, file)), target.split('#')[0])
+      const exists = await stat(path).then(entry => entry.isFile() || entry.isDirectory(), () => false)
+      if (!exists) missing.push(`${file} -> ${target}`)
+    }
+  }
+  assert.deepEqual(missing, [])
+})
+
+test('tool adapters stay pointers to AGENTS.md', async () => {
+  for (const file of ['CLAUDE.md', '.cursor/rules/project.mdc', '.github/copilot-instructions.md']) {
+    const text = await readFile(join(root, file), 'utf8')
+    assert.match(text, /AGENTS\.md/, `${file} must point at AGENTS.md`)
+    assert.ok(text.split('\n').length <= 20, `${file} should stay a short pointer`)
+  }
 })

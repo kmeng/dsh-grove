@@ -69,6 +69,12 @@ grove update RESEARCH_ID --version 3 --stage review --status closed
 
 标志、锁定组合、色板、字体与导出图都在 [`brand/`](brand/README.md)，规范见 [`brand/VI.md`](brand/VI.md)（中文）与 [`brand/VI.en.md`](brand/VI.en.md)（English）。根目录的 `icon.svg` 与 `brand/mark.svg` 保持字节一致，由测试保证。
 
+## 参与开发
+
+规则只有一份：[`AGENTS.md`](AGENTS.md)。Claude Code、Cursor、GitHub Copilot 分别读 `CLAUDE.md`、`.cursor/rules/project.mdc`、`.github/copilot-instructions.md`，三者都只指向 `AGENTS.md`。
+
+理念、任务分层、DoD 与评审清单在 [`docs/development/`](docs/development/README.md)；会话交接在 [`docs/journal/`](docs/journal/)。改动前先跑 `npm test` 与 `bash scripts/check-compat.sh`。
+
 ## 从源代码验证
 
 ```sh
