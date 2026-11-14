@@ -210,3 +210,17 @@ test('parser settings persist without changing the active vault', async () => {
   await new Promise(resolve => setTimeout(resolve, 20))
   assert.deepEqual(config, { vault: '/existing', parsers: { other: true, pdf: false } })
 })
+
+test('a question alone creates a research project with optional notes', async t => {
+  const path = await fixture(t)
+  const { ctx, registered } = host()
+  registerRoutes(ctx, { current: () => ({ path }) })
+  const call = body => registered.get(routes.research).fetch(request(routes.research, body))
+  const response = await call({ question: 'Where does the shade fall?' })
+  assert.equal(response.status, 200)
+  const { meta, body } = await response.json()
+  assert.equal(body, '')
+  const revised = await call({ id: meta.id, version: 1, body: 'Observe at noon' })
+  assert.equal(revised.status, 200)
+  assert.equal((await new Vault(path).get(meta.id, 1)).body, '')
+})
