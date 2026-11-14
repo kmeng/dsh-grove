@@ -22,9 +22,18 @@ window.__ModuleLoader__.load({
     var CONNECTION = '/api/grove/connection'
     var CONFIG = '/api/grove/config'
     var CAPTURE = '/api/grove/capture'
+    var RESEARCH = '/api/grove/research'
     var INSPIRATIONS = '/api/grove/inspirations'
 
     var ZH = {
+      'research.title': '研究',
+      'research.new': '新建独立研究',
+      'research.question': '想深挖什么？',
+      'research.notes': '研究记录',
+      'research.save': '保存研究',
+      'research.continue': '接着上次深挖',
+      'research.back': '返回首页',
+      'research.saved': '已保存。',
       'idea.title': '灵感来了',
       'idea.placeholder': '刚冒出什么点子？先记一句。',
       'idea.save': '💡叮～',
@@ -83,6 +92,14 @@ window.__ModuleLoader__.load({
     }
 
     var EN = {
+      'research.title': 'Research',
+      'research.new': 'New independent study',
+      'research.question': 'What do you want to explore?',
+      'research.notes': 'Research notes',
+      'research.save': 'Save study',
+      'research.continue': 'Continue the last study',
+      'research.back': 'Back to home',
+      'research.saved': 'Saved.',
       'idea.title': 'An idea?',
       'idea.placeholder': 'What just came to mind? Jot it down.',
       'idea.save': '💡 Ding!',
@@ -212,6 +229,7 @@ window.__ModuleLoader__.load({
       var [selected, setSelected] = useState(null)
       var [saved, setSaved] = useState(false)
       var [changing, setChanging] = useState(false)
+      var [research, setResearch] = useState(false)
       var mounted = useRef(true)
 
       useEffect(function () {
@@ -244,6 +262,7 @@ window.__ModuleLoader__.load({
         }).then(function (next) {
           if (!mounted.current) return
           setStatus(next)
+          setResearch(false)
           setNotes(null)
           setSelected(null)
           setSaved(false)
@@ -343,7 +362,10 @@ window.__ModuleLoader__.load({
               ? h('div', { className: 'gr-card' }, h('div', { className: 'gr-body' }, T('loading')))
               : changing || !connected
                 ? connectView
-                : h(InspirationHome, {
+                : research
+                  ? h(ResearchPage, { onBack: function () { setResearch(false) } })
+                  : h(InspirationHome, {
+                  onResearch: function () { setResearch(true) },
                   draft: draft, busy: busy, saved: saved, onSave: saveIdea,
                   onDraft: function (value) { setDraft(value); setSaved(false) },
                   query: query, notes: notes, selected: selected, onQuery: setQuery,
@@ -433,6 +455,8 @@ window.__ModuleLoader__.load({
             h('span', { role: 'status' }, props.saved ? T('idea.saved') : ''),
           ),
         ),
+        h('div', { className: 'gr-row' },
+          h('button', { className: 'gr-btn gr-btn-ghost', disabled: !!props.busy, onClick: props.onResearch }, T('research.title'))),
         h('details', { className: 'gr-card' },
           h('summary', null, T('idea.find')),
           h('form', { className: 'gr-row', onSubmit: function (event) {
@@ -457,6 +481,74 @@ window.__ModuleLoader__.load({
                 selected.versions.map(function (version) { return h('option', { key: version, value: version }, 'v' + version) }))),
           ) : null,
         ),
+      )
+    }
+
+    function ResearchPage(props) {
+      var [studies, setStudies] = useState([])
+      var [selected, setSelected] = useState(null)
+      var [question, setQuestion] = useState('')
+      var [body, setBody] = useState('')
+      var [busy, setBusy] = useState(true)
+      var [error, setError] = useState(null)
+      var [saved, setSaved] = useState(false)
+
+      useEffect(function () {
+        var active = true
+        api(RESEARCH).then(function (data) {
+          if (active) setStudies(data.studies)
+        }, function (problem) {
+          if (active) setError(problem)
+        }).finally(function () {
+          if (active) setBusy(false)
+        })
+        return function () { active = false }
+      }, [])
+
+      function select(note) {
+        setSelected(note)
+        setBody(note ? note.body : '')
+        setQuestion('')
+        setSaved(false)
+      }
+
+      function save(event) {
+        event.preventDefault()
+        if (busy || !body.trim() || (!selected && !question.trim())) return
+        setBusy(true)
+        setError(null)
+        setSaved(false)
+        var input = selected ? { id: selected.meta.id, version: selected.meta.version, body: body } : { question: question, body: body }
+        api(RESEARCH, input).then(function (note) {
+          select(note)
+          setSaved(true)
+          setStudies(function (items) {
+            return [note].concat(items.filter(function (item) { return item.meta.id !== note.meta.id }))
+          })
+        }, setError).finally(function () { setBusy(false) })
+      }
+
+      return h(React.Fragment, null,
+        h('div', { className: 'gr-row' },
+          h('button', { className: 'gr-btn gr-btn-ghost', disabled: busy, onClick: props.onBack }, T('research.back')),
+          studies.length ? h('button', { className: 'gr-btn', disabled: busy, onClick: function () { select(studies[0]) } }, T('research.continue')) : null,
+          h('button', { className: 'gr-btn gr-btn-ghost', disabled: busy, onClick: function () { select(null) } }, T('research.new'))),
+        error ? h('p', { role: 'alert' }, messageOf(error)) : null,
+        h('form', { className: 'gr-card', onSubmit: save },
+          selected ? h('h2', { className: 'gr-h2' }, selected.meta.title) :
+            h('label', null, T('research.question'),
+              h('input', { className: 'gr-input', value: question, required: true, maxLength: 300,
+                onChange: function (event) { setQuestion(event.target.value) } })),
+          h('label', null, T('research.notes'),
+            h('textarea', { className: 'gr-textarea', value: body, required: true,
+              onChange: function (event) { setBody(event.target.value); setSaved(false) } })),
+          h('div', { className: 'gr-row' },
+            h('button', { className: 'gr-btn', disabled: busy }, T('research.save')),
+            h('span', { role: 'status' }, saved ? T('research.saved') : ''))),
+        studies.map(function (note) {
+          return h('button', { key: note.meta.id, className: 'gr-btn gr-btn-ghost', disabled: busy,
+            onClick: function () { select(note) } }, note.meta.title)
+        }),
       )
     }
 

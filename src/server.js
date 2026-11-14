@@ -3,6 +3,7 @@ import { constants } from 'node:fs'
 import { access, realpath, stat } from 'node:fs/promises'
 import { isAbsolute, join, resolve } from 'node:path'
 import { captureInspiration, findInspirations, readInspiration } from './modules/inspirations.js'
+import { startResearch, listResearch, saveResearch } from './modules/research.js'
 import { Vault } from './vault.js'
 
 export const routes = {
@@ -10,6 +11,7 @@ export const routes = {
   config: '/api/grove/config',
   connection: '/api/grove/connection',
   capture: '/api/grove/capture',
+  research: '/api/grove/research',
   inspirations: '/api/grove/inspirations',
 }
 
@@ -193,6 +195,28 @@ export function registerRoutes(ctx, options) {
         }
         const query = typeof input?.query === 'string' ? input.query.trim() : ''
         return json({ notes: (await findInspirations(vault, query)).slice(0, 50) })
+      } catch (error) {
+        return failure(error)
+      }
+    })
+    route(routes.research, ['GET', 'POST'], async request => {
+      try {
+        const { path } = options.current()
+        if (!path) throw coded('not-configured', 'Grove has no vault yet')
+        const vault = new Vault(path)
+        if (request.method === 'GET') return json({ studies: await listResearch(vault) })
+        const input = await readJson(request)
+        const body = typeof input?.body === 'string' ? input.body.trim() : ''
+        if (!body) throw coded('invalid-body', 'Write down your research notes')
+        if (input.id !== undefined) {
+          if (typeof input.id !== 'string' || !Number.isSafeInteger(input.version) || input.version < 1) {
+            throw coded('invalid-body', 'Invalid research version')
+          }
+          return json(await saveResearch(vault, input.id, input.version, body))
+        }
+        const question = typeof input.question === 'string' ? input.question.trim() : ''
+        if (!question || question.length > 300) throw coded('invalid-body', 'Enter a research question up to 300 characters')
+        return json(await startResearch(vault, question, body))
       } catch (error) {
         return failure(error)
       }
