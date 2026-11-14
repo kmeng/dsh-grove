@@ -1,3 +1,5 @@
+import { readKnowledge, saveKnowledge } from '../src/modules/knowledge.js'
+import { readWork, saveWork } from '../src/modules/works.js'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { mkdtemp, realpath, rm } from 'node:fs/promises'
@@ -41,6 +43,16 @@ test('an excerpt keeps its original document version after another import', asyn
   assert.equal(historical.body, 'Finding')
   assert.deepEqual(historical.versions, [2, 1])
   assert.deepEqual(historical.evidence[0].original, excerpt.meta.links[0])
+  const knowledge = await saveKnowledge(store, { type: 'method', title: 'Field notes', body: 'First method', report: report.meta })
+  const work = await saveWork(store, { title: 'Walking guide', body: 'First guide', basis: knowledge.meta })
+  const revisedKnowledge = await saveKnowledge(store, { id: knowledge.meta.id, version: 1, body: 'Second method', reason: 'Observed at noon' })
+  const laterResearch = await startResearch(store, 'Noon?', 'Compare shade', revisedKnowledge.meta)
+  const savedWork = await readWork(store, work.meta.id, 1)
+  const originalKnowledge = await readKnowledge(store, savedWork.meta.links[0].id, savedWork.meta.links[0].version)
+  assert.equal(originalKnowledge.body, 'First method')
+  assert.equal(originalKnowledge.meta.links[0].version, 1)
+  assert.equal(laterResearch.meta.links[0].version, 2)
+  assert.equal(revisedKnowledge.meta.revisionReason, 'Observed at noon')
   const updated = await importMarkdown('New passage')
   assert.equal(updated.meta.id, old.meta.id)
   assert.equal(updated.meta.version, 2)

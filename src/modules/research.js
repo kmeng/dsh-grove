@@ -1,6 +1,6 @@
-export async function startResearch(store, question, body) {
+export async function startResearch(store, question, body, origin) {
   const entry = await store.create({ type: 'question', body: question })
-  return store.create({ type: 'research', title: entry.meta.title, body, question: entry.meta.id })
+  return store.create({ type: 'research', title: entry.meta.title, body, question: entry.meta.id, links: origin ? [{ kind: 'derived', id: origin.id, version: origin.version }] : [] })
 }
 
 export async function listResearch(store) {
