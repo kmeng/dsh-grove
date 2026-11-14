@@ -4,7 +4,7 @@ import { lstat, realpath, mkdir, open, link, unlink, readdir } from 'node:fs/pro
 import { isAbsolute, join } from 'node:path'
 import { parse, stringify } from 'yaml'
 
-export const types = ['inspiration', 'question', 'concept', 'theory', 'claim', 'evidence', 'method', 'output', 'exploration', 'research', 'source', 'report']
+export const types = ['inspiration', 'question', 'concept', 'theory', 'claim', 'evidence', 'method', 'output', 'exploration', 'research', 'source', 'report', 'finding']
 export const stages = ['question', 'framework', 'evidence', 'analysis', 'judgment', 'validation', 'expression', 'review']
 const relations = ['related', 'derived', 'supports', 'refutes', 'qualifies']
 const validId = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/
