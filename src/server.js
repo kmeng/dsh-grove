@@ -8,6 +8,7 @@ import { Vault } from './vault.js'
 export const routes = {
   status: '/api/grove/status',
   config: '/api/grove/config',
+  connection: '/api/grove/connection',
   capture: '/api/grove/capture',
   inspirations: '/api/grove/inspirations',
 }
@@ -60,6 +61,18 @@ export async function inspectVault(value) {
   if (await realpath(path) !== path) throw coded('symlink', 'The vault path must be a real directory, not a symlink')
   const looksLikeVault = await stat(join(path, '.obsidian')).then(entry => entry.isDirectory(), () => false)
   return { path, looksLikeVault }
+}
+
+async function checkConnection(value) {
+  const candidate = await inspectVault(value)
+  const grove = await new Vault(candidate.path).folder().catch(error => {
+    if (error.code === 'ENOENT') return candidate.path
+    throw coded('invalid-path', 'The Grove directory is not usable')
+  })
+  await access(grove, constants.R_OK | constants.W_OK | constants.X_OK).catch(() => {
+    throw coded('invalid-path', 'The Grove directory must be readable and writable')
+  })
+  return candidate
 }
 
 /** Metadata the panel needs to choose between the cold-start and overview states. Never returns note bodies. */
@@ -184,10 +197,17 @@ export function registerRoutes(ctx, options) {
         return failure(error)
       }
     })
+    route(routes.connection, ['POST'], async request => {
+      try {
+        return json(await checkConnection((await readJson(request))?.path))
+      } catch (error) {
+        return failure(error)
+      }
+    })
     route(routes.config, ['POST'], async request => {
       let path
       try {
-        path = (await inspectVault((await readJson(request))?.path)).path
+        path = (await checkConnection((await readJson(request))?.path)).path
       } catch (error) {
         return failure(error)
       }
