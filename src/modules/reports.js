@@ -46,3 +46,12 @@ export async function readReport(store, id, version) {
   }))
   return { ...note, evidence, versions: await store.versions(id) }
 }
+
+export async function draftFromFinding(store, research, id, version) {
+  const finding = await store.get(id, version)
+  if (finding.meta.type !== 'finding' || !finding.meta.links?.some(link => link.kind === 'related' && link.id === research)) {
+    throw new Error('Choose a finding from this research')
+  }
+  return { body: finding.body, evidence: finding.meta.links.filter(link => link.kind === 'derived')
+    .map(({ id, version }) => ({ id, version })) }
+}

@@ -31,6 +31,8 @@ window.__ModuleLoader__.load({
     var INSPIRATIONS = '/api/grove/inspirations'
 
     var ZH = {
+      'report.review': '审核为报告草稿',
+      'report.discard': '丢弃未保存草稿',
       'model.title': '研究模型',
       'model.enabled': '启用 AI 深挖',
       'model.endpoint': 'HTTPS 模型接口',
@@ -127,6 +129,8 @@ window.__ModuleLoader__.load({
     }
 
     var EN = {
+      'report.review': 'Review as report draft',
+      'report.discard': 'Discard unsaved draft',
       'model.title': 'Research model',
       'model.enabled': 'Enable AI research',
       'model.endpoint': 'HTTPS model endpoint',
@@ -636,7 +640,10 @@ window.__ModuleLoader__.load({
         h('summary', null, T('model.ask')),
         error ? h('p', { role: 'alert' }, messageOf(error)) : null,
         findings.map(function (item) {
-          return h('article', { key: item.meta.id }, h('h3', null, item.meta.title), h('pre', { className: 'gr-code' }, item.body))
+          return h('article', { key: item.meta.id }, h('h3', null, item.meta.title), h('pre', { className: 'gr-code' }, item.body),
+            h('button', { className: 'gr-btn gr-btn-ghost', disabled: busy, onClick: function () {
+              api(REPORTS, { action: 'draft', research: props.id, id: item.meta.id, version: item.meta.version }).then(props.onDraft, setError)
+            } }, T('report.review')))
         }),
         h('form', { onSubmit: ask },
           h('label', null, T('model.question'), h('textarea', { className: 'gr-textarea', value: question,
@@ -783,6 +790,15 @@ window.__ModuleLoader__.load({
       var [error, setError] = useState(null)
       var [editing, setEditing] = useState(false)
 
+      useEffect(function () {
+        if (!props.draft) return
+        setBody(props.draft.body)
+        setReferences(props.draft.evidence)
+        setReport(null)
+        setEditing(true)
+        list().catch(setError)
+      }, [props.draft])
+
       function list() {
         return api(REPORTS, { action: 'list', research: props.id }).then(setCatalog)
       }
@@ -844,7 +860,7 @@ window.__ModuleLoader__.load({
           originals[item.meta.id] ? h('pre', { className: 'gr-code' }, originals[item.meta.id]) : null)
       }
 
-      return h('details', { className: 'gr-card', onToggle: function (event) {
+      return h('details', { className: 'gr-card', open: props.draft ? true : undefined, onToggle: function (event) {
         if (event.currentTarget.open) run(list)
       } },
       h('summary', null, T('report.title')),
@@ -873,10 +889,13 @@ window.__ModuleLoader__.load({
                 : references.filter(function (ref) { return ref.id !== item.id }).concat({ id: item.id, version: item.version }))
             } }), item.title, ' · v', item.version)
         }),
-        h('button', { className: 'gr-btn', disabled: busy || (report && report.meta.version !== report.versions[0]) }, T('report.save'))) : null)
+        h('button', { className: 'gr-btn', disabled: busy || (report && report.meta.version !== report.versions[0]) }, T('report.save')),
+        h('button', { type: 'button', className: 'gr-btn gr-btn-ghost', disabled: busy,
+          onClick: function () { setEditing(false); props.onDiscard() } }, T('report.discard'))) : null)
     }
 
     function ResearchPage(props) {
+      var [reportDraft, setReportDraft] = useState(null)
       var [studies, setStudies] = useState([])
       var [selected, setSelected] = useState(null)
       var [question, setQuestion] = useState('')
@@ -899,6 +918,7 @@ window.__ModuleLoader__.load({
 
       function select(note) {
         setSelected(note)
+        setReportDraft(null)
         setBody(note ? note.body : '')
         setQuestion('')
         setSaved(false)
@@ -939,9 +959,9 @@ window.__ModuleLoader__.load({
             h('span', { role: 'status' }, saved ? T('research.saved') : ''))),
         h(ModelSettings),
         h(ParserSettings),
-        selected ? h(ResearchFindings, { key: 'findings:' + selected.meta.id, id: selected.meta.id, title: selected.meta.title, version: selected.meta.version }) : null,
+        selected ? h(ResearchFindings, { key: 'findings:' + selected.meta.id, id: selected.meta.id, title: selected.meta.title, version: selected.meta.version, onDraft: setReportDraft }) : null,
         selected ? h(ResearchSources, { key: selected.meta.id, id: selected.meta.id }) : null,
-        selected ? h(ResearchReports, { key: 'report:' + selected.meta.id, id: selected.meta.id }) : null,
+        selected ? h(ResearchReports, { key: 'report:' + selected.meta.id, id: selected.meta.id, draft: reportDraft, onDiscard: function () { setReportDraft(null) } }) : null,
         studies.map(function (note) {
           return h('button', { key: note.meta.id, className: 'gr-btn gr-btn-ghost', disabled: busy,
             onClick: function () { select(note) } }, note.meta.title)
