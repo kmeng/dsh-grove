@@ -114,7 +114,7 @@ test('routes answer status, validate paths, and save after responding', async t 
   const editor = { edit: (_entry, change) => { saved = change({}, {}); return Promise.resolve() } }
   const { ctx, registered } = host(editor)
   registerRoutes(ctx, { current: () => ({ path: root, source: 'config' }), saveDelay: 1 })
-  assert.deepEqual([...registered.keys()].sort(), [routes.capture, routes.config, routes.inspirations, routes.status].sort())
+  assert.deepEqual([...registered.keys()].sort(), [routes.capture, routes.config, routes.connection, routes.inspirations, routes.status].sort())
 
   const status = await registered.get(routes.status).fetch(request(routes.status))
   assert.equal(status.status, 200)
@@ -157,4 +157,28 @@ test('status stays available before a vault is configured', async t => {
   const body = await response.json()
   assert.equal(body.configured, false)
   assert.deepEqual(body.counts, { total: 0 })
+})
+
+test('a candidate vault is checked before switching and the previous library stays intact', async t => {
+  const first = await fixture(t)
+  const second = await fixture(t)
+  const invalid = await fixture(t)
+  await symlink(join(first, 'Grove'), join(invalid, 'Grove'))
+  let current = first
+  const { ctx, registered } = host({ edit: async (_entry, next) => { current = next({}).vault } })
+  registerRoutes(ctx, { current: () => ({ path: current, source: 'config' }), saveDelay: 1 })
+  const call = (path, body) => registered.get(path).fetch(request(path, body))
+  const firstIdea = await (await call(routes.capture, { body: 'First library' })).json()
+  assert.equal((await call(routes.connection, { path: invalid })).status, 400)
+  assert.equal((await call(routes.config, { path: invalid })).status, 400)
+  assert.equal(current, first)
+  assert.equal((await call(routes.connection, { path: second })).status, 200)
+  assert.equal(current, first)
+  await call(routes.config, { path: second })
+  await new Promise(resolve => setTimeout(resolve, 20))
+  assert.equal(current, second)
+  assert.deepEqual((await (await call(routes.inspirations, {})).json()).notes, [])
+  await call(routes.config, { path: first })
+  await new Promise(resolve => setTimeout(resolve, 20))
+  assert.equal((await (await call(routes.inspirations, { id: firstIdea.id })).json()).body, 'First library')
 })

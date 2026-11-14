@@ -19,6 +19,7 @@ window.__ModuleLoader__.load({
 
     var NS = 'grove'
     var STATUS = '/api/grove/status'
+    var CONNECTION = '/api/grove/connection'
     var CONFIG = '/api/grove/config'
     var CAPTURE = '/api/grove/capture'
     var INSPIRATIONS = '/api/grove/inspirations'
@@ -236,8 +237,10 @@ window.__ModuleLoader__.load({
       function connect(path) {
         setBusy('connect')
         setError(null)
-        return api(CONFIG, { path: path }).then(function () {
-          return waitForVault(path, 12)
+        return api(CONNECTION, { path: path }).then(function (candidate) {
+          return api(CONFIG, { path: candidate.path }).then(function () {
+            return waitForVault(candidate.path, 12)
+          })
         }).then(function (next) {
           if (!mounted.current) return
           setStatus(next)
