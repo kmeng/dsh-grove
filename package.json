@@ -1,12 +1,13 @@
 {
   "name": "dsh-grove",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Explore with AI in DeepSeek Harness and grow knowledge you can revisit and revise in your own Obsidian vault",
   "license": "MIT",
   "type": "module",
   "main": "./src/plugin.js",
   "exports": {
     ".": "./src/plugin.js",
+    "./client": "./client.js",
     "./package.json": "./package.json",
     "./locale/*.json": "./locale/*.json",
     "./icon": "./icon.svg"
@@ -17,11 +18,13 @@
   },
   "files": [
     "src",
+    "client.js",
     "cordis.patch.yml",
     "locale/*.json",
     "icon.svg",
     "docs/DETAIL.en.md",
-    "docs/DETAIL.zh.md"
+    "docs/DETAIL.zh.md",
+    "docs/preview.svg"
   ],
   "engines": {
     "node": ">=22",
@@ -40,6 +43,14 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-ui-layout"
+      ]
     }
   },
   "peerDependencies": {

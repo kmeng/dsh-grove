@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Grove",
-    "description": "Explore with AI in DeepSeek Harness and pursue research with traceable evidence. You choose what to save and share. Keep knowledge you can revisit and revise in your own Obsidian vault.",
+    "description": "Open Grove from the left sidebar after installing: connect your Obsidian vault, capture a first idea, then return to the conversation and let AI question it, compare explanations, and look for counterexamples. Notes stay as Markdown in the vault's Grove/ folder, ready to revisit, revise, and share; content drafted by AI is saved only after you confirm it in the terminal. Grove reads and writes only that subfolder.",
     "detail": "docs/DETAIL.en.md"
   }
 }
