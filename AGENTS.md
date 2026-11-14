@@ -16,7 +16,7 @@
 2. `gh issue list --state open` 看还在跑什么。
 3. `git status` 与 `git branch --show-current`，确认工作区干净、分支是预期的。
 4. 用三句话复述：项目现在在哪、开着什么、我理解你要做什么。
-5. 等确认再动手。只读问题（"这个字段什么意思"）可以把 4 压成一句话直接答。
+5. 设计方案由用户确认，确认后再动手。只读问题（"这个字段什么意思"）可以把 4 压成一句话直接答。
 
 在 PR 合并、issue 关闭、重大决定之后，主动提议补一篇 `docs/journal/`，不要自己判定会话结束。
 
@@ -58,6 +58,8 @@ bash scripts/verify-install.sh     # 临时 profile 里真装一次，确认 gro
 ### 6. 交付
 
 PR 描述按 [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md)：改了什么、关键文件、实测命令与真实输出、风险与未覆盖、`Closes #n`。没跑过的不要写成跑过。
+
+按已确认的设计方案完成实现并通过本仓库要求的验证后，由 AI 直接合并 PR。
 
 ## 硬规则
 
