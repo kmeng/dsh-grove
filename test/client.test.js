@@ -110,3 +110,31 @@ test('the page renders its cold-start state without a vault', () => {
   assert.equal(tree.type, 'div')
   assert.equal(tree.props.className, 'gr-root')
 })
+
+test('the folder button uses the host picker and cancellation leaves manual entry alone', async () => {
+  const { ctx, registrations } = mount()
+  let picks = 0
+  ctx.remote = { directoryPicker: { async pick() { picks++; return { ok: true, value: null } } } }
+  ctx.inject = (services, callback) => {
+    assert.deepEqual(services, ['remote', 'remote.directoryPicker'])
+    callback(ctx)
+  }
+  const original = React.useState
+  const changes = []
+  let index = 0
+  React.useState = value => {
+    const slot = index++
+    return [slot === 1 ? false : value, next => changes.push([slot, next])]
+  }
+  try {
+    loadModule().factory(requireStub).apply(ctx)
+    const page = registrations.find(item => item.name === 'main').component
+    const tree = page()
+    const connect = tree.children[1].children[0].children.find(item => item?.props?.onPick)
+    await connect.props.onPick()
+    assert.equal(picks, 1)
+    assert.ok(!changes.some(([slot, value]) => slot === 4 && value === true))
+  } finally {
+    React.useState = original
+  }
+})
