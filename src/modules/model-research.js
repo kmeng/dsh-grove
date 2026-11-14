@@ -13,7 +13,13 @@ export async function runResearchModel(store, model, input) {
     }
     refs.set(item.meta.id, { id: item.meta.id, version: item.meta.version, text: item.body })
   }
-  const result = await model.investigate({ question: input.question, materials: [...refs.values()], history: input.history })
+  const inspirationContext = (study.meta.links ?? [])
+    .filter(link => link.kind === 'derived' && typeof link.excerpt === 'string')
+    .map(link => link.excerpt.slice(0, 1600)).slice(0, 4)
+  const result = await model.investigate({
+    question: input.question, materials: [...refs.values()], history: input.history,
+    ...(inspirationContext.length ? { inspirationContext } : {}),
+  })
   if (typeof result?.text !== 'string' || !result.text.trim() || result.text.length > 20000 ||
     !Array.isArray(result.citations) || result.citations.some(id => !refs.has(id))) {
     throw Object.assign(new Error('Model returned invalid or unapproved citations'), { code: 'model-response' })

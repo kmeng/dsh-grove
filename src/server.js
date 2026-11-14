@@ -3,6 +3,7 @@ import { constants } from 'node:fs'
 import { access, realpath, stat } from 'node:fs/promises'
 import { isAbsolute, join, resolve } from 'node:path'
 import { captureInspiration, findInspirations, readInspiration } from './modules/inspirations.js'
+import { inspirationHistory, discoverInspirations } from './modules/inspiration-discovery.js'
 import { startResearch, listResearch, saveResearch } from './modules/research.js'
 import { importSource, saveEvidence, openSource } from './modules/evidence.js'
 import { listReports, confirmReport, readReport, draftFromFinding } from './modules/reports.js'
@@ -217,7 +218,16 @@ export function registerRoutes(ctx, options) {
             (input.version !== undefined && (!Number.isSafeInteger(input.version) || input.version < 1))) {
             throw coded('invalid-body', 'Invalid inspiration reference')
           }
-          return json(await readInspiration(vault, input.id, input.version))
+          const note = await readInspiration(vault, input.id, input.version)
+          if (input.action === 'discover') {
+            const settings = options.modelConfig
+            if (!settings?.enabled || settings.inspirationLinks !== true) return json({ enabled: false, matches: [] })
+            const provider = options.model?.(settings)
+            if (!provider) throw coded('model-key', 'Set GROVE_MODEL_KEY for the host')
+            return json({ enabled: true, matches: await discoverInspirations(vault, provider, note) })
+          }
+          if (input.action === 'detail') return json({ ...note, studies: await inspirationHistory(vault, note.meta.id) })
+          return json(note)
         }
         const query = typeof input?.query === 'string' ? input.query.trim() : ''
         return json({ notes: (await findInspirations(vault, query)).slice(0, 50) })
@@ -245,11 +255,11 @@ export function registerRoutes(ctx, options) {
       })
     }
     route(routes.model, ['GET', 'POST'], async request => {
-      if (request.method === 'GET') return json({ enabled: options.modelConfig?.enabled === true, endpoint: options.modelConfig?.endpoint, name: options.modelConfig?.name })
+      if (request.method === 'GET') return json({ enabled: options.modelConfig?.enabled === true, inspirationLinks: options.modelConfig?.inspirationLinks === true, endpoint: options.modelConfig?.endpoint, name: options.modelConfig?.name })
       try {
         const input = await readJson(request)
         const model = input?.enabled === false ? { enabled: false } :
-          { enabled: true, endpoint: input?.endpoint, name: input?.name }
+          { enabled: true, endpoint: input?.endpoint, name: input?.name, inspirationLinks: input?.inspirationLinks === true }
         if (model.enabled) {
           if (typeof model.endpoint !== 'string' || typeof model.name !== 'string' || !model.name.trim() ||
             model.name.length > 200 || model.endpoint.length > 2048) throw coded('model-settings', 'Enter the model endpoint and name')
@@ -396,8 +406,29 @@ export function registerRoutes(ctx, options) {
         }
         const question = typeof input.question === 'string' ? input.question.trim() : ''
         if (!question || question.length > 300) throw coded('invalid-body', 'Enter a research question up to 300 characters')
-        const origin = input.origin ? (await readKnowledge(vault, input.origin.id, input.origin.version)).meta : undefined
-        return json(await startResearch(vault, question, body, origin))
+        const origins = []
+        if (input.origin) {
+          const { meta } = await readKnowledge(vault, input.origin.id, input.origin.version)
+          origins.push({ id: meta.id, version: meta.version })
+        }
+        if (input.inspirations !== undefined) {
+          if (!Array.isArray(input.inspirations) || input.inspirations.length > 4) {
+            throw coded('invalid-body', 'Choose up to four inspirations')
+          }
+          for (const ref of input.inspirations) {
+            if (typeof ref?.id !== 'string' || !/^[a-f0-9-]{36}$/.test(ref.id) || !Number.isSafeInteger(ref.version) || ref.version < 1 ||
+              (ref.excerpt !== undefined && (typeof ref.excerpt !== 'string' || !ref.excerpt.trim()))) {
+              throw coded('invalid-body', 'Choose an exact inspiration version')
+            }
+            const note = await readInspiration(vault, ref.id, ref.version)
+            if (ref.excerpt !== undefined && !note.body.includes(ref.excerpt)) {
+              throw coded('invalid-body', 'Choose an excerpt from the referenced inspiration')
+            }
+            if (origins.some(origin => origin.id === ref.id)) continue
+            origins.push({ id: note.meta.id, version: note.meta.version, excerpt: ref.excerpt ?? note.body.slice(0, 1600) })
+          }
+        }
+        return json(await startResearch(vault, question, body, origins))
       } catch (error) {
         return failure(error)
       }
