@@ -4,6 +4,7 @@ import { access, realpath, stat } from 'node:fs/promises'
 import { isAbsolute, join, resolve } from 'node:path'
 import { captureInspiration, findInspirations, readInspiration } from './modules/inspirations.js'
 import { startResearch, listResearch, saveResearch } from './modules/research.js'
+import { importSource, saveEvidence, openSource } from './modules/evidence.js'
 import { Vault } from './vault.js'
 
 export const routes = {
@@ -11,6 +12,7 @@ export const routes = {
   config: '/api/grove/config',
   connection: '/api/grove/connection',
   capture: '/api/grove/capture',
+  sources: '/api/grove/sources',
   research: '/api/grove/research',
   inspirations: '/api/grove/inspirations',
 }
@@ -195,6 +197,40 @@ export function registerRoutes(ctx, options) {
         }
         const query = typeof input?.query === 'string' ? input.query.trim() : ''
         return json({ notes: (await findInspirations(vault, query)).slice(0, 50) })
+      } catch (error) {
+        return failure(error)
+      }
+    })
+    route(routes.sources, ['POST'], async request => {
+      try {
+        const { path } = options.current()
+        if (!path) throw coded('not-configured', 'Grove has no vault yet')
+        const vault = new Vault(path)
+        const input = await readJson(request)
+        if (input?.action === 'import') {
+          const name = input.name
+          const original = input.original
+          if (typeof name !== 'string' || !name.trim() || name.length > 256 ||
+            typeof original !== 'string' || !/^[A-Za-z0-9+/]+={0,2}$/.test(original)) {
+            throw coded('invalid-body', 'Choose a Markdown or PDF file')
+          }
+          if (original.length > 700000) throw coded('too-large', 'File exceeds the import limit')
+          return json(await importSource(vault, options.parsers ?? new Map(), {
+            name, original, research: input.research, bytes: Buffer.from(original, 'base64'),
+          }))
+        }
+        if (input?.action === 'excerpt') {
+          return json(await saveEvidence(vault, { id: input.id, version: input.version }, input.index))
+        }
+        if (input?.action === 'open' && Number.isSafeInteger(input.version) && input.version > 0) {
+          return json(await openSource(vault, input.id, input.version))
+        }
+        if (input?.action === 'list') {
+          const notes = await vault.list()
+          return json({ sources: notes.filter(({ meta }) => meta.type === 'source' &&
+            meta.links?.some(link => link.kind === 'related' && link.id === input.research)).map(({ meta }) => meta) })
+        }
+        throw coded('invalid-body', 'Choose a source action')
       } catch (error) {
         return failure(error)
       }

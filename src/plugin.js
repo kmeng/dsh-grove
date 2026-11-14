@@ -1,6 +1,7 @@
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { Vault, types } from './vault.js'
 import { propose, roles } from './proposals.js'
+import { documentParsers } from './adapters/parsers/documents.js'
 import { registerRoutes } from './server.js'
 
 export const name = 'grove'
@@ -24,7 +25,7 @@ export function apply(ctx, config = {}) {
   const { path, source } = configuredVault(config)
 
   // The panel routes stay registered without a vault so the cold start can pick one.
-  if (typeof ctx.inject === 'function') registerRoutes(ctx, { current: () => configuredVault(config) })
+  if (typeof ctx.inject === 'function') registerRoutes(ctx, { current: () => configuredVault(config), parsers: documentParsers(config.parsers) })
 
   if (path === undefined) return
   let vault
@@ -49,7 +50,7 @@ export function apply(ctx, config = {}) {
     name: 'grove_propose',
     description: 'When asked, save a draft for local human review. This tool does not create a knowledge asset.',
     parameters: {
-      type: { type: 'string', enum: types.filter(type => !['evidence', 'research'].includes(type)), required: true },
+      type: { type: 'string', enum: types.filter(type => !['evidence', 'research', 'source'].includes(type)), required: true },
       body: { type: 'string', required: true },
       title: { type: 'string' },
       origin: { type: 'string', description: 'User-approved session reference or source description' },

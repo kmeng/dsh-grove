@@ -22,10 +22,17 @@ window.__ModuleLoader__.load({
     var CONNECTION = '/api/grove/connection'
     var CONFIG = '/api/grove/config'
     var CAPTURE = '/api/grove/capture'
+    var SOURCES = '/api/grove/sources'
     var RESEARCH = '/api/grove/research'
     var INSPIRATIONS = '/api/grove/inspirations'
 
     var ZH = {
+      'source.title': '研究资料',
+      'source.import': '导入 Markdown 或文本 PDF',
+      'source.read': '看看原文',
+      'source.save': '保存为证据',
+      'source.saved': '证据已保存',
+      'source.open': '打开原始文件',
       'research.title': '研究',
       'research.new': '新建独立研究',
       'research.question': '想深挖什么？',
@@ -92,6 +99,12 @@ window.__ModuleLoader__.load({
     }
 
     var EN = {
+      'source.title': 'Sources',
+      'source.import': 'Import Markdown or text PDF',
+      'source.read': 'View original passage',
+      'source.save': 'Save as evidence',
+      'source.saved': 'Evidence saved',
+      'source.open': 'Open original file',
       'research.title': 'Research',
       'research.new': 'New independent study',
       'research.question': 'What do you want to explore?',
@@ -484,6 +497,87 @@ window.__ModuleLoader__.load({
       )
     }
 
+    async function readSourceFile(file) {
+      if (file.size > 500000) throw new Error(T('err.too-large'))
+      var bytes = new Uint8Array(await file.arrayBuffer())
+      var binary = ''
+      for (var i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
+      return btoa(binary)
+    }
+
+    function ResearchSources(props) {
+      var [items, setItems] = useState([])
+      var [document, setDocument] = useState(null)
+      var [busy, setBusy] = useState(false)
+      var [error, setError] = useState(null)
+      var [saved, setSaved] = useState(false)
+      useEffect(function () {
+        var active = true
+        api(SOURCES, { action: 'list', research: props.id }).then(function (value) {
+          if (active) setItems(value.sources)
+        }, function (problem) {
+          if (active) setError(problem)
+        })
+        return function () { active = false }
+      }, [props.id])
+
+      async function run(operation) {
+        setBusy(true)
+        setError(null)
+        setSaved(false)
+        try { await operation() }
+        catch (problem) { setError(problem) }
+        finally { setBusy(false) }
+      }
+
+      async function upload(event) {
+        var file = event.target.files[0]
+        event.target.value = ''
+        if (!file) return
+        await run(async function () {
+          var original = await readSourceFile(file)
+          var result = await api(SOURCES, { action: 'import', name: file.name, original: original, research: props.id })
+          setItems(function (existing) { return [result.meta].concat(existing.filter(function (item) { return item.id !== result.meta.id })) })
+          setDocument({ meta: result.meta, blocks: result.blocks, original: original })
+        })
+      }
+
+      function download() {
+        var bytes = Uint8Array.from(atob(document.original), function (character) { return character.charCodeAt(0) })
+        var url = URL.createObjectURL(new Blob([bytes]))
+        var link = window.document.createElement('a')
+        link.href = url
+        link.download = document.meta.title
+        link.click()
+        setTimeout(function () { URL.revokeObjectURL(url) }, 1000)
+      }
+
+      return h('section', { className: 'gr-card' },
+        h('h2', { className: 'gr-h2' }, T('source.title')),
+        h('label', null, T('source.import'), ' ',
+          h('input', { type: 'file', accept: '.md,.markdown,.pdf', disabled: busy, onChange: upload })),
+        error ? h('p', { role: 'alert' }, messageOf(error)) : null,
+        h('p', { role: 'status' }, saved ? T('source.saved') : ''),
+        items.map(function (item) {
+          return h('button', { key: item.id, className: 'gr-btn gr-btn-ghost', disabled: busy, onClick: function () {
+            run(async function () { setDocument(await api(SOURCES, { action: 'open', id: item.id, version: item.version })) })
+          } }, item.title)
+        }),
+        document ? h('div', null,
+          h('button', { className: 'gr-btn', onClick: download }, T('source.open')),
+          document.blocks.map(function (block, index) {
+            return h('details', { key: document.meta.id + ':' + index },
+              h('summary', null, T('source.read'), ' · ', block.locator),
+              h('pre', { className: 'gr-code' }, block.text),
+              h('button', { className: 'gr-btn', disabled: busy, onClick: function () {
+                run(async function () {
+                  await api(SOURCES, { action: 'excerpt', id: document.meta.id, version: document.meta.version, index: index })
+                  setSaved(true)
+                })
+              } }, T('source.save')))
+          })) : null)
+    }
+
     function ResearchPage(props) {
       var [studies, setStudies] = useState([])
       var [selected, setSelected] = useState(null)
@@ -545,6 +639,7 @@ window.__ModuleLoader__.load({
           h('div', { className: 'gr-row' },
             h('button', { className: 'gr-btn', disabled: busy }, T('research.save')),
             h('span', { role: 'status' }, saved ? T('research.saved') : ''))),
+        selected ? h(ResearchSources, { key: selected.meta.id, id: selected.meta.id }) : null,
         studies.map(function (note) {
           return h('button', { key: note.meta.id, className: 'gr-btn gr-btn-ghost', disabled: busy,
             onClick: function () { select(note) } }, note.meta.title)
