@@ -16,7 +16,7 @@
 2. Run `gh issue list --state open` to see what is in flight.
 3. Run `git status` and `git branch --show-current`; confirm a clean tree and the expected branch.
 4. Restate in three sentences: where the project stands, what is open, and what I understand you are asking for.
-5. Wait for confirmation before acting. For read-only questions ("what does this field mean") compress step 4 into one sentence and just answer.
+5. The user approves the design before implementation begins. For read-only questions ("what does this field mean") compress step 4 into one sentence and just answer.
 
 After a merged PR, a closed issue or a major decision, offer to add a `docs/journal/` entry. Do not decide on your own that the session is over.
 
@@ -58,6 +58,8 @@ When you touch the icon or the locale files, confirm with the host's `readPlugin
 ### 6. Deliver
 
 Write the PR description per [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md): what changed, key files, the commands actually run with their real output, risks and gaps, `Closes #n`. Never describe a command you did not run as if you ran it.
+
+Once implementation follows the approved design and passes the required repository checks, the AI merges the PR directly.
 
 ## Hard rules
 
