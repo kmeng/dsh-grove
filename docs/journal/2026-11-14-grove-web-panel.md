@@ -7,7 +7,7 @@
 - [#29](https://github.com/kmeng/dsh-grove/issues/29) → [PR #30](https://github.com/kmeng/dsh-grove/pull/30)：中文界面菜单显示「知林」，英文仍是 `Grove`；面板标题保持 `Grove`。
 - 0.2.0 发布：npm latest 0.2.0，tarball 17 文件；宿主 `readPluginMeta` 读发布包，中英标题、介绍、图标齐全。
 - desktop profile 从 npm 0.1.2 切为 `link:` 0.2.0；用户确认左侧菜单显示「知林」。
-- 决策 D-005（需要长期保留的 Web 客户端与路由形态）写进 [DECISIONS.md](../development/DECISIONS.md)。
+- 决策 D-006（需要长期保留的 Web 客户端与路由形态）写进 [DECISIONS.md](../development/DECISIONS.md)。
 
 ## 卡住
 
