@@ -16,7 +16,7 @@ export async function runResearchModel(store, model, input) {
   const result = await model.investigate({ question: input.question, materials: [...refs.values()], history: input.history })
   if (typeof result?.text !== 'string' || !result.text.trim() || result.text.length > 20000 ||
     !Array.isArray(result.citations) || result.citations.some(id => !refs.has(id))) {
-    throw new Error('Model returned invalid or unapproved citations')
+    throw Object.assign(new Error('Model returned invalid or unapproved citations'), { code: 'model-response' })
   }
   const links = [{ kind: 'related', id: study.meta.id, version: study.meta.version }]
   for (const id of new Set(result.citations)) {

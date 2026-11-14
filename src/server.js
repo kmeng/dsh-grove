@@ -46,11 +46,25 @@ function statusOf(error) {
     case 'invalid-path':
     case 'not-directory':
     case 'symlink':
+    case 'model-settings':
+    case 'model-endpoint':
     case 'invalid-body':
       return 400
     case 'not-found':
     case 'ENOENT':
       return 404
+    case 'model-timeout':
+      return 504
+    case 'model-auth':
+    case 'model-not-found':
+    case 'model-rate-limit':
+    case 'model-network':
+    case 'model-rejected':
+    case 'model-unavailable':
+    case 'model-response':
+      return 502
+    case 'model-key':
+    case 'model-disabled':
     case 'not-configured':
       return 409
     case 'too-large':
@@ -238,17 +252,17 @@ export function registerRoutes(ctx, options) {
           { enabled: true, endpoint: input?.endpoint, name: input?.name }
         if (model.enabled) {
           if (typeof model.endpoint !== 'string' || typeof model.name !== 'string' || !model.name.trim() ||
-            model.name.length > 200 || model.endpoint.length > 2048) throw coded('invalid-body', 'Enter the model endpoint and name')
-          const url = new URL(model.endpoint)
-          if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) {
-            throw coded('invalid-body', 'Use an HTTPS endpoint without embedded credentials')
+            model.name.length > 200 || model.endpoint.length > 2048) throw coded('model-settings', 'Enter the model endpoint and name')
+          const url = URL.parse(model.endpoint)
+          if (!url || url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) {
+            throw coded('model-endpoint', 'Use an HTTPS endpoint without credentials, query parameters or fragments')
           }
           if (input.test === true) {
             const provider = options.model?.(model)
-            if (!provider) throw coded('invalid-body', 'Set GROVE_MODEL_KEY for the host')
-            const reply = await provider.investigate({ question: 'Confirm the connection. Return JSON.', materials: [], history: [] })
-            if (typeof reply?.text !== 'string' || !Array.isArray(reply.citations) || reply.citations.length) {
-              throw coded('invalid-body', 'The model did not return the expected format')
+            if (!provider) throw coded('model-key', 'Set GROVE_MODEL_KEY for the host')
+            const reply = await provider.investigate({ question: 'This is a connection test. Return only {"text":"OK","citations":[]}.', materials: [], history: [] })
+            if (typeof reply?.text !== 'string' || !reply.text.trim() || !Array.isArray(reply.citations) || reply.citations.length) {
+              throw coded('model-response', 'The model did not return the expected format')
             }
             return json({ ok: true })
           }
@@ -277,8 +291,9 @@ export function registerRoutes(ctx, options) {
         const question = typeof input?.question === 'string' ? input.question.trim() : ''
         if (!question || question.length > 1000 || !Array.isArray(input.materials) || input.materials.length > 20 ||
           !Number.isSafeInteger(input.version) || input.version < 1) throw coded('invalid-body', 'Enter a research question and select evidence')
-        const provider = options.modelConfig?.enabled ? options.model?.(options.modelConfig) : null
-        if (!provider) throw coded('not-configured', 'Configure and enable a model first')
+        if (!options.modelConfig?.enabled) throw coded('model-disabled', 'Configure and enable a model first')
+        const provider = options.model?.(options.modelConfig)
+        if (!provider) throw coded('model-key', 'Set GROVE_MODEL_KEY for the host')
         return json(await runResearchModel(store, provider, { ...input, question, history: input.includeHistory === true ? findings.map(({ meta, body }) => ({ question: meta.title, text: body })).slice(-8) : [] }))
       } catch (error) {
         return failure(error)
@@ -369,10 +384,12 @@ export function registerRoutes(ctx, options) {
         const vault = new Vault(path)
         if (request.method === 'GET') return json({ studies: await listResearch(vault) })
         const input = await readJson(request)
-        const body = typeof input?.body === 'string' ? input.body.trim() : ''
-        if (!body) throw coded('invalid-body', 'Write down your research notes')
+        if (!input || (input.body !== undefined && typeof input.body !== 'string')) {
+          throw coded('invalid-body', 'Research notes must be text')
+        }
+        const body = input.body?.trim() ?? ''
         if (input.id !== undefined) {
-          if (typeof input.id !== 'string' || !Number.isSafeInteger(input.version) || input.version < 1) {
+          if (typeof input.body !== 'string' || typeof input.id !== 'string' || !Number.isSafeInteger(input.version) || input.version < 1) {
             throw coded('invalid-body', 'Invalid research version')
           }
           return json(await saveResearch(vault, input.id, input.version, body))

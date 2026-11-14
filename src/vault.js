@@ -116,7 +116,7 @@ export class Vault {
     if (!validId.test(id)) throw new Error('Invalid Grove ID')
     const type = input.type
     if (!types.includes(type)) throw new Error('Unknown asset type')
-    const body = required(input.body, 'body')
+    const body = type === 'research' && typeof input.body === 'string' ? input.body.trim() : required(input.body, 'body')
     const meta = { grove: 1, id, version: 1, type, title: input.title?.trim() || body.split('\n')[0].slice(0, 100), created: new Date().toISOString() }
     if (input.origin) meta.origin = required(input.origin, 'origin')
     if (type === 'question' || type === 'research') meta.status = 'open'
@@ -151,7 +151,7 @@ export class Vault {
     const { meta } = note
     let body = note.body
     if (change.body !== undefined) {
-      body = required(change.body, 'body')
+      body = meta.type === 'research' && typeof change.body === 'string' ? change.body.trim() : required(change.body, 'body')
       if (meta.type === 'claim' && body !== note.body) {
         meta.links = (meta.links ?? []).filter(edge => !['supports', 'refutes', 'qualifies'].includes(edge.kind))
       }
