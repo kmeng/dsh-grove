@@ -6,7 +6,7 @@
 ## What this repository is
 
 - A DeepSeek Harness (dsh) plugin, and specifically a dsh **bundle**: `package.json`'s `dsh.bundle.patch` points at `cordis.patch.yml`, which inserts one `grove` row into the host composition.
-- Host-only, no web UI. The surface is three model tools (`grove_role` / `grove_propose` / `grove_read`) plus one terminal CLI.
+- A Host half plus a web client: the Grove panel in the left sidebar connects a vault and captures a first idea; the model surface is three tools (`grove_role` / `grove_propose` / `grove_read`) plus one terminal CLI.
 - User data lives in **the user's** Obsidian vault. The repository stores no user content; tests only ever write to temporary directories.
 - Support range is declared by `engines.dsh`: `>=0.2.2-rc.1 <0.3.0`.
 

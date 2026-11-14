@@ -22,9 +22,9 @@ AI 可以追问、比较解释、查找反例和协助表达。你决定相信�
 
 ## Grove 如何实践这套方法
 
-Grove 是连接 DeepSeek Harness 和 Obsidian 的插件。当前版本把自由对话、自主保存和基础证据研究接在一起。你可以从会话挑出值得保留的内容，把它保存成自己 vault 里的 Markdown，并用版本和双链回看问题、证据与判断的关联。指南里的学习、反思和完整研究方法可以手工实践。
+Grove 是连接 DeepSeek Harness 和 Obsidian 的插件。当前版本把左侧 Grove 面板、自由对话、自主保存和基础证据研究接在一起。安装后左侧菜单出现 Grove：连接 vault、写下第一条灵感；回到会话里让 AI 陪你追问。你可以从会话挑出值得保留的内容，把它保存成自己 vault 里的 Markdown，并用版本和双链回看问题、证据与判断的关联。指南里的学习、反思和完整研究方法可以手工实践。
 
-## 安装 v0.1.2
+## 安装 v0.2.0
 
 需要 Node.js 22 或更高版本、一个已有的 Obsidian vault，以及 DeepSeek Harness `>=0.2.2-rc.1 <0.3.0`。兼容范围由 `engines.dsh` 声明：它必须是范围而不是某一个精确版本，否则 dsh 会把整个 bundle 判为不兼容并跳过加载。
 
@@ -34,10 +34,10 @@ Grove 是连接 DeepSeek Harness 和 Obsidian 的插件。当前版本把自由�
 | --- | --- |
 | Desktop | **Plugins → Add plugin**，选择本仓库目录；按目录安装会装成 `link:`，改完代码重启宿主即生效 |
 | 会话里 | 让 agent 调用 `plugin_manager` 的 `install_bundle`，`target` 传目录绝对路径 |
-| npm | `dsh plugin --profile <profile> add dsh-grove`（0.1.2 起已发布到 npm） |
+| npm | `dsh plugin --profile <profile> add dsh-grove`（0.2.0 起已发布到 npm） |
 | CLI | `dsh plugin --profile <profile> add <目录或 tgz>`。Desktop 的 profile 由 App 管理，命令行装进 `profiles/web` 不会出现在 Desktop |
 
-装完在 **Plugins** 页确认 Grove 这一条出现，并在新会话里让模型调用 `grove_role`——工具真的注册上才算装好。
+装完左侧菜单出现 **Grove**：点开选择 vault，写下第一条灵感。再到 **Plugins** 页确认 Grove 这一条出现，并在新会话里让模型调用 `grove_role`——工具真的注册上才算装好。
 
 ### 独立 profile 试用（不碰日常配置）
 
@@ -55,12 +55,12 @@ npx --yes @deepseek-ai/dsh@0.2.2-rc.3 --profile grove
 
 ```sh
 npm pack --pack-destination /tmp
-npm install --global /tmp/dsh-grove-0.1.2.tgz
+npm install --global /tmp/dsh-grove-0.2.0.tgz
 ```
 
 ## 日常使用
 
-1. 终端执行 `grove capture --body '为什么组织扩大后协调成本会上升？'`。在 Obsidian 中打开 vault 的 `Grove` 文件夹可看到 Markdown 笔记。
+1. 点开左侧菜单的 **Grove**，选择你的 Obsidian vault，写下第一条灵感。也可以继续用终端：`grove capture --body '为什么组织扩大后协调成本会上升？'`。在 Obsidian 中打开 vault 的 `Grove` 文件夹可看到 Markdown 笔记。
 2. 在 Harness 中自由对话。可要求使用 `grove_role` 作为思想伙伴、知识助手、研究助手、批判性审查者或创造助手。想保留一段讨论时，请求 `grove_propose` 起草，并提供你愿意保存的会话引用。探索可以直接结束。
 3. 在自己的终端执行 `grove preview 草稿ID`。用 `grove accept 草稿ID` 查看并输入 `SAVE`，或执行 `grove discard 草稿ID`。确认时也可用 `--file` 提供你编辑过的正文。
 4. 用 `grove list` 查询资产，用 `grove show 资产ID --version 1` 回看具体版本。默认 Grove 不向模型提供资产正文。若希望分享指定笔记，启动宿主前将 `GROVE_READABLE_IDS` 设为逗号分隔的资产 ID。取消分享后重新启动宿主。已进入宿主会话的内容仍受宿主历史设置约束。

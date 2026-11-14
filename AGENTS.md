@@ -6,7 +6,7 @@
 ## 这个仓库是什么
 
 - 一个 DeepSeek Harness（dsh）插件，也是 dsh 的一个 **bundle**：`package.json` 的 `dsh.bundle.patch` 指向 `cordis.patch.yml`，往宿主 composition 里插一行 `grove`。
-- Host-only，没有 Web 界面；对外能力是三个模型工具（`grove_role` / `grove_propose` / `grove_read`）加一个终端 CLI。
+- Host 半边加一个 Web 客户端：左侧 Grove 面板负责连接 vault、写入第一条灵感；模型能力是三个工具（`grove_role` / `grove_propose` / `grove_read`）加一个终端 CLI。
 - 用户数据在**用户的** Obsidian vault 里，仓库不保存任何用户内容。写测试只用临时目录。
 - 支持范围由 `engines.dsh` 声明：`>=0.2.2-rc.1 <0.3.0`。
 

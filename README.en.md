@@ -22,9 +22,9 @@ AI can ask questions, compare explanations, surface counterexamples, and help yo
 
 ## How Grove puts the method into practice
 
-Grove connects DeepSeek Harness and Obsidian. The current version connects open-ended conversation, user-confirmed saves, and basic evidence tracking. Choose what to keep from a conversation, save it as Markdown in your own vault, and use versions and wikilinks to revisit relationships among questions, evidence, and claims. You can practice the guide’s learning, reflection, and full research methods by hand.
+Grove connects DeepSeek Harness and Obsidian. The current version connects the Grove panel in the left sidebar, open-ended conversation, user-confirmed saves, and basic evidence tracking. After installing, Grove appears in the sidebar: connect a vault and capture a first idea, then return to the conversation. Choose what to keep from a conversation, save it as Markdown in your own vault, and use versions and wikilinks to revisit relationships among questions, evidence, and claims. You can practice the guide’s learning, reflection, and full research methods by hand.
 
-## Install v0.1.1
+## Install v0.2.0
 
 You need Node.js 22 or later, an existing Obsidian vault, and DeepSeek Harness `>=0.2.2-rc.1 <0.3.0`. The `engines.dsh` range determines whether the host loads the bundle.
 
@@ -34,9 +34,10 @@ You need Node.js 22 or later, an existing Obsidian vault, and DeepSeek Harness `
 | --- | --- |
 | Desktop | Open **Plugins → Add plugin** and select this repository directory. The host installs a `link:` dependency. Restart the host after editing the source. |
 | In a session | Ask the agent to call `plugin_manager` with `install_bundle` and pass the directory’s absolute path as `target`. |
+| npm | `dsh plugin --profile <profile> add dsh-grove` (published to npm since 0.2.0). |
 | CLI | Run `dsh plugin --profile <profile> add <directory-or-tgz>`. The Desktop app manages its own profile. Packages installed into `profiles/web` do not appear there. |
 
-Check that Grove appears on the **Plugins** page, then ask the model to call `grove_role` in a new session to confirm the tool is registered.
+After installing, **Grove** appears in the left sidebar: open it, choose a vault, and capture a first idea. Check that Grove also appears on the **Plugins** page, then ask the model to call `grove_role` in a new session to confirm the tool is registered.
 
 ### Try a separate profile
 
@@ -54,12 +55,12 @@ A global installation puts the package’s `grove` executable on PATH. Installin
 
 ```sh
 npm pack --pack-destination /tmp
-npm install --global /tmp/dsh-grove-0.1.1.tgz
+npm install --global /tmp/dsh-grove-0.2.0.tgz
 ```
 
 ## Everyday use
 
-1. Run `grove capture --body 'Why might coordination costs increase as an organization grows?'` and open the `Grove` folder in Obsidian to see the Markdown note.
+1. Open **Grove** in the left sidebar, choose your Obsidian vault, and capture a first idea. You can also keep using the terminal: `grove capture --body 'Why might coordination costs increase as an organization grows?'`. Open the `Grove` folder in Obsidian to see the Markdown note.
 2. Explore in Harness. Use `grove_role` for a thinking partner, knowledge assistant, research assistant, critical reviewer, or creation assistant. Ask `grove_propose` to draft a note when you want to keep something, and supply the conversation reference you want to save. You can also end the exploration there.
 3. Run `grove preview DRAFT_ID` in your terminal. Use `grove accept DRAFT_ID` and type `SAVE`, or run `grove discard DRAFT_ID`. Pass `--file` when accepting to supply your edited body.
 4. Use `grove list` and `grove show ASSET_ID --version 1` to revisit your notes. To share selected notes with the model, set `GROVE_READABLE_IDS` to a comma-separated list of asset IDs before starting the host. Restart the host after revoking that access. Content already shared in a session follows the host’s history settings.
