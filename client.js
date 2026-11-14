@@ -24,6 +24,7 @@ window.__ModuleLoader__.load({
 
     var ZH = {
       panel: 'Grove',
+      menu: '知林',
       subtitle: '把探索留在自己的 vault 里。',
       'status.connected': '已连接',
       'status.disconnected': '未连接',
@@ -97,6 +98,7 @@ window.__ModuleLoader__.load({
 
     var EN = {
       panel: 'Grove',
+      menu: 'Grove',
       subtitle: 'Keep what you explore in your own vault.',
       'status.connected': 'Connected',
       'status.disconnected': 'Not connected',
@@ -627,7 +629,7 @@ window.__ModuleLoader__.load({
       slots.inject('sidebar.panellist', function () {
         return slots.register({
           name: 'sidebar.panellist', id: 'grove', order: 40,
-          label: function () { return T('panel') }, locale: NS,
+          label: function () { return T('menu') }, locale: NS,
         }, GroveIcon)
       })
     }
