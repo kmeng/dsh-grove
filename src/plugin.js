@@ -1,6 +1,7 @@
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { Vault, types } from './vault.js'
 import { propose, roles } from './proposals.js'
+import { registerRoutes } from './server.js'
 
 export const name = 'grove'
 export const inject = ['tools']
@@ -10,10 +11,30 @@ const output = {
   render: (_args, value) => [{ type: 'text', text: value }],
 }
 
+/** The vault a row configured, else GROVE_VAULT. The panel reports which one is in use. */
+function configuredVault(config) {
+  const fromConfig = typeof config.vault === 'string' ? config.vault.trim() : ''
+  const fromEnv = (process.env.GROVE_VAULT ?? '').trim()
+  if (fromConfig !== '') return { path: fromConfig, source: 'config' }
+  if (fromEnv !== '') return { path: fromEnv, source: 'env' }
+  return { path: undefined, source: null }
+}
+
 export function apply(ctx, config = {}) {
-  const path = config.vault ?? process.env.GROVE_VAULT
-  if (!path) return
-  const vault = new Vault(path)
+  const { path, source } = configuredVault(config)
+
+  // The panel routes stay registered without a vault so the cold start can pick one.
+  if (typeof ctx.inject === 'function') registerRoutes(ctx, { current: () => configuredVault(config) })
+
+  if (path === undefined) return
+  let vault
+  try {
+    vault = new Vault(path)
+  } catch (error) {
+    // An unusable path must not take the whole plugin down: the panel shows the problem instead.
+    console.warn(`[grove] ${error.message}`)
+    return
+  }
   const allowed = new Set(config.readableIds ?? (process.env.GROVE_READABLE_IDS ?? '').split(',').map(id => id.trim()).filter(Boolean))
 
   ctx.tools.register(defineTool({

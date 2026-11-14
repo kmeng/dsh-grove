@@ -109,7 +109,7 @@ test('files covers everything the bundle needs at runtime and display', async ()
 })
 
 test('exports subpaths resolve inside the package', async () => {
-  const specifiers = [manifest.name, `${manifest.name}/package.json`, `${manifest.name}/icon`, `${manifest.name}/locale/en.json`]
+  const specifiers = [manifest.name, `${manifest.name}/package.json`, `${manifest.name}/icon`, `${manifest.name}/locale/en.json`, `${manifest.name}/client`]
   for (const specifier of specifiers) {
     const resolved = fileURLToPath(import.meta.resolve(specifier))
     assert.ok(resolved.startsWith(root + sep), `${specifier} resolves outside the package: ${resolved}`)
@@ -143,6 +143,36 @@ test('icon is well-formed, self-contained and within the size limit', async () =
   }
   assert.deepEqual(stack, [], 'icon has unclosed elements')
   assert.ok(Buffer.byteLength(svg) < 256 * 1024)
+})
+
+test('the web client is declared, exported and shipped', async () => {
+  const client = manifest.dsh?.client
+  assert.equal(client?.platform, 'web')
+  assert.equal(client?.immediately, true)
+  assert.ok(Array.isArray(client?.inject) && client.inject.length > 0, 'client.inject must order activation')
+  assert.equal(manifest.exports?.['./client'], './client.js')
+  assert.ok(await isFile('client.js'))
+  const source = await readFile(join(root, 'client.js'), 'utf8')
+  assert.match(source, /__ModuleLoader__\.load\(\{/)
+  assert.match(source, /id: 'dsh-grove'/)
+  assert.match(source, /sidebar\.panellist/)
+  assert.match(source, /name: 'main'/)
+})
+
+test('each detail document shows exactly one packaged feature image', async () => {
+  for (const locale of ['en', 'zh']) {
+    const data = JSON.parse(await readFile(join(root, 'locale', `${locale}.json`), 'utf8'))
+    const detail = await readFile(join(root, rel(data.meta.detail)), 'utf8')
+    const images = [...detail.matchAll(/!\[[^\]]*\]\(([^)]+)\)/g)]
+    assert.equal(images.length, 1, `${locale}: the detail document must show one image`)
+    assert.equal(images[0][1], 'preview.svg')
+  }
+  const svg = await readFile(join(root, 'docs/preview.svg'), 'utf8')
+  assert.match(svg, /viewBox="0 0 640 300"/)
+  for (const forbidden of ['<script', '<style', '<foreignObject', '<text']) {
+    assert.ok(!svg.includes(forbidden), `preview.svg must not contain ${forbidden}`)
+  }
+  assert.ok(Buffer.byteLength(svg) < 1024 * 1024)
 })
 
 test('brand assets stay out of the npm package, and icon.svg mirrors the master', async () => {

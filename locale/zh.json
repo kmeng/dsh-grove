@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Grove（知林）",
-    "description": "在 DeepSeek Harness 中与 AI 自由探索，按需开展有据可查的研究。你决定保存和分享什么，知识以可回看、可修正的 Markdown 笔记留在自己的 Obsidian vault。",
+    "description": "安装后从左侧菜单的 Grove 打开面板：连接你的 Obsidian vault，写下第一条灵感，再回到会话里让 AI 陪你追问、比较解释、查找反例。笔记以 Markdown 留在 vault 的 Grove/ 文件夹，可回看、修订和分享；AI 起草的内容需要你在终端确认后才落盘。Grove 只读写这个子文件夹。",
     "detail": "docs/DETAIL.zh.md"
   }
 }
