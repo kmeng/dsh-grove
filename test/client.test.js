@@ -23,7 +23,7 @@ function loadModule() {
   return loaded
 }
 
-function mount() {
+function mount(localeId = 'zh') {
   const dictionaries = {}
   const registrations = []
   const effects = []
@@ -31,7 +31,10 @@ function mount() {
     locale: {
       register(namespace, value) { dictionaries[namespace] = value; return () => {} },
       bind(namespace) {
-        return key => dictionaries[namespace]?.zh?.[key] ?? dictionaries[namespace]?.en?.[key] ?? key
+        return key => {
+          const value = dictionaries[namespace]?.[localeId]?.[key]
+          return value === undefined ? key : value
+        }
       },
     },
     effect(fn) { effects.push(fn()); return () => {} },
@@ -65,7 +68,7 @@ test('the client registers a Grove sidebar entry and a matching main panel', () 
   assert.equal(typeof main.component, 'function')
   assert.equal(sidebar.id, 'grove')
   assert.equal(sidebar.order, 40)
-  assert.equal(sidebar.label(), 'Grove')
+  assert.equal(sidebar.label(), '知林')
   assert.equal(typeof sidebar.component, 'function')
 
   const icon = sidebar.component({ size: 16, active: false })
@@ -82,6 +85,19 @@ test('the client registers a Grove sidebar entry and a matching main panel', () 
     assert.equal(typeof value, 'string', key)
     assert.ok(value.trim() !== '', key)
   }
+})
+
+test('the sidebar label follows the active locale', () => {
+  const loaded = loadModule()
+  const app = loaded.factory(requireStub)
+
+  const zh = mount('zh')
+  app.apply(zh.ctx)
+  assert.equal(zh.registrations.find(item => item.name === 'sidebar.panellist').label(), '知林')
+
+  const en = mount('en')
+  app.apply(en.ctx)
+  assert.equal(en.registrations.find(item => item.name === 'sidebar.panellist').label(), 'Grove')
 })
 
 test('the page renders its cold-start state without a vault', () => {
