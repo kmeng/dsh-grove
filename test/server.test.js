@@ -114,7 +114,7 @@ test('routes answer status, validate paths, and save after responding', async t 
   const editor = { edit: (_entry, change) => { saved = change({}, {}); return Promise.resolve() } }
   const { ctx, registered } = host(editor)
   registerRoutes(ctx, { current: () => ({ path: root, source: 'config' }), saveDelay: 1 })
-  assert.deepEqual([...registered.keys()].sort(), [routes.capture, routes.config, routes.connection, routes.inspirations, routes.status].sort())
+  assert.deepEqual([...registered.keys()].sort(), [routes.capture, routes.config, routes.connection, routes.inspirations, routes.research, routes.status].sort())
 
   const status = await registered.get(routes.status).fetch(request(routes.status))
   assert.equal(status.status, 200)
@@ -181,4 +181,20 @@ test('a candidate vault is checked before switching and the previous library sta
   await call(routes.config, { path: first })
   await new Promise(resolve => setTimeout(resolve, 20))
   assert.equal((await (await call(routes.inspirations, { id: firstIdea.id })).json()).body, 'First library')
+})
+
+test('independent research can be created, edited and reopened', async t => {
+  const path = await fixture(t)
+  const { ctx, registered } = host(undefined)
+  registerRoutes(ctx, { current: () => ({ path, source: 'config' }) })
+  const call = body => registered.get(routes.research).fetch(request(routes.research, body))
+  const created = await (await call({ question: 'Where is the shade?', body: 'Compare on both sides' })).json()
+  assert.equal(created.meta.type, 'research')
+  const question = await new Vault(path).get(created.meta.question, created.meta.questionVersion)
+  assert.equal(question.body, 'Where is the shade?')
+  const revised = await (await call({ id: created.meta.id, version: 1, body: 'Repeat at noon' })).json()
+  assert.equal(revised.meta.version, 2)
+  const listing = await (await call()).json()
+  assert.equal(listing.studies[0].body, 'Repeat at noon')
+  assert.equal((await new Vault(path).get(created.meta.id, 1)).body, 'Compare on both sides')
 })
