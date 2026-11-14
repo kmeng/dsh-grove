@@ -228,3 +228,34 @@ test('tool adapters stay pointers to AGENTS.md', async () => {
     assert.ok(text.split('\n').length <= 20, `${file} should stay a short pointer`)
   }
 })
+
+test('the english contract mirrors the chinese one', async () => {
+  const zh = await readFile(join(root, 'AGENTS.md'), 'utf8')
+  const en = await readFile(join(root, 'AGENTS.en.md'), 'utf8')
+
+  const countOf = (text, marker) => (text.match(new RegExp(`^${marker} `, 'gm')) ?? []).length
+  assert.equal(countOf(en, '##'), countOf(zh, '##'), 'level-2 section count must match')
+  assert.equal(countOf(en, '###'), countOf(zh, '###'), 'level-3 section count must match')
+
+  // 两份文档互相指向，读者不会只看一半
+  assert.match(zh, /AGENTS\.en\.md/, 'AGENTS.md must link to the English version')
+  assert.match(en, /AGENTS\.md/, 'AGENTS.en.md must link back to the Chinese version')
+
+  for (const id of ['H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'H7']) {
+    assert.ok(zh.includes(`| ${id} |`), `AGENTS.md is missing ${id}`)
+    assert.ok(en.includes(`| ${id} |`), `AGENTS.en.md is missing ${id}`)
+  }
+
+  const commands = ['npm ci && npm test', 'npm pack --dry-run --json', 'bash scripts/check-compat.sh', 'bash scripts/verify-install.sh']
+  for (const command of commands) {
+    assert.ok(zh.includes(command), `AGENTS.md is missing: ${command}`)
+    assert.ok(en.includes(command), `AGENTS.en.md is missing: ${command}`)
+  }
+
+  const docLinks = text => [...new Set([...text.matchAll(/\]\(([^)]+)\)/g)].map(match => match[1]))]
+    .filter(target => /^(docs\/development\/|\.github\/)/.test(target))
+    .sort()
+  assert.deepEqual(docLinks(en), docLinks(zh), 'relative document links must match')
+
+  assert.ok(en.length > zh.length * 0.8, 'AGENTS.en.md looks truncated')
+})
