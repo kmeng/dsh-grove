@@ -26,6 +26,7 @@ Grove 只搬了**可迁移**的部分：与团队人数、模型价格、内部�
 | 文件 | 回答的问题 |
 | --- | --- |
 | [`../../AGENTS.md`](../../AGENTS.md) | 开工要做什么、硬规则是什么 |
+| [`../../AGENTS.en.md`](../../AGENTS.en.md) | 同一份契约的英文版 |
 | [`ISSUE_HIERARCHY.md`](ISSUE_HIERARCHY.md) | 任务怎么分层、怎么拆才是一个闭环 |
 | [`DEFINITION_OF_DONE.md`](DEFINITION_OF_DONE.md) | 什么算做完 |
 | [`REVIEW_CHECKLIST.md`](REVIEW_CHECKLIST.md) | 评审时逐条看什么 |

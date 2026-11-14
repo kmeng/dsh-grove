@@ -71,7 +71,7 @@ grove update RESEARCH_ID --version 3 --stage review --status closed
 
 ## 参与开发
 
-规则只有一份：[`AGENTS.md`](AGENTS.md)。Claude Code、Cursor、GitHub Copilot 分别读 `CLAUDE.md`、`.cursor/rules/project.mdc`、`.github/copilot-instructions.md`，三者都只指向 `AGENTS.md`。
+规则只有一份：[`AGENTS.md`](AGENTS.md)（[English](AGENTS.en.md)）。Claude Code、Cursor、GitHub Copilot 分别读 `CLAUDE.md`、`.cursor/rules/project.mdc`、`.github/copilot-instructions.md`，三者都只指向 `AGENTS.md`。
 
 理念、任务分层、DoD 与评审清单在 [`docs/development/`](docs/development/README.md)；会话交接在 [`docs/journal/`](docs/journal/)。改动前先跑 `npm test` 与 `bash scripts/check-compat.sh`。
 

@@ -117,3 +117,5 @@ Co-authored-by: claude-opus <noreply@anthropic.com>
 | [`docs/development/HANDOFF.md`](docs/development/HANDOFF.md) | 跨会话交接与 journal 约定 |
 | [`brand/VI.md`](brand/VI.md) | 视觉规范（中文） |
 | [`docs/DETAIL.zh.md`](docs/DETAIL.zh.md) | 插件详情页文案 |
+
+英文版本：[`AGENTS.en.md`](AGENTS.en.md)
