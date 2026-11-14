@@ -24,7 +24,7 @@ AI 可以追问、比较解释、查找反例和协助表达。你决定相信�
 
 Grove 是连接 DeepSeek Harness 和 Obsidian 的插件。当前版本把自由对话、自主保存和基础证据研究接在一起。你可以从会话挑出值得保留的内容，把它保存成自己 vault 里的 Markdown，并用版本和双链回看问题、证据与判断的关联。指南里的学习、反思和完整研究方法可以手工实践。
 
-## 安装 v0.1.1
+## 安装 v0.1.2
 
 需要 Node.js 22 或更高版本、一个已有的 Obsidian vault，以及 DeepSeek Harness `>=0.2.2-rc.1 <0.3.0`。兼容范围由 `engines.dsh` 声明：它必须是范围而不是某一个精确版本，否则 dsh 会把整个 bundle 判为不兼容并跳过加载。
 
@@ -54,7 +54,7 @@ npx --yes @deepseek-ai/dsh@0.2.2-rc.3 --profile grove
 
 ```sh
 npm pack --pack-destination /tmp
-npm install --global /tmp/dsh-grove-0.1.1.tgz
+npm install --global /tmp/dsh-grove-0.1.2.tgz
 ```
 
 ## 日常使用
