@@ -1,7 +1,7 @@
 {
   "name": "dsh-grove",
   "version": "0.1.1",
-  "description": "Personal knowledge growth for DeepSeek Harness and Obsidian",
+  "description": "Explore with AI in DeepSeek Harness and grow knowledge you can revisit and revise in your own Obsidian vault",
   "license": "MIT",
   "type": "module",
   "main": "./src/plugin.js",

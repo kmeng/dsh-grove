@@ -1,6 +1,10 @@
 # Grove
 
-Grove turns DeepSeek Harness conversations into versioned knowledge assets in an Obsidian vault: inspirations, questions, concepts, theories, judgements, methods, outputs, explorations and research projects. AI helps you think; **every saved asset is confirmed by you**.
+Grove connects DeepSeek Harness and Obsidian to help you build knowledge you can revisit and revise, and develop your own judgment over time. The current plugin supports open-ended exploration, user-confirmed saves, and basic research.
+
+- **Explore freely and pursue research when it serves you.** Start with a passing idea and stop whenever you like. Keep an open question for later and decide whether to develop it into a project or a finished work.
+- **Keep the evidence and the history of your thinking.** Record where evidence came from and link it to the version of a claim it supports, challenges, or qualifies. Revisit that record when your judgment changes.
+- **Think with AI and stay in control of your knowledge.** AI can ask questions, offer other explanations, and draft notes. You decide what to adopt, save, and share. Your saved knowledge lives in your own Obsidian vault as Markdown.
 
 ## What it provides
 
