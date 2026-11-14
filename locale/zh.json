@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Grove（知林）",
-    "description": "在 Obsidian vault 里做个人知识成长：捕捉灵感、沉淀可版本化的知识资产、带证据做研究，每条资产都由你确认后才落盘。",
+    "description": "在 DeepSeek Harness 中与 AI 自由探索，按需开展有据可查的研究。你决定保存和分享什么，知识以可回看、可修正的 Markdown 笔记留在自己的 Obsidian vault。",
     "detail": "docs/DETAIL.zh.md"
   }
 }

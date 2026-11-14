@@ -1,6 +1,6 @@
 # Grove visual identity (VI)
 
-Grove's brand line: **turn conversations into traceable knowledge assets.** The visual tone is restrained, concrete and auditable — closer to a well-filed notebook than to a poster.
+Grove's brand line: **Build knowledge you can revisit and revise. Develop your own judgment.** The visual tone is restrained, concrete and auditable — closer to a well-filed notebook than to a poster.
 
 ## 1. The mark
 
