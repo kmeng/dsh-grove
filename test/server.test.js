@@ -114,7 +114,7 @@ test('routes answer status, validate paths, and save after responding', async t 
   const editor = { edit: (_entry, change) => { saved = change({}, {}); return Promise.resolve() } }
   const { ctx, registered } = host(editor)
   registerRoutes(ctx, { current: () => ({ path: root, source: 'config' }), saveDelay: 1 })
-  assert.deepEqual([...registered.keys()].sort(), [routes.capture, routes.config, routes.connection, routes.inspirations, routes.research, routes.sources, routes.status].sort())
+  assert.deepEqual([...registered.keys()].sort(), [routes.capture, routes.config, routes.connection, routes.inspirations, routes.reports, routes.research, routes.sources, routes.status].sort())
 
   const status = await registered.get(routes.status).fetch(request(routes.status))
   assert.equal(status.status, 200)
