@@ -114,7 +114,7 @@ test('routes answer status, validate paths, and save after responding', async t 
   const editor = { edit: (_entry, change) => { saved = change({}, {}); return Promise.resolve() } }
   const { ctx, registered } = host(editor)
   registerRoutes(ctx, { current: () => ({ path: root, source: 'config' }), saveDelay: 1 })
-  assert.deepEqual([...registered.keys()].sort(), [routes.capture, routes.config, routes.connection, routes.inspirations, routes.reports, routes.research, routes.sources, routes.status].sort())
+  assert.deepEqual([...registered.keys()].sort(), [routes.capture, routes.config, routes.connection, routes.inspirations, routes.parsers, routes.reports, routes.research, routes.sources, routes.status].sort())
 
   const status = await registered.get(routes.status).fetch(request(routes.status))
   assert.equal(status.status, 200)
@@ -197,4 +197,16 @@ test('independent research can be created, edited and reopened', async t => {
   const listing = await (await call()).json()
   assert.equal(listing.studies[0].body, 'Repeat at noon')
   assert.equal((await new Vault(path).get(created.meta.id, 1)).body, 'Compare on both sides')
+})
+
+test('parser settings persist without changing the active vault', async () => {
+  let config = { vault: '/existing', parsers: { other: true } }
+  const { ctx, registered } = host({ edit: async (_entry, change) => { config = change(config) } })
+  registerRoutes(ctx, { current: () => ({ path: config.vault }), saveDelay: 1 })
+  const route = registered.get(routes.parsers)
+  assert.deepEqual(await (await route.fetch(request(routes.parsers))).json(), { pdf: true })
+  assert.equal((await route.fetch(request(routes.parsers, { pdf: 'false' }))).status, 400)
+  assert.deepEqual(await (await route.fetch(request(routes.parsers, { pdf: false }))).json(), { pending: true })
+  await new Promise(resolve => setTimeout(resolve, 20))
+  assert.deepEqual(config, { vault: '/existing', parsers: { other: true, pdf: false } })
 })

@@ -22,12 +22,20 @@ window.__ModuleLoader__.load({
     var CONNECTION = '/api/grove/connection'
     var CONFIG = '/api/grove/config'
     var CAPTURE = '/api/grove/capture'
+    var PARSERS = '/api/grove/parsers'
     var REPORTS = '/api/grove/reports'
     var SOURCES = '/api/grove/sources'
     var RESEARCH = '/api/grove/research'
     var INSPIRATIONS = '/api/grove/inspirations'
 
     var ZH = {
+      'parsers.title': '资料解析设置',
+      'parsers.pdf': '启用文本 PDF 解析',
+      'parsers.apply': '应用设置',
+      'parsers.pending': '正在应用…',
+      'parsers.done': '解析设置已应用。',
+      'parsers.failed': '设置还没生效，请重试。',
+      'parsers.hint': 'Markdown 始终可导入。关闭 PDF 解析后，旧证据仍可回看。',
       'report.title': '研究报告',
       'report.new': '新报告',
       'report.body': '报告正文',
@@ -107,6 +115,13 @@ window.__ModuleLoader__.load({
     }
 
     var EN = {
+      'parsers.title': 'Parser settings',
+      'parsers.pdf': 'Enable text PDF parsing',
+      'parsers.apply': 'Apply settings',
+      'parsers.pending': 'Applying…',
+      'parsers.done': 'Parser settings applied.',
+      'parsers.failed': 'Settings did not take effect. Try again.',
+      'parsers.hint': 'Markdown remains available. Existing evidence stays readable when PDF parsing is off.',
       'report.title': 'Research reports',
       'report.new': 'New report',
       'report.body': 'Report body',
@@ -512,6 +527,49 @@ window.__ModuleLoader__.load({
       )
     }
 
+    function ParserSettings() {
+      var [enabled, setEnabled] = useState(null)
+      var [pending, setPending] = useState(false)
+      var [done, setDone] = useState(false)
+      var [error, setError] = useState(null)
+
+      async function apply(event) {
+        event.preventDefault()
+        setPending(true)
+        setDone(false)
+        setError(null)
+        try {
+          await api(PARSERS, { pdf: enabled })
+          for (var attempt = 0; attempt < 12; attempt++) {
+            await new Promise(function (resolve) { setTimeout(resolve, 400) })
+            var current = await api(PARSERS).catch(function () { return null })
+            if (current && current.pdf === enabled) {
+              setDone(true)
+              return
+            }
+          }
+          throw new Error(T('parsers.failed'))
+        } catch (problem) {
+          setError(problem)
+        } finally {
+          setPending(false)
+        }
+      }
+
+      return h('details', { className: 'gr-card', onToggle: function (event) {
+        if (!event.currentTarget.open || enabled !== null) return
+        api(PARSERS).then(function (current) { setEnabled(current.pdf); setError(null) }, setError)
+      } },
+      h('summary', null, T('parsers.title')),
+      h('p', { className: 'gr-body' }, T('parsers.hint')),
+      error ? h('p', { role: 'alert' }, messageOf(error)) : null,
+      enabled === null ? null : h('form', { onSubmit: apply },
+        h('label', null, h('input', { type: 'checkbox', checked: enabled, disabled: pending,
+          onChange: function (event) { setEnabled(event.target.checked); setDone(false) } }), T('parsers.pdf')),
+        h('button', { className: 'gr-btn', disabled: pending }, T(pending ? 'parsers.pending' : 'parsers.apply')),
+        h('p', { role: 'status' }, done ? T('parsers.done') : '')))
+    }
+
     async function readSourceFile(file) {
       if (file.size > 500000) throw new Error(T('err.too-large'))
       var bytes = new Uint8Array(await file.arrayBuffer())
@@ -757,6 +815,7 @@ window.__ModuleLoader__.load({
           h('div', { className: 'gr-row' },
             h('button', { className: 'gr-btn', disabled: busy }, T('research.save')),
             h('span', { role: 'status' }, saved ? T('research.saved') : ''))),
+        h(ParserSettings),
         selected ? h(ResearchSources, { key: selected.meta.id, id: selected.meta.id }) : null,
         selected ? h(ResearchReports, { key: 'report:' + selected.meta.id, id: selected.meta.id }) : null,
         studies.map(function (note) {

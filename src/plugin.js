@@ -25,7 +25,7 @@ export function apply(ctx, config = {}) {
   const { path, source } = configuredVault(config)
 
   // The panel routes stay registered without a vault so the cold start can pick one.
-  if (typeof ctx.inject === 'function') registerRoutes(ctx, { current: () => configuredVault(config), parsers: documentParsers(config.parsers) })
+  if (typeof ctx.inject === 'function') registerRoutes(ctx, { current: () => configuredVault(config), parsers: documentParsers(config.parsers), pdfEnabled: config.parsers?.pdf !== false })
 
   if (path === undefined) return
   let vault

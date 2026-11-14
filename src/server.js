@@ -14,6 +14,7 @@ export const routes = {
   connection: '/api/grove/connection',
   capture: '/api/grove/capture',
   reports: '/api/grove/reports',
+  parsers: '/api/grove/parsers',
   sources: '/api/grove/sources',
   research: '/api/grove/research',
   inspirations: '/api/grove/inspirations',
@@ -199,6 +200,23 @@ export function registerRoutes(ctx, options) {
         }
         const query = typeof input?.query === 'string' ? input.query.trim() : ''
         return json({ notes: (await findInspirations(vault, query)).slice(0, 50) })
+      } catch (error) {
+        return failure(error)
+      }
+    })
+    route(routes.parsers, ['GET', 'POST'], async request => {
+      if (request.method === 'GET') return json({ pdf: options.pdfEnabled !== false })
+      try {
+        const input = await readJson(request)
+        if (typeof input?.pdf !== 'boolean') throw coded('invalid-body', 'Choose whether PDF parsing is enabled')
+        const editor = ctx.get?.('configEditor')
+        const entry = ctx.fiber?.entry
+        if (!entry || typeof editor?.edit !== 'function') throw coded('save-unavailable', 'This profile cannot save parser settings')
+        setTimeout(() => {
+          editor.edit(entry, current => ({ ...current, parsers: { ...current.parsers, pdf: input.pdf } }))
+            .catch(error => console.warn(`[grove] could not save parser settings: ${error.message}`))
+        }, delay)
+        return json({ pending: true })
       } catch (error) {
         return failure(error)
       }
