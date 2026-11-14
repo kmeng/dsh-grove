@@ -21,8 +21,17 @@ window.__ModuleLoader__.load({
     var STATUS = '/api/grove/status'
     var CONFIG = '/api/grove/config'
     var CAPTURE = '/api/grove/capture'
+    var INSPIRATIONS = '/api/grove/inspirations'
 
     var ZH = {
+      'idea.title': '灵感来了',
+      'idea.placeholder': '刚冒出什么点子？先记一句。',
+      'idea.save': '💡叮～',
+      'idea.saved': '叮～ 记住啦！',
+      'idea.find': '找回灵感',
+      'idea.search': '搜索',
+      'idea.empty': '没找到这条灵感。',
+      'idea.version': '历史版本',
       panel: 'Grove',
       menu: '知林',
       subtitle: '把探索留在自己的 vault 里。',
@@ -43,31 +52,7 @@ window.__ModuleLoader__.load({
       's0.hint': '路径会保存到当前 profile 的插件配置；之后可在插件页里修改。',
       's0.stale': '原来的 vault 已不可用：{path}。请重新选择，或把它移回原位。',
       's0.noVault': '这个文件夹里没有 .obsidian。如果它不是 vault 根目录，仍可继续连接。',
-      's1.connectedTo': '已连接',
       's1.change': '更换 vault',
-      's1.title': '写下第一条灵感',
-      's1.body': '一个观察、一个困惑、一句还没想清楚的话都可以。保存后它会出现在 vault 的 Grove/ 文件夹里。',
-      's1.placeholder': '比如：为什么组织扩大后，协调成本会上升？',
-      's1.save': '保存到 vault',
-      's1.saving': '正在保存…',
-      's1.saved': '已保存',
-      's1.savedBody': '已写入 vault。用 Obsidian 打开 Grove/ 文件夹就能看到。回到会话里，让 AI 用 grove_role 陪你继续想。',
-      's1.view': '查看概览',
-      's1.another': '另一种开始',
-      's1.prompt': '用 grove_role 当我的思想伙伴，先帮我拆开这个问题：<你的问题>',
-      's1.copy': '复制提示词',
-      's1.copied': '已复制',
-      's2.title': '你的知识库',
-      's2.total': '条资产',
-      's2.recent': '最近更新',
-      's2.empty': '还没有笔记。',
-      's2.continue': '在会话里继续探索',
-      's2.prompt': '用 grove_role 当我的思想伙伴，接着上次的问题继续。',
-      's2.count.inspiration': '灵感',
-      's2.count.question': '问题',
-      's2.count.research': '研究',
-      's2.count.claim': '判断',
-      's2.count.evidence': '证据',
       'type.inspiration': '灵感',
       'type.question': '问题',
       'type.concept': '概念',
@@ -97,6 +82,14 @@ window.__ModuleLoader__.load({
     }
 
     var EN = {
+      'idea.title': 'An idea?',
+      'idea.placeholder': 'What just came to mind? Jot it down.',
+      'idea.save': '💡 Ding!',
+      'idea.saved': 'Ding! Saved.',
+      'idea.find': 'Find ideas',
+      'idea.search': 'Search',
+      'idea.empty': 'No matching ideas.',
+      'idea.version': 'History',
       panel: 'Grove',
       menu: 'Grove',
       subtitle: 'Keep what you explore in your own vault.',
@@ -117,31 +110,7 @@ window.__ModuleLoader__.load({
       's0.hint': 'The path is saved in this profile’s plugin configuration and can be changed later from the Plugins page.',
       's0.stale': 'The previous vault is no longer usable: {path}. Choose it again, or move it back.',
       's0.noVault': 'This folder has no .obsidian. You can still connect if it is a vault root.',
-      's1.connectedTo': 'Connected',
       's1.change': 'Change vault',
-      's1.title': 'Capture a first idea',
-      's1.body': 'An observation, a question, or a thought you have not worked out yet. Saving puts it in the vault’s Grove/ folder.',
-      's1.placeholder': 'For example: why do coordination costs rise as an organization grows?',
-      's1.save': 'Save to vault',
-      's1.saving': 'Saving…',
-      's1.saved': 'Saved',
-      's1.savedBody': 'Written to the vault. Open the Grove/ folder in Obsidian to see it. Back in the conversation, ask AI to use grove_role and keep thinking.',
-      's1.view': 'View overview',
-      's1.another': 'Another way to start',
-      's1.prompt': 'Use grove_role as my thinking partner and help me unpack this question: <your question>',
-      's1.copy': 'Copy prompt',
-      's1.copied': 'Copied',
-      's2.title': 'Your knowledge base',
-      's2.total': 'assets',
-      's2.recent': 'Recently updated',
-      's2.empty': 'No notes yet.',
-      's2.continue': 'Continue in the conversation',
-      's2.prompt': 'Use grove_role as my thinking partner and continue from the last question.',
-      's2.count.inspiration': 'Inspirations',
-      's2.count.question': 'Questions',
-      's2.count.research': 'Research',
-      's2.count.claim': 'Claims',
-      's2.count.evidence': 'Evidence',
       'type.inspiration': 'Inspiration',
       'type.question': 'Question',
       'type.concept': 'Concept',
@@ -214,18 +183,6 @@ window.__ModuleLoader__.load({
       return (error && error.message) || T('err.internal')
     }
 
-    function when(iso) {
-      if (!iso) return ''
-      var date = new Date(iso)
-      if (isNaN(date.getTime())) return ''
-      return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0')
-    }
-
-    function copyText(text) {
-      if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(text)
-      return Promise.reject(new Error('clipboard'))
-    }
-
     function waitForVault(expected, tries) {
       return api(STATUS).catch(function () { return null }).then(function (status) {
         if (status && status.configured && status.usable && (expected === undefined || status.vault === expected)) return status
@@ -249,8 +206,10 @@ window.__ModuleLoader__.load({
       var [manual, setManual] = useState(false)
       var [draft, setDraft] = useState('')
       var [pathDraft, setPathDraft] = useState('')
-      var [firstNote, setFirstNote] = useState(null)
-      var [copied, setCopied] = useState(false)
+      var [query, setQuery] = useState('')
+      var [notes, setNotes] = useState(null)
+      var [selected, setSelected] = useState(null)
+      var [saved, setSaved] = useState(false)
       var [changing, setChanging] = useState(false)
       var mounted = useRef(true)
 
@@ -282,6 +241,9 @@ window.__ModuleLoader__.load({
         }).then(function (next) {
           if (!mounted.current) return
           setStatus(next)
+          setNotes(null)
+          setSelected(null)
+          setSaved(false)
           setManual(false)
           setChanging(false)
         }, function (problem) {
@@ -319,37 +281,39 @@ window.__ModuleLoader__.load({
         connect(path)
       }
 
-      function saveFirst() {
-        var body = draft.trim()
-        if (body === '') return
-        setBusy('capture')
+      function requestNotes(input, apply) {
+        if (busy) return
+        setBusy('read')
         setError(null)
-        api(CAPTURE, { body: body }).then(function (note) {
-          if (!mounted.current) return
-          setFirstNote(note)
-          setDraft('')
-          return api(STATUS).then(function (next) {
-            if (mounted.current) setStatus(next)
-          })
+        return api(INSPIRATIONS, input).then(function (data) {
+          if (mounted.current) apply(data)
         }, function (problem) {
           if (mounted.current) setError(problem)
-        }).then(function () {
+        }).finally(function () {
           if (mounted.current) setBusy('')
         })
       }
 
-      function copyPrompt(text) {
-        copyText(text).then(function () {
+      function saveIdea() {
+        var body = draft.trim()
+        if (!body || busy) return
+        setBusy('capture')
+        setError(null)
+        setSaved(false)
+        api(CAPTURE, { body: body }).then(function () {
           if (!mounted.current) return
-          setCopied(true)
-          setTimeout(function () { if (mounted.current) setCopied(false) }, 1600)
+          setDraft('')
+          setSaved(true)
+          setNotes(null)
+          setSelected(null)
         }, function (problem) {
           if (mounted.current) setError(problem)
+        }).finally(function () {
+          if (mounted.current) setBusy('')
         })
       }
 
       var connected = !!(status && status.configured && status.usable)
-      var total = status && status.counts ? Number(status.counts.total) || 0 : 0
       var connectView = h(Connect, {
         busy: busy, manual: manual, error: error, pathDraft: pathDraft,
         stale: !changing && status && status.configured && !status.usable ? status.vault : null,
@@ -376,13 +340,17 @@ window.__ModuleLoader__.load({
               ? h('div', { className: 'gr-card' }, h('div', { className: 'gr-body' }, T('loading')))
               : changing || !connected
                 ? connectView
-                : total > 0 && firstNote === null
-                  ? h(Overview, { status: status, onCopy: copyPrompt })
-                  : h(FirstNote, {
-                    status: status, draft: draft, busy: busy, note: firstNote,
-                    onDraft: setDraft, onSave: saveFirst, onCopy: copyPrompt,
-                    onOverview: function () { setFirstNote(null) },
-                  }),
+                : h(InspirationHome, {
+                  draft: draft, busy: busy, saved: saved, onSave: saveIdea,
+                  onDraft: function (value) { setDraft(value); setSaved(false) },
+                  query: query, notes: notes, selected: selected, onQuery: setQuery,
+                  onSearch: function () {
+                    requestNotes({ query: query }, function (data) { setNotes(data.notes); setSelected(null) })
+                  },
+                  onSelect: function (id, version) {
+                    requestNotes({ id: id, version: version }, setSelected)
+                  },
+                }),
             h(Footer, null),
           ),
         ),
@@ -444,77 +412,47 @@ window.__ModuleLoader__.load({
       )
     }
 
-    function FirstNote(props) {
-      var status = props.status
-      if (props.note) {
-        return h('div', { className: 'gr-card' },
-          h('div', { className: 'gr-h2 gr-ok' }, '✓ ' + T('s1.saved')),
-          h('div', { className: 'gr-body' }, T('s1.savedBody')),
-          h('div', { className: 'gr-row' }, h('span', { className: 'gr-path' }, props.note.path)),
-          h('div', { className: 'gr-row' }, h('button', { className: 'gr-btn gr-btn-sm', onClick: props.onOverview }, T('s1.view'))),
-        )
-      }
+    function InspirationHome(props) {
+      var selected = props.selected
       return h(React.Fragment, null,
         h('div', { className: 'gr-card' },
-          h('div', { className: 'gr-meta' }, T('s1.connectedTo') + ' · ' + (status.vault || '')),
-          h('div', { className: 'gr-h2' }, T('s1.title')),
-          h('div', { className: 'gr-body' }, T('s1.body')),
+          h('label', { className: 'gr-h2', htmlFor: 'gr-idea' }, T('idea.title')),
           h('textarea', {
-            className: 'gr-textarea', value: props.draft, placeholder: T('s1.placeholder'),
-            'aria-label': T('s1.title'),
+            id: 'gr-idea', className: 'gr-textarea', value: props.draft,
+            placeholder: T('idea.placeholder'),
             onChange: function (event) { props.onDraft(event.target.value) },
             onKeyDown: function (event) {
               if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') props.onSave()
             },
           }),
           h('div', { className: 'gr-row' },
-            h('button', { className: 'gr-btn', disabled: props.busy !== '' || props.draft.trim() === '', onClick: props.onSave },
-              props.busy === 'capture' ? T('s1.saving') : T('s1.save')),
-            h('span', { className: 'gr-meta' }, '⌘↵'),
+            h('button', { className: 'gr-btn', disabled: !!props.busy || !props.draft.trim(), onClick: props.onSave }, T('idea.save')),
+            h('span', { role: 'status' }, props.saved ? T('idea.saved') : ''),
           ),
         ),
-        h('div', { className: 'gr-card' },
-          h('div', { className: 'gr-h2' }, T('s1.another')),
-          h('pre', { className: 'gr-code' }, T('s1.prompt')),
-          h('button', { className: 'gr-btn gr-btn-ghost gr-btn-sm', onClick: function () { props.onCopy(T('s1.prompt')) } }, T('s1.copy')),
-        ),
-      )
-    }
-
-    function Overview(props) {
-      var status = props.status
-      var counts = status.counts || {}
-      var stats = ['inspiration', 'question', 'research', 'claim', 'evidence'].map(function (type) {
-        return h('div', { className: 'gr-stat', key: type },
-          h('b', null, String(counts[type] || 0)),
-          h('span', null, T('s2.count.' + type)),
-        )
-      })
-      var recent = status.recent || []
-      return h(React.Fragment, null,
-        h('div', { className: 'gr-card' },
-          h('div', { className: 'gr-row', style: { justifyContent: 'space-between' } },
-            h('div', { className: 'gr-h2' }, T('s2.title')),
-            h('div', { className: 'gr-meta' }, String(counts.total || 0) + ' ' + T('s2.total')),
-          ),
-          h('div', { className: 'gr-stats' }, stats),
-        ),
-        h('div', { className: 'gr-card' },
-          h('div', { className: 'gr-h2' }, T('s2.recent')),
-          recent.length === 0
-            ? h('div', { className: 'gr-body' }, T('s2.empty'))
-            : h('div', { className: 'gr-recent' }, recent.map(function (item) {
-              return h('div', { className: 'gr-item', key: item.id + ':' + item.version },
-                h('span', { className: 'gr-type' }, T('type.' + item.type)),
-                h('span', { className: 'gr-itemtitle', title: item.title || '' }, item.title || item.id),
-                h('span', { className: 'gr-meta' }, 'v' + item.version + (item.at ? ' · ' + when(item.at) : '')),
-              )
-            })),
-        ),
-        h('div', { className: 'gr-card' },
-          h('div', { className: 'gr-h2' }, T('s2.continue')),
-          h('pre', { className: 'gr-code' }, T('s2.prompt')),
-          h('button', { className: 'gr-btn gr-btn-ghost gr-btn-sm', onClick: function () { props.onCopy(T('s2.prompt')) } }, T('s1.copy')),
+        h('details', { className: 'gr-card' },
+          h('summary', null, T('idea.find')),
+          h('form', { className: 'gr-row', onSubmit: function (event) {
+            event.preventDefault()
+            props.onSearch()
+          } },
+          h('input', { className: 'gr-input', type: 'search', 'aria-label': T('idea.find'),
+            value: props.query, onChange: function (event) { props.onQuery(event.target.value) } }),
+          h('button', { className: 'gr-btn gr-btn-sm', disabled: !!props.busy }, T('idea.search'))),
+          props.notes && props.notes.length === 0 ? h('p', null, T('idea.empty')) : null,
+          (props.notes || []).map(function (note) {
+            return h('div', { key: note.id },
+              h('button', { className: 'gr-btn gr-btn-ghost', disabled: !!props.busy,
+                onClick: function () { props.onSelect(note.id, note.version) } }, note.title))
+          }),
+          selected ? h('article', { className: 'gr-card' },
+            h('div', { className: 'gr-h2' }, selected.meta.title),
+            h('pre', { className: 'gr-code' }, selected.body),
+            h('label', null, T('idea.version'), ' ',
+              h('select', { value: selected.meta.version, disabled: !!props.busy,
+                onChange: function (event) { props.onSelect(selected.meta.id, Number(event.target.value)) } },
+                selected.versions.map(function (version) { return h('option', { key: version, value: version }, 'v' + version) }))),
+          ) : null,
         ),
       )
     }

@@ -114,7 +114,7 @@ test('routes answer status, validate paths, and save after responding', async t 
   const editor = { edit: (_entry, change) => { saved = change({}, {}); return Promise.resolve() } }
   const { ctx, registered } = host(editor)
   registerRoutes(ctx, { current: () => ({ path: root, source: 'config' }), saveDelay: 1 })
-  assert.deepEqual([...registered.keys()].sort(), [routes.capture, routes.config, routes.status].sort())
+  assert.deepEqual([...registered.keys()].sort(), [routes.capture, routes.config, routes.inspirations, routes.status].sort())
 
   const status = await registered.get(routes.status).fetch(request(routes.status))
   assert.equal(status.status, 200)
@@ -122,7 +122,18 @@ test('routes answer status, validate paths, and save after responding', async t 
 
   const captured = await registered.get(routes.capture).fetch(request(routes.capture, { body: 'From the page' }))
   assert.equal(captured.status, 200)
-  assert.equal((await captured.json()).type, 'inspiration')
+  const { id, type } = await captured.json()
+  assert.equal(type, 'inspiration')
+  const vault = new Vault(root)
+  assert.equal((await vault.get(id)).body, 'From the page')
+  await vault.update(id, 1, { body: 'Revised idea' })
+  const inspirations = registered.get(routes.inspirations)
+  const matching = await inspirations.fetch(request(routes.inspirations, { query: 'Revised' }))
+  assert.deepEqual((await matching.json()).notes.map(note => note.id), [id])
+  const historical = await inspirations.fetch(request(routes.inspirations, { id, version: 1 }))
+  const savedIdea = await historical.json()
+  assert.equal(savedIdea.body, 'From the page')
+  assert.deepEqual(savedIdea.versions, [2, 1])
 
   const empty = await registered.get(routes.capture).fetch(request(routes.capture, { body: '' }))
   assert.equal(empty.status, 400)

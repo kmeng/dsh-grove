@@ -94,6 +94,10 @@ export class Vault {
     return entries
   }
 
+  async versions(id) {
+    return ((await this.inventory()).get(id) ?? []).sort((a, b) => b - a)
+  }
+
   async get(id, version) {
     if (typeof id !== 'string' || !validId.test(id)) throw new Error('Invalid Grove ID')
     const selected = version ?? Math.max(...((await this.inventory()).get(id) ?? []))

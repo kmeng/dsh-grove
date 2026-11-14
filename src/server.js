@@ -2,12 +2,14 @@
 import { constants } from 'node:fs'
 import { access, realpath, stat } from 'node:fs/promises'
 import { isAbsolute, join, resolve } from 'node:path'
+import { captureInspiration, findInspirations, readInspiration } from './modules/inspirations.js'
 import { Vault } from './vault.js'
 
 export const routes = {
   status: '/api/grove/status',
   config: '/api/grove/config',
   capture: '/api/grove/capture',
+  inspirations: '/api/grove/inspirations',
 }
 
 /** Largest body the panel may post, matching the proposal limit. */
@@ -31,6 +33,9 @@ function statusOf(error) {
     case 'symlink':
     case 'invalid-body':
       return 400
+    case 'not-found':
+    case 'ENOENT':
+      return 404
     case 'not-configured':
       return 409
     case 'too-large':
@@ -105,7 +110,7 @@ export async function capture(vaultPath, input) {
   if (typeof body !== 'string' || body.trim() === '') throw coded('invalid-body', 'Write something first')
   if (Buffer.byteLength(body) > maxBody) throw coded('too-large', 'The note is too large')
   const vault = new Vault(vaultPath)
-  const note = await vault.create({ type: 'inspiration', body, title: input?.title })
+  const note = await captureInspiration(vault, { body, title: input?.title })
   const folder = await vault.folder()
   return {
     id: note.meta.id, type: note.meta.type, title: note.meta.title, version: 1,
@@ -156,6 +161,25 @@ export function registerRoutes(ctx, options) {
       try {
         const body = await readJson(request)
         return json(await capture(options.current().path, body))
+      } catch (error) {
+        return failure(error)
+      }
+    })
+    route(routes.inspirations, ['POST'], async request => {
+      try {
+        const input = await readJson(request)
+        const { path } = options.current()
+        if (!path) throw coded('not-configured', 'Grove has no vault yet')
+        const vault = new Vault(path)
+        if (input?.id !== undefined) {
+          if (typeof input.id !== 'string' || !/^[a-f0-9-]{36}$/.test(input.id) ||
+            (input.version !== undefined && (!Number.isSafeInteger(input.version) || input.version < 1))) {
+            throw coded('invalid-body', 'Invalid inspiration reference')
+          }
+          return json(await readInspiration(vault, input.id, input.version))
+        }
+        const query = typeof input?.query === 'string' ? input.query.trim() : ''
+        return json({ notes: (await findInspirations(vault, query)).slice(0, 50) })
       } catch (error) {
         return failure(error)
       }
