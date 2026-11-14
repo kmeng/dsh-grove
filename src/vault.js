@@ -180,6 +180,7 @@ export class Vault {
         meta.links = [...(meta.links ?? []), edge]
       }
     }
+    if (change.revisionReason !== undefined) meta.revisionReason = required(change.revisionReason, 'revision reason')
     meta.version++
     meta.modified = new Date().toISOString()
     const path = await this.folder()

@@ -7,6 +7,8 @@ import { startResearch, listResearch, saveResearch } from './modules/research.js
 import { importSource, saveEvidence, openSource } from './modules/evidence.js'
 import { listReports, confirmReport, readReport, draftFromFinding } from './modules/reports.js'
 import { runResearchModel } from './modules/model-research.js'
+import { listKnowledge, readKnowledge, saveKnowledge } from './modules/knowledge.js'
+import { listWorks, readWork, saveWork } from './modules/works.js'
 import { Vault } from './vault.js'
 
 export const routes = {
@@ -16,6 +18,8 @@ export const routes = {
   capture: '/api/grove/capture',
   model: '/api/grove/model',
   findings: '/api/grove/findings',
+  knowledge: '/api/grove/knowledge',
+  works: '/api/grove/works',
   reports: '/api/grove/reports',
   parsers: '/api/grove/parsers',
   sources: '/api/grove/sources',
@@ -207,6 +211,25 @@ export function registerRoutes(ctx, options) {
         return failure(error)
       }
     })
+    for (const [path, list, read, save] of [
+      [routes.knowledge, listKnowledge, readKnowledge, saveKnowledge],
+      [routes.works, listWorks, readWork, saveWork],
+    ]) {
+      route(path, ['POST'], async request => {
+        try {
+          const { path } = options.current()
+          if (!path) throw coded('not-configured', 'Grove has no vault yet')
+          const store = new Vault(path)
+          const input = await readJson(request)
+          if (input?.action === 'list') return json({ items: await list(store, typeof input.query === 'string' ? input.query : '') })
+          if (input?.action === 'read') return json(await read(store, input.id, input.version))
+          if (input?.action === 'save' && typeof input.body === 'string' && input.body.trim()) return json(await save(store, input))
+          throw coded('invalid-body', 'Choose an action and supply a body when saving')
+        } catch (error) {
+          return failure(error)
+        }
+      })
+    }
     route(routes.model, ['GET', 'POST'], async request => {
       if (request.method === 'GET') return json({ enabled: options.modelConfig?.enabled === true, endpoint: options.modelConfig?.endpoint, name: options.modelConfig?.name })
       try {
@@ -356,7 +379,8 @@ export function registerRoutes(ctx, options) {
         }
         const question = typeof input.question === 'string' ? input.question.trim() : ''
         if (!question || question.length > 300) throw coded('invalid-body', 'Enter a research question up to 300 characters')
-        return json(await startResearch(vault, question, body))
+        const origin = input.origin ? (await readKnowledge(vault, input.origin.id, input.origin.version)).meta : undefined
+        return json(await startResearch(vault, question, body, origin))
       } catch (error) {
         return failure(error)
       }

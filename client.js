@@ -22,6 +22,8 @@ window.__ModuleLoader__.load({
     var CONNECTION = '/api/grove/connection'
     var CONFIG = '/api/grove/config'
     var CAPTURE = '/api/grove/capture'
+    var KNOWLEDGE = '/api/grove/knowledge'
+    var WORKS = '/api/grove/works'
     var MODEL = '/api/grove/model'
     var FINDINGS = '/api/grove/findings'
     var PARSERS = '/api/grove/parsers'
@@ -31,6 +33,21 @@ window.__ModuleLoader__.load({
     var INSPIRATIONS = '/api/grove/inspirations'
 
     var ZH = {
+      'asset.knowledge': '知识库',
+      'asset.works': '作品',
+      'asset.title': '标题',
+      'asset.body': '正文',
+      'asset.new': '新建',
+      'asset.save': '保存',
+      'asset.basis': '查看依据',
+      'asset.derive': '提炼为知识',
+      'asset.compose': '写成作品',
+      'asset.research': '带着这条知识深挖',
+      'asset.reason': '实践反思 · 什么改变了你的理解？',
+      'asset.copy': '复制正文',
+      'asset.copied': '已复制',
+      'asset.type': '知识类型',
+      'asset.missing': '来源不可用。',
       'report.review': '审核为报告草稿',
       'report.discard': '丢弃未保存草稿',
       'model.title': '研究模型',
@@ -129,6 +146,21 @@ window.__ModuleLoader__.load({
     }
 
     var EN = {
+      'asset.knowledge': 'Knowledge',
+      'asset.works': 'Works',
+      'asset.title': 'Title',
+      'asset.body': 'Body',
+      'asset.new': 'New',
+      'asset.save': 'Save',
+      'asset.basis': 'View basis',
+      'asset.derive': 'Save as knowledge',
+      'asset.compose': 'Create a work',
+      'asset.research': 'Research from this knowledge',
+      'asset.reason': 'Reflection · What changed your understanding?',
+      'asset.copy': 'Copy body',
+      'asset.copied': 'Copied',
+      'asset.type': 'Knowledge type',
+      'asset.missing': 'The source is unavailable.',
       'report.review': 'Review as report draft',
       'report.discard': 'Discard unsaved draft',
       'model.title': 'Research model',
@@ -298,7 +330,13 @@ window.__ModuleLoader__.load({
       var [selected, setSelected] = useState(null)
       var [saved, setSaved] = useState(false)
       var [changing, setChanging] = useState(false)
-      var [research, setResearch] = useState(false)
+      var [page, setPage] = useState('home')
+      var [seed, setSeed] = useState(null)
+
+      function navigate(destination, draft) {
+        setSeed(draft || null)
+        setPage(destination)
+      }
       var mounted = useRef(true)
 
       useEffect(function () {
@@ -331,7 +369,7 @@ window.__ModuleLoader__.load({
         }).then(function (next) {
           if (!mounted.current) return
           setStatus(next)
-          setResearch(false)
+          navigate('home')
           setNotes(null)
           setSelected(null)
           setSaved(false)
@@ -431,20 +469,24 @@ window.__ModuleLoader__.load({
               ? h('div', { className: 'gr-card' }, h('div', { className: 'gr-body' }, T('loading')))
               : changing || !connected
                 ? connectView
-                : research
-                  ? h(ResearchPage, { onBack: function () { setResearch(false) } })
-                  : h(InspirationHome, {
-                  onResearch: function () { setResearch(true) },
-                  draft: draft, busy: busy, saved: saved, onSave: saveIdea,
-                  onDraft: function (value) { setDraft(value); setSaved(false) },
-                  query: query, notes: notes, selected: selected, onQuery: setQuery,
-                  onSearch: function () {
-                    requestNotes({ query: query }, function (data) { setNotes(data.notes); setSelected(null) })
-                  },
-                  onSelect: function (id, version) {
-                    requestNotes({ id: id, version: version }, setSelected)
-                  },
-                }),
+                : page === 'research'
+                  ? h(ResearchPage, { seed: seed, onNavigate: navigate, onBack: function () { navigate('home') } })
+                  : page === 'knowledge' || page === 'works'
+                    ? h(AssetPage, { key: page, kind: page, seed: seed, onNavigate: navigate })
+                    : h(InspirationHome, {
+                    onResearch: function () { navigate('research') },
+                    onKnowledge: function () { navigate('knowledge') },
+                    onWorks: function () { navigate('works') },
+                    draft: draft, busy: busy, saved: saved, onSave: saveIdea,
+                    onDraft: function (value) { setDraft(value); setSaved(false) },
+                    query: query, notes: notes, selected: selected, onQuery: setQuery,
+                    onSearch: function () {
+                      requestNotes({ query: query }, function (data) { setNotes(data.notes); setSelected(null) })
+                    },
+                    onSelect: function (id, version) {
+                      requestNotes({ id: id, version: version }, setSelected)
+                    },
+                  }),
             h(Footer, null),
           ),
         ),
@@ -525,7 +567,9 @@ window.__ModuleLoader__.load({
           ),
         ),
         h('div', { className: 'gr-row' },
-          h('button', { className: 'gr-btn gr-btn-ghost', disabled: !!props.busy, onClick: props.onResearch }, T('research.title'))),
+          h('button', { className: 'gr-btn gr-btn-ghost', disabled: !!props.busy, onClick: props.onResearch }, T('research.title')),
+          h('button', { className: 'gr-btn gr-btn-ghost', disabled: !!props.busy, onClick: props.onKnowledge }, T('asset.knowledge')),
+          h('button', { className: 'gr-btn gr-btn-ghost', disabled: !!props.busy, onClick: props.onWorks }, T('asset.works'))),
         h('details', { className: 'gr-card' },
           h('summary', null, T('idea.find')),
           h('form', { className: 'gr-row', onSubmit: function (event) {
@@ -878,6 +922,13 @@ window.__ModuleLoader__.load({
         },
       }, report.versions.map(function (version) { return h('option', { key: version, value: version }, 'v' + version) }))) : null,
       report ? report.evidence.map(cite) : null,
+      report ? h('div', { className: 'gr-row' },
+        h('button', { className: 'gr-btn', onClick: function () {
+          props.onNavigate('knowledge', { title: report.meta.title, body: report.body, report: { id: report.meta.id, version: report.meta.version } })
+        } }, T('asset.derive')),
+        h('button', { className: 'gr-btn', onClick: function () {
+          props.onNavigate('works', { title: report.meta.title, body: report.body, basis: { id: report.meta.id, version: report.meta.version } })
+        } }, T('asset.compose'))) : null,
       editing ? h('form', { onSubmit: save },
         h('label', null, T('report.body'), h('textarea', { className: 'gr-textarea', required: true,
           value: body, onChange: function (event) { setBody(event.target.value) } })),
@@ -894,11 +945,127 @@ window.__ModuleLoader__.load({
           onClick: function () { setEditing(false); props.onDiscard() } }, T('report.discard'))) : null)
     }
 
+    function AssetPage(props) {
+      var isKnowledge = props.kind === 'knowledge'
+      var endpoint = isKnowledge ? KNOWLEDGE : WORKS
+      var [items, setItems] = useState([])
+      var [selected, setSelected] = useState(null)
+      var [draft, setDraft] = useState(props.seed)
+      var [title, setTitle] = useState(props.seed?.title || '')
+      var [body, setBody] = useState(props.seed?.body || '')
+      var [kind, setKind] = useState('concept')
+      var [reason, setReason] = useState('')
+      var [basis, setBasis] = useState(null)
+      var [busy, setBusy] = useState(false)
+      var [error, setError] = useState(null)
+      var [message, setMessage] = useState('')
+
+      function list() { return api(endpoint, { action: 'list' }).then(function (result) { setItems(result.items) }) }
+      useEffect(function () { list().catch(setError) }, [endpoint])
+
+      async function run(operation) {
+        setBusy(true)
+        setError(null)
+        setMessage('')
+        try { await operation() }
+        catch (problem) { setError(problem) }
+        finally { setBusy(false) }
+      }
+
+      async function read(id, version) {
+        var entry = await api(endpoint, { action: 'read', id: id, version: version })
+        setSelected(entry)
+        setDraft({})
+        setTitle(entry.meta.title)
+        setBody(entry.body)
+        setBasis(null)
+        setReason('')
+      }
+
+      function start() {
+        setSelected(null)
+        setDraft({})
+        setTitle('')
+        setBody('')
+        setBasis(null)
+        setReason('')
+      }
+
+      function save(event) {
+        event.preventDefault()
+        run(async function () {
+          var input = { action: 'save', body: body, title: title, type: kind, reason: reason,
+            basis: draft?.basis, report: draft?.report }
+          if (selected) { input.id = selected.meta.id; input.version = selected.meta.version }
+          var entry = await api(endpoint, input)
+          await read(entry.meta.id, entry.meta.version)
+          await list()
+          setMessage(T('research.saved'))
+        })
+      }
+
+      function readBasis() {
+        run(async function () {
+          var ref = selected.meta.links.find(function (link) { return link.kind === 'derived' })
+          var input = { action: 'read', id: ref.id, version: ref.version }
+          var entry = await api(isKnowledge ? REPORTS : KNOWLEDGE, input)
+            .catch(function () { return isKnowledge ? null : api(REPORTS, input).catch(function () { return null }) })
+          setBasis(entry || { body: T('asset.missing') })
+        })
+      }
+
+      function reference() { return { id: selected.meta.id, version: selected.meta.version } }
+
+      return h(React.Fragment, null,
+        h('div', { className: 'gr-row' },
+          h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () { props.onNavigate('home') } }, T('research.back')),
+          h('h2', { className: 'gr-h2' }, T('asset.' + props.kind)),
+          h('button', { className: 'gr-btn', disabled: busy, onClick: start }, T('asset.new'))),
+        error ? h('p', { role: 'alert' }, messageOf(error)) : null,
+        h('p', { role: 'status' }, message),
+        items.map(function (entry) {
+          return h('button', { key: entry.meta.id, className: 'gr-btn gr-btn-ghost', disabled: busy,
+            onClick: function () { run(function () { return read(entry.meta.id, entry.meta.version) }) } }, entry.meta.title)
+        }),
+        draft ? h('form', { className: 'gr-card', onSubmit: save },
+          selected ? h('h3', null, selected.meta.title) : h('label', null, T('asset.title'),
+            h('input', { className: 'gr-input', value: title, maxLength: 300, required: true, onChange: function (event) { setTitle(event.target.value) } })),
+          isKnowledge && !selected ? h('label', null, T('asset.type'),
+            h('select', { value: kind, onChange: function (event) { setKind(event.target.value) } },
+              ['concept', 'theory', 'claim', 'method'].map(function (type) { return h('option', { key: type, value: type }, T('type.' + type)) }))) : null,
+          selected ? h('label', null, T('report.history'),
+            h('select', { value: selected.meta.version, disabled: busy, onChange: function (event) {
+              var version = Number(event.target.value)
+              run(function () { return read(selected.meta.id, version) })
+            } }, selected.versions.map(function (version) { return h('option', { key: version, value: version }, 'v' + version) }))) : null,
+          h('label', null, T('asset.body'), h('textarea', { className: 'gr-textarea', value: body, required: true,
+            onChange: function (event) { setBody(event.target.value) } })),
+          selected?.meta.revisionReason ? h('p', { className: 'gr-meta' }, selected.meta.revisionReason) : null,
+          isKnowledge && selected ? h('label', null, T('asset.reason'),
+            h('textarea', { className: 'gr-textarea', value: reason, required: true, onChange: function (event) { setReason(event.target.value) } })) : null,
+          h('button', { className: 'gr-btn', disabled: busy || (selected && selected.meta.version !== selected.versions[0]) }, T('asset.save'))) : null,
+        selected ? h('div', { className: 'gr-row' },
+          selected.meta.links?.some(function (link) { return link.kind === 'derived' })
+            ? h('button', { className: 'gr-btn', disabled: busy, onClick: readBasis }, T('asset.basis')) : null,
+          isKnowledge ? h('button', { className: 'gr-btn', onClick: function () {
+            props.onNavigate('research', { title: selected.meta.title, origin: reference() })
+          } }, T('asset.research')) : null,
+          isKnowledge ? h('button', { className: 'gr-btn', onClick: function () {
+            props.onNavigate('works', { title: selected.meta.title, body: selected.body, basis: reference() })
+          } }, T('asset.compose')) : null,
+          !isKnowledge ? h('button', { className: 'gr-btn', onClick: function () {
+            run(async function () { await navigator.clipboard.writeText(selected.body); setMessage(T('asset.copied')) })
+          } }, T('asset.copy')) : null) : null,
+        basis ? h('article', { className: 'gr-card' },
+          basis.meta ? h('h3', null, basis.meta.title, ' · v', basis.meta.version) : null,
+          h('pre', { className: 'gr-code' }, basis.body)) : null)
+    }
+
     function ResearchPage(props) {
       var [reportDraft, setReportDraft] = useState(null)
       var [studies, setStudies] = useState([])
       var [selected, setSelected] = useState(null)
-      var [question, setQuestion] = useState('')
+      var [question, setQuestion] = useState(props.seed?.title || '')
       var [body, setBody] = useState('')
       var [busy, setBusy] = useState(true)
       var [error, setError] = useState(null)
@@ -930,7 +1097,7 @@ window.__ModuleLoader__.load({
         setBusy(true)
         setError(null)
         setSaved(false)
-        var input = selected ? { id: selected.meta.id, version: selected.meta.version, body: body } : { question: question, body: body }
+        var input = selected ? { id: selected.meta.id, version: selected.meta.version, body: body } : { question: question, body: body, origin: props.seed?.origin }
         api(RESEARCH, input).then(function (note) {
           select(note)
           setSaved(true)
@@ -961,7 +1128,7 @@ window.__ModuleLoader__.load({
         h(ParserSettings),
         selected ? h(ResearchFindings, { key: 'findings:' + selected.meta.id, id: selected.meta.id, title: selected.meta.title, version: selected.meta.version, onDraft: setReportDraft }) : null,
         selected ? h(ResearchSources, { key: selected.meta.id, id: selected.meta.id }) : null,
-        selected ? h(ResearchReports, { key: 'report:' + selected.meta.id, id: selected.meta.id, draft: reportDraft, onDiscard: function () { setReportDraft(null) } }) : null,
+        selected ? h(ResearchReports, { key: 'report:' + selected.meta.id, id: selected.meta.id, onNavigate: props.onNavigate, draft: reportDraft, onDiscard: function () { setReportDraft(null) } }) : null,
         studies.map(function (note) {
           return h('button', { key: note.meta.id, className: 'gr-btn gr-btn-ghost', disabled: busy,
             onClick: function () { select(note) } }, note.meta.title)
