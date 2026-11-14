@@ -39,6 +39,24 @@ window.__ModuleLoader__.load({
       'idea.query': '搜索灵感',
       'model.optional': '无需配置模型，也能记录、导入资料、整理证据和写报告。想请 AI 深挖时，再配置研究模型。',
       'model.setup': '先在「研究模型」里启用并配置模型。',
+      'model.keyHint': '连接模型需要在 dsh 宿主设置 GROVE_MODEL_KEY。',
+      'model.saveFailed': '模型设置还未生效。请检查当前 dsh 配置是否可写，再试一次。',
+      'model.running': 'AI 正在深挖…',
+      'err.model-settings': '请填写模型接口和模型名称。',
+      'err.model-endpoint': '请填写 HTTPS 接口地址，地址里不要带密钥、查询参数或片段。',
+      'err.model-disabled': '请先在「研究模型」中启用并应用模型设置。',
+      'err.model-key': 'dsh 宿主缺少 GROVE_MODEL_KEY。设置后重新启动 dsh。',
+      'err.model-auth': '模型服务拒绝了认证（{message}）。请检查密钥及模型访问权限。',
+      'err.model-not-found': '找不到模型接口或模型（{message}）。请检查地址和模型名称。',
+      'err.model-rate-limit': '模型服务限制了请求（{message}）。请稍后重试或检查用量额度。',
+      'err.model-rejected': '模型服务拒绝了请求（{message}）。请检查模型名称及接口是否支持 JSON 输出。',
+      'err.model-unavailable': '模型服务暂时不可用（{message}）。请稍后重试。',
+      'err.model-network': '无法连接模型服务。请检查 HTTPS 地址、网络和证书。',
+      'err.model-timeout': '模型服务在 60 秒内未响应。请重试，或减少选中的材料。',
+      'err.model-response': '模型返回的正文或引用格式不正确。请重试，或更换支持 JSON 输出的模型。',
+      'research.notesOptional': '研究记录（可选）',
+      'research.start': '开始研究',
+
       's0.pickerUnavailable': '这个宿主暂时无法打开文件夹选择器。可以手动输入路径。',
       's0.pickerFailed': '没能打开文件夹选择器。{message}',
       'asset.knowledge': '知识库',
@@ -153,6 +171,23 @@ window.__ModuleLoader__.load({
       'idea.query': 'Search ideas',
       'model.optional': 'Record ideas, import sources, collect evidence, and write reports without a model. Set up a research model when you want AI help.',
       'model.setup': 'Enable and configure a model under Research model first.',
+      'model.keyHint': 'Set GROVE_MODEL_KEY in the dsh host to connect a model.',
+      'model.saveFailed': 'Model settings have not taken effect. Check that the dsh profile is writable, then try again.',
+      'model.running': 'AI is investigating…',
+      'err.model-settings': 'Enter the model endpoint and name.',
+      'err.model-endpoint': 'Enter an HTTPS endpoint without credentials, query parameters, or a fragment.',
+      'err.model-disabled': 'Enable and apply the settings under Research model first.',
+      'err.model-key': 'The dsh host is missing GROVE_MODEL_KEY. Set it and restart dsh.',
+      'err.model-auth': 'The model service rejected authentication ({message}). Check the key and model permissions.',
+      'err.model-not-found': 'The endpoint or model was not found ({message}). Check the URL and model name.',
+      'err.model-rate-limit': 'The model service limited the request ({message}). Try again later or check your quota.',
+      'err.model-rejected': 'The model service rejected the request ({message}). Check the model name and JSON output support.',
+      'err.model-unavailable': 'The model service is temporarily unavailable ({message}). Try again later.',
+      'err.model-network': 'Could not connect to the model service. Check the HTTPS URL, network, and certificate.',
+      'err.model-timeout': 'The model service did not respond within 60 seconds. Try again or select fewer materials.',
+      'err.model-response': 'The model returned invalid text or citations. Retry or choose a model that supports JSON output.',
+      'research.notesOptional': 'Research notes (optional)',
+      'research.start': 'Start research',
       's0.pickerUnavailable': 'This host cannot open a folder picker. You can enter the path manually.',
       's0.pickerFailed': 'Could not open the folder picker. {message}',
       'asset.knowledge': 'Knowledge',
@@ -299,7 +334,7 @@ window.__ModuleLoader__.load({
     }
 
     function messageOf(error) {
-      if (error && error.code && ZH['err.' + error.code] !== undefined) return T('err.' + error.code)
+      if (error && error.code && ZH['err.' + error.code] !== undefined) return T('err.' + error.code, { message: error.message })
       if (error && error.code === 'network') return T('err.network')
       return (error && error.message) || T('err.internal')
     }
@@ -355,6 +390,17 @@ window.__ModuleLoader__.load({
         })
         return function () { active = false }
       }, [vault, page, recentRevision])
+      var [resumable, setResumable] = useState(null)
+      useEffect(function () {
+        if (!vault || page !== 'home' || changing) return
+        var active = true
+        api(RESEARCH).then(function (data) {
+          if (active) setResumable({ vault: vault, id: data.studies[0]?.meta.id })
+        }, function () {
+          if (active) setResumable(null)
+        })
+        return function () { active = false }
+      }, [vault, page, changing])
       var mounted = useRef(true)
 
       useEffect(function () {
@@ -497,6 +543,9 @@ window.__ModuleLoader__.load({
                     ? h(AssetPage, { key: page, kind: page, seed: seed, onNavigate: navigate })
                     : h(InspirationHome, {
                     onResearch: function () { navigate('research') },
+                    onResume: resumable?.vault === vault && resumable.id ? function () {
+                      navigate('research', { resume: resumable.id })
+                    } : null,
                     onKnowledge: function () { navigate('knowledge') },
                     onWorks: function () { navigate('works') },
                     draft: draft, busy: busy, saved: saved, onSave: saveIdea,
@@ -585,6 +634,7 @@ window.__ModuleLoader__.load({
           ),
         ),
         h('div', { className: 'gr-row' },
+          props.onResume ? h('button', { className: 'gr-btn', disabled: !!props.busy, onClick: props.onResume }, T('research.continue')) : null,
           h('button', { className: 'gr-btn gr-btn-ghost', disabled: !!props.busy, onClick: props.onResearch }, T('research.title')),
           h('button', { className: 'gr-btn gr-btn-ghost', disabled: !!props.busy, onClick: props.onKnowledge }, T('asset.knowledge')),
           h('button', { className: 'gr-btn gr-btn-ghost', disabled: !!props.busy, onClick: props.onWorks }, T('asset.works'))),
@@ -626,7 +676,7 @@ window.__ModuleLoader__.load({
       }))
     }
 
-    function ModelSettings() {
+    function ModelSettings(props) {
       var [config, setConfig] = useState(null)
       var [busy, setBusy] = useState(false)
       var [message, setMessage] = useState('')
@@ -651,11 +701,13 @@ window.__ModuleLoader__.load({
             var current = await api(MODEL).catch(function () { return null })
             if (current && current.enabled === config.enabled &&
               (!current.enabled || (current.name === config.name && current.endpoint === config.endpoint))) {
+              props.onApplied(current)
+              setConfig(current)
               setMessage(T('research.saved'))
               return
             }
           }
-          throw new Error(T('parsers.failed'))
+          throw new Error(T('model.saveFailed'))
         } catch (problem) { setError(problem) }
         finally { setBusy(false) }
       }
@@ -673,7 +725,7 @@ window.__ModuleLoader__.load({
             required: true, disabled: busy, onChange: function (event) { change('endpoint', event.target.value) } })),
           h('label', null, T('model.name'), h('input', { className: 'gr-input', value: config.name || '',
             required: true, disabled: busy, onChange: function (event) { change('name', event.target.value) } })),
-          h('p', { className: 'gr-meta' }, 'GROVE_MODEL_KEY')) : null,
+          h('p', { className: 'gr-meta' }, T('model.keyHint'))) : null,
         h('div', { className: 'gr-row' },
           config.enabled ? h('button', { className: 'gr-btn', value: 'test', disabled: busy }, T('model.test')) : null,
           h('button', { className: 'gr-btn', value: 'apply', disabled: busy }, T('model.apply'))),
@@ -681,24 +733,38 @@ window.__ModuleLoader__.load({
     }
 
     function ResearchFindings(props) {
-      var [question, setQuestion] = useState(props.title)
+      var [question, setQuestion] = useState(props.initialQuestion || props.title)
+      var panel = useRef(null)
+      var autoStarted = useRef(false)
       var [findings, setFindings] = useState([])
       var [evidence, setEvidence] = useState([])
       var [selected, setSelected] = useState([])
       var [busy, setBusy] = useState(false)
-      var [modelEnabled, setModelEnabled] = useState(null)
       var [error, setError] = useState(null)
 
       function load(event) {
         if (!event.currentTarget.open) return
-        api(MODEL).then(function (result) { setModelEnabled(result.enabled === true) }, setError)
-        api(FINDINGS, { action: 'list', id: props.id }).then(function (result) { setFindings(result.findings) }, setError)
+        api(FINDINGS, { action: 'list', id: props.id }).then(function (result) {
+          setFindings(function (items) {
+            return result.findings.concat(items.filter(function (item) {
+              return !result.findings.some(function (loaded) { return loaded.meta.id === item.meta.id })
+            }))
+          })
+        }, setError)
         api(REPORTS, { action: 'list', research: props.id }).then(function (result) { setEvidence(result.evidence) }, setError)
       }
 
+      useEffect(function () {
+        if (props.initialQuestion && !autoStarted.current) {
+          autoStarted.current = true
+          panel.current.open = true
+          ask()
+        }
+      }, [])
+
       async function ask(event) {
-        event.preventDefault()
-        if (!modelEnabled || busy) return
+        if (event) event.preventDefault()
+        if (!props.modelEnabled || busy) return
         setBusy(true)
         setError(null)
         try {
@@ -706,13 +772,15 @@ window.__ModuleLoader__.load({
             includeHistory: true, materials: evidence.filter(function (item) { return selected.includes(item.id) }).map(function (item) {
               return { id: item.id, version: item.version }
             }) })
-          setFindings(function (items) { return items.concat(finding) })
+          setFindings(function (items) {
+            return items.some(function (item) { return item.meta.id === finding.meta.id }) ? items : items.concat(finding)
+          })
           setQuestion('')
         } catch (problem) { setError(problem) }
         finally { setBusy(false) }
       }
 
-      return h('details', { className: 'gr-card', onToggle: load },
+      return h('details', { className: 'gr-card', ref: panel, onToggle: load },
         h('summary', null, T('model.ask')),
         error ? h('p', { role: 'alert' }, messageOf(error)) : null,
         findings.map(function (item) {
@@ -721,16 +789,16 @@ window.__ModuleLoader__.load({
               api(REPORTS, { action: 'draft', research: props.id, id: item.meta.id, version: item.meta.version }).then(props.onDraft, setError)
             } }, T('report.review')))
         }),
-        modelEnabled === false ? h('p', { className: 'gr-body' }, T('model.setup')) : null,
-        modelEnabled ? h('form', { className: 'gr-stack', onSubmit: ask },
+        props.modelEnabled === false ? h('p', { className: 'gr-body' }, T('model.setup')) : null,
+        props.modelEnabled ? h('form', { className: 'gr-stack', onSubmit: ask },
           h('label', null, T('model.question'), h('textarea', { className: 'gr-textarea', value: question,
-            required: true, maxLength: 1000, onChange: function (event) { setQuestion(event.target.value) } })),
+            required: true, disabled: busy, maxLength: 1000, onChange: function (event) { setQuestion(event.target.value) } })),
           h('p', { className: 'gr-meta' }, T('model.scope')),
           evidence.map(function (item) {
             return h('label', { key: item.id }, h('input', { type: 'checkbox', checked: selected.includes(item.id),
               onChange: function (event) { setSelected(event.target.checked ? selected.concat(item.id) : selected.filter(function (id) { return id !== item.id })) } }), item.title)
           }),
-          h('button', { className: 'gr-btn', disabled: busy }, T('model.ask'))) : null)
+          h('button', { className: 'gr-btn', disabled: busy }, T(busy ? 'model.running' : 'model.ask'))) : null)
     }
 
     function ParserSettings() {
@@ -1096,6 +1164,8 @@ window.__ModuleLoader__.load({
 
     function ResearchPage(props) {
       var [reportDraft, setReportDraft] = useState(null)
+      var [model, setModel] = useState(null)
+      var [initialQuestion, setInitialQuestion] = useState('')
       var [studies, setStudies] = useState([])
       var [selected, setSelected] = useState(null)
       var [question, setQuestion] = useState(props.seed?.title || '')
@@ -1106,8 +1176,17 @@ window.__ModuleLoader__.load({
 
       useEffect(function () {
         var active = true
+        api(MODEL).then(function (data) {
+          if (active) setModel(data)
+        }, function (problem) {
+          if (active) setError(problem)
+        })
         api(RESEARCH).then(function (data) {
-          if (active) setStudies(data.studies)
+          if (!active) return
+          setStudies(data.studies)
+          if (props.seed?.resume) select(data.studies.find(function (study) {
+            return study.meta.id === props.seed.resume
+          }) || data.studies[0] || null)
         }, function (problem) {
           if (active) setError(problem)
         }).finally(function () {
@@ -1118,6 +1197,7 @@ window.__ModuleLoader__.load({
 
       function select(note) {
         setSelected(note)
+        setInitialQuestion('')
         setReportDraft(null)
         setBody(note ? note.body : '')
         setQuestion('')
@@ -1126,13 +1206,15 @@ window.__ModuleLoader__.load({
 
       function save(event) {
         event.preventDefault()
-        if (busy || !body.trim() || (!selected && !question.trim())) return
+        if (busy || (!selected && !question.trim())) return
+        var investigate = !selected && event.nativeEvent.submitter?.value === 'investigate'
         setBusy(true)
         setError(null)
         setSaved(false)
         var input = selected ? { id: selected.meta.id, version: selected.meta.version, body: body } : { question: question, body: body, origin: props.seed?.origin }
         api(RESEARCH, input).then(function (note) {
           select(note)
+          if (investigate) setInitialQuestion(question.trim())
           setSaved(true)
           setStudies(function (items) {
             return [note].concat(items.filter(function (item) { return item.meta.id !== note.meta.id }))
@@ -1151,16 +1233,18 @@ window.__ModuleLoader__.load({
             h('label', null, T('research.question'),
               h('input', { className: 'gr-input', value: question, required: true, maxLength: 300,
                 onChange: function (event) { setQuestion(event.target.value) } })),
-          h('label', null, T('research.notes'),
-            h('textarea', { className: 'gr-textarea', value: body, required: true,
+          h('label', null, T(selected ? 'research.notes' : 'research.notesOptional'),
+            h('textarea', { className: 'gr-textarea', value: body,
               onChange: function (event) { setBody(event.target.value); setSaved(false) } })),
           h('div', { className: 'gr-row' },
-            h('button', { className: 'gr-btn', disabled: busy }, T('research.save')),
+            !selected && model?.enabled ? h('button', { className: 'gr-btn', value: 'investigate', disabled: busy }, T('model.ask')) : null,
+            h('button', { className: !selected && model?.enabled ? 'gr-btn gr-btn-ghost' : 'gr-btn', disabled: busy },
+              T(selected ? 'research.save' : 'research.start')),
             h('span', { role: 'status' }, saved ? T('research.saved') : ''))),
         h('p', { className: 'gr-body' }, T('model.optional')),
-        h(ModelSettings),
+        h(ModelSettings, { onApplied: setModel }),
         h(ParserSettings),
-        selected ? h(ResearchFindings, { key: 'findings:' + selected.meta.id, id: selected.meta.id, title: selected.meta.title, version: selected.meta.version, onDraft: setReportDraft }) : null,
+        selected ? h(ResearchFindings, { key: 'findings:' + selected.meta.id, id: selected.meta.id, title: selected.meta.title, version: selected.meta.version, modelEnabled: model?.enabled, initialQuestion: initialQuestion, onDraft: setReportDraft }) : null,
         selected ? h(ResearchSources, { key: selected.meta.id, id: selected.meta.id }) : null,
         selected ? h(ResearchReports, { key: 'report:' + selected.meta.id, id: selected.meta.id, onNavigate: props.onNavigate, draft: reportDraft, onDiscard: function () { setReportDraft(null) } }) : null,
         studies.length ? h('div', { className: 'gr-stack' }, studies.map(function (note) {
