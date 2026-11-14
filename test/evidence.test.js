@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { Vault } from '../src/vault.js'
 import { documentParsers } from '../src/adapters/parsers/documents.js'
 import { importSource, saveEvidence, openSource } from '../src/modules/evidence.js'
+import { confirmReport, readReport } from '../src/modules/reports.js'
 import { startResearch } from '../src/modules/research.js'
 
 test('an excerpt keeps its original document version after another import', async t => {
@@ -23,6 +24,12 @@ test('an excerpt keeps its original document version after another import', asyn
   }
   const old = await importMarkdown('Context\n\nOld passage')
   const excerpt = await saveEvidence(store, old.meta, 1)
+  const report = await confirmReport(store, { research: research.meta.id, body: 'Finding', evidence: [excerpt.meta] })
+  await confirmReport(store, { research: research.meta.id, id: report.meta.id, version: 1, body: 'Revised', evidence: [] })
+  const historical = await readReport(store, report.meta.id, 1)
+  assert.equal(historical.body, 'Finding')
+  assert.deepEqual(historical.versions, [2, 1])
+  assert.deepEqual(historical.evidence[0].original, excerpt.meta.links[0])
   const updated = await importMarkdown('New passage')
   assert.equal(updated.meta.id, old.meta.id)
   assert.equal(updated.meta.version, 2)

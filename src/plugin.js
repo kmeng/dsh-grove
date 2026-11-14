@@ -50,7 +50,7 @@ export function apply(ctx, config = {}) {
     name: 'grove_propose',
     description: 'When asked, save a draft for local human review. This tool does not create a knowledge asset.',
     parameters: {
-      type: { type: 'string', enum: types.filter(type => !['evidence', 'research', 'source'].includes(type)), required: true },
+      type: { type: 'string', enum: types.filter(type => !['evidence', 'research', 'source', 'report'].includes(type)), required: true },
       body: { type: 'string', required: true },
       title: { type: 'string' },
       origin: { type: 'string', description: 'User-approved session reference or source description' },

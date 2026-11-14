@@ -22,11 +22,19 @@ window.__ModuleLoader__.load({
     var CONNECTION = '/api/grove/connection'
     var CONFIG = '/api/grove/config'
     var CAPTURE = '/api/grove/capture'
+    var REPORTS = '/api/grove/reports'
     var SOURCES = '/api/grove/sources'
     var RESEARCH = '/api/grove/research'
     var INSPIRATIONS = '/api/grove/inspirations'
 
     var ZH = {
+      'report.title': '研究报告',
+      'report.new': '新报告',
+      'report.body': '报告正文',
+      'report.save': '确认报告',
+      'report.history': '历史版本',
+      'report.missing': '原件不可用，仍可核对上面的摘录。',
+      'report.missingEvidence': '这条证据已不可用。',
       'source.title': '研究资料',
       'source.import': '导入 Markdown 或文本 PDF',
       'source.read': '看看原文',
@@ -99,6 +107,13 @@ window.__ModuleLoader__.load({
     }
 
     var EN = {
+      'report.title': 'Research reports',
+      'report.new': 'New report',
+      'report.body': 'Report body',
+      'report.save': 'Confirm report',
+      'report.history': 'History',
+      'report.missing': 'Original unavailable. The saved excerpt is shown above.',
+      'report.missingEvidence': 'This evidence version is unavailable.',
       'source.title': 'Sources',
       'source.import': 'Import Markdown or text PDF',
       'source.read': 'View original passage',
@@ -578,6 +593,109 @@ window.__ModuleLoader__.load({
           })) : null)
     }
 
+    function ResearchReports(props) {
+      var [catalog, setCatalog] = useState(null)
+      var [report, setReport] = useState(null)
+      var [body, setBody] = useState('')
+      var [references, setReferences] = useState([])
+      var [originals, setOriginals] = useState({})
+      var [busy, setBusy] = useState(false)
+      var [error, setError] = useState(null)
+      var [editing, setEditing] = useState(false)
+
+      function list() {
+        return api(REPORTS, { action: 'list', research: props.id }).then(setCatalog)
+      }
+
+      async function run(operation) {
+        setBusy(true)
+        setError(null)
+        try { await operation() }
+        catch (problem) { setError(problem) }
+        finally { setBusy(false) }
+      }
+
+      async function read(id, version) {
+        var result = await api(REPORTS, { action: 'read', id: id, version: version })
+        setReport(result)
+        setBody(result.body)
+        setReferences(result.evidence.filter(function (item) { return !item.missing }).map(function (item) {
+          return { id: item.meta.id, version: item.meta.version }
+        }))
+        setOriginals({})
+        setEditing(true)
+      }
+
+      function start() {
+        setReport(null)
+        setBody('')
+        setReferences([])
+        setEditing(true)
+      }
+
+      function save(event) {
+        event.preventDefault()
+        run(async function () {
+          var input = { action: 'confirm', research: props.id, body: body, evidence: references }
+          if (report) { input.id = report.meta.id; input.version = report.meta.version }
+          var result = await api(REPORTS, input)
+          await read(result.meta.id, result.meta.version)
+          await list()
+        })
+      }
+
+      function cite(item) {
+        if (item.missing) return h('p', { key: item.reference.id }, T('report.missingEvidence'))
+        var ref = item.original
+        return h('div', { key: item.meta.id, className: 'gr-card' },
+          h('p', null, item.meta.source, ' · ', item.meta.locator),
+          h('pre', { className: 'gr-code' }, item.body),
+          ref ? h('button', { className: 'gr-btn gr-btn-ghost', disabled: busy, onClick: function () {
+            run(async function () {
+              var text
+              try {
+                var result = await api(SOURCES, { action: 'open', id: ref.id, version: ref.version })
+                var block = result.blocks.find(function (entry) { return entry.locator === item.meta.locator })
+                text = block ? block.text : T('report.missing')
+              } catch { text = T('report.missing') }
+              setOriginals(function (previous) { return Object.assign({}, previous, { [item.meta.id]: text }) })
+            })
+          } }, T('source.read')) : null,
+          originals[item.meta.id] ? h('pre', { className: 'gr-code' }, originals[item.meta.id]) : null)
+      }
+
+      return h('details', { className: 'gr-card', onToggle: function (event) {
+        if (event.currentTarget.open) run(list)
+      } },
+      h('summary', null, T('report.title')),
+      error ? h('p', { role: 'alert' }, messageOf(error)) : null,
+      h('button', { className: 'gr-btn', disabled: busy, onClick: start }, T('report.new')),
+      (catalog ? catalog.reports : []).map(function (entry) {
+        return h('button', { key: entry.meta.id, className: 'gr-btn gr-btn-ghost', disabled: busy,
+          onClick: function () { run(function () { return read(entry.meta.id, entry.meta.version) }) } }, entry.meta.title)
+      }),
+      report ? h('label', null, T('report.history'), ' ', h('select', {
+        value: report.meta.version, disabled: busy,
+        onChange: function (event) {
+          var version = Number(event.target.value)
+          run(function () { return read(report.meta.id, version) })
+        },
+      }, report.versions.map(function (version) { return h('option', { key: version, value: version }, 'v' + version) }))) : null,
+      report ? report.evidence.map(cite) : null,
+      editing ? h('form', { onSubmit: save },
+        h('label', null, T('report.body'), h('textarea', { className: 'gr-textarea', required: true,
+          value: body, onChange: function (event) { setBody(event.target.value) } })),
+        (catalog ? catalog.evidence : []).map(function (item) {
+          var checked = references.some(function (ref) { return ref.id === item.id && ref.version === item.version })
+          return h('label', { key: item.id }, h('input', { type: 'checkbox', checked: checked,
+            onChange: function () {
+              setReferences(checked ? references.filter(function (ref) { return ref.id !== item.id })
+                : references.filter(function (ref) { return ref.id !== item.id }).concat({ id: item.id, version: item.version }))
+            } }), item.title, ' · v', item.version)
+        }),
+        h('button', { className: 'gr-btn', disabled: busy || (report && report.meta.version !== report.versions[0]) }, T('report.save'))) : null)
+    }
+
     function ResearchPage(props) {
       var [studies, setStudies] = useState([])
       var [selected, setSelected] = useState(null)
@@ -640,6 +758,7 @@ window.__ModuleLoader__.load({
             h('button', { className: 'gr-btn', disabled: busy }, T('research.save')),
             h('span', { role: 'status' }, saved ? T('research.saved') : ''))),
         selected ? h(ResearchSources, { key: selected.meta.id, id: selected.meta.id }) : null,
+        selected ? h(ResearchReports, { key: 'report:' + selected.meta.id, id: selected.meta.id }) : null,
         studies.map(function (note) {
           return h('button', { key: note.meta.id, className: 'gr-btn gr-btn-ghost', disabled: busy,
             onClick: function () { select(note) } }, note.meta.title)

@@ -5,6 +5,7 @@ import { isAbsolute, join, resolve } from 'node:path'
 import { captureInspiration, findInspirations, readInspiration } from './modules/inspirations.js'
 import { startResearch, listResearch, saveResearch } from './modules/research.js'
 import { importSource, saveEvidence, openSource } from './modules/evidence.js'
+import { listReports, confirmReport, readReport } from './modules/reports.js'
 import { Vault } from './vault.js'
 
 export const routes = {
@@ -12,6 +13,7 @@ export const routes = {
   config: '/api/grove/config',
   connection: '/api/grove/connection',
   capture: '/api/grove/capture',
+  reports: '/api/grove/reports',
   sources: '/api/grove/sources',
   research: '/api/grove/research',
   inspirations: '/api/grove/inspirations',
@@ -197,6 +199,30 @@ export function registerRoutes(ctx, options) {
         }
         const query = typeof input?.query === 'string' ? input.query.trim() : ''
         return json({ notes: (await findInspirations(vault, query)).slice(0, 50) })
+      } catch (error) {
+        return failure(error)
+      }
+    })
+    route(routes.reports, ['POST'], async request => {
+      try {
+        const { path } = options.current()
+        if (!path) throw coded('not-configured', 'Grove has no vault yet')
+        const store = new Vault(path)
+        const input = await readJson(request)
+        if (input?.action === 'list') {
+          const notes = await store.list()
+          const sources = new Set(notes.filter(({ meta }) => meta.type === 'source' &&
+            meta.links?.some(link => link.kind === 'related' && link.id === input.research)).map(({ meta }) => meta.id))
+          const evidence = notes.filter(({ meta }) => meta.type === 'evidence' &&
+            meta.links?.some(link => link.kind === 'derived' && sources.has(link.id))).map(({ meta }) => meta)
+          return json({ reports: await listReports(store, input.research), evidence })
+        }
+        if (input?.action === 'read') return json(await readReport(store, input.id, input.version))
+        if (input?.action === 'confirm' && typeof input.body === 'string' && input.body.trim() &&
+          (input.evidence === undefined || Array.isArray(input.evidence))) {
+          return json(await confirmReport(store, input))
+        }
+        throw coded('invalid-body', 'Choose a report action and nonempty report body')
       } catch (error) {
         return failure(error)
       }
