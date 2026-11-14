@@ -2,102 +2,62 @@
 
 ![Grove. Build knowledge you can revisit and revise.](brand/exports/readme-header-1600x480.en.png)
 
-[简体中文](README.md) · [English](README.en.md)
+[简体中文](README.md) · [English](README.en.md) · [MIT license](LICENSE)
 
-[![MIT license](https://img.shields.io/badge/license-MIT-2F7D5B?style=flat-square)](LICENSE)
-[![DeepSeek Harness 0.2.2-rc.1 up to 0.3.0](https://img.shields.io/badge/dsh-%3E%3D0.2.2--rc.1_%3C0.3.0-1B3A2E?style=flat-square)](package.json)
-[![Node.js 22 or later](https://img.shields.io/badge/Node.js-22%2B-2F7D5B?style=flat-square&logo=nodedotjs&logoColor=white)](package.json)
+## Why Grove exists
 
-## Personal knowledge and growth
+Grove started with a question. How can an idea, a conversation, or a round of research become knowledge you can find, verify, and revise later? Grove connects DeepSeek Harness to your own Obsidian vault so that work stays with you as Markdown.
 
-**PKGS (Personal Knowledge & Growth System) is a method for long-term personal growth.** It connects exploration, learning, evidence-based research, creation, and reflection. Something you understood years ago may help explain a problem today. Evidence you find tomorrow may change a judgment you make today. Over time, you build knowledge you can draw on again and become better at understanding, judging, researching, and communicating.
+The Personal Knowledge & Growth System (PKGS) connects exploration, learning, research, creation, and reflection. You can jot down a sentence or revise a judgment after trying it in practice, then carry that understanding into your next study. AI can compare explanations, ask questions, and draft. You decide what to believe, keep, and share. [PKGS guide](docs/PKGS.en.md)
 
-You can practice the method with paper, Markdown, or tools you already use. The [PKGS guide](docs/PKGS.en.md) explains the design and shows how to develop questions, connect ideas, conduct research, track changes in your views, and share the work with AI.
+## Core features
 
-- **Exploration** starts with an observation, uncertainty, or association. You can stop anytime or leave an open question to return to later. You decide when to research it and whether to make something from it.
-- **Knowledge growth** starts by explaining an idea in your own words. Connect concepts, examples, and questions, then test your understanding through use and review.
-- **Research and creation** start with a question worth investigating. Preserve sources, counterexamples, and versions of your judgment. When useful, turn what you learned into an article, report, or proposal. Reflection can give you a starting point for the next exploration.
+The features below describe this repository. Installations from npm use the version published in the registry. [npm package](https://www.npmjs.com/package/dsh-grove)
 
-AI can ask questions, compare explanations, surface counterexamples, and help you express an idea. You decide what to believe, keep, and share.
+- **Capture ideas.** Jot down a thought, find it by keyword, and reopen an earlier version.
+- **Research with evidence.** Start an independent study or configure a model to analyze selected excerpts. Import Markdown or PDFs with a text layer, save passages with paragraph or page locations, and confirm a report after review.
+- **Build knowledge and create works.** Turn findings into concepts or methods, and use your knowledge to draft a work. Record why your understanding changed while keeping earlier references readable.
+- **Keep your data locally.** Notes and versions live in the vault’s `Grove/` folder. The CLI can verify a backup and restore it to a separate directory.
 
-## How Grove puts the method into practice
+## Install and use
 
-Grove connects DeepSeek Harness and Obsidian. The current version connects the Grove panel in the left sidebar, open-ended conversation, user-confirmed saves, and basic evidence tracking. After installing, Grove appears in the sidebar: connect a vault and capture a first idea, then return to the conversation. Choose what to keep from a conversation, save it as Markdown in your own vault, and use versions and wikilinks to revisit relationships among questions, evidence, and claims. You can practice the guide’s learning, reflection, and full research methods by hand.
+Have an Obsidian vault ready. Check [`engines` in package.json](package.json) for the supported Node.js and DeepSeek Harness versions.
 
-## Install v0.2.0
+- **Install from npm.** Run `dsh plugin --profile <profile> add dsh-grove`.
+- **Try the source in Desktop.** Open **Plugins → Add plugin** and select this repository directory. Restart the host after editing the source. Desktop manages its own profile.
+- **Try the source in a separate profile.** From the repository root, run the following commands.
 
-You need Node.js 22 or later, an existing Obsidian vault, and DeepSeek Harness `>=0.2.2-rc.1 <0.3.0`. The `engines.dsh` range determines whether the host loads the bundle.
+```sh
+dsh plugin --profile grove-trial add "$PWD"
+dsh --profile grove-trial
+```
 
-### Install in an existing Harness
+Open **Grove** (or **知林** in Chinese) in the sidebar, choose your vault, and save an idea. Open **Research** to save a question and observations, then add sources, capture evidence, or confirm a report as needed. For AI research, enter a Chat Completions-compatible HTTPS endpoint and model name in the research panel, and set `GROVE_MODEL_KEY` in the host environment.
 
-| Entry point | Steps |
-| --- | --- |
-| Desktop | Open **Plugins → Add plugin** and select this repository directory. The host installs a `link:` dependency. Restart the host after editing the source. |
-| In a session | Ask the agent to call `plugin_manager` with `install_bundle` and pass the directory’s absolute path as `target`. |
-| npm | `dsh plugin --profile <profile> add dsh-grove` (published to npm since 0.2.0). |
-| CLI | Run `dsh plugin --profile <profile> add <directory-or-tgz>`. The Desktop app manages its own profile. Packages installed into `profiles/web` do not appear there. |
-
-After installing, **Grove** appears in the left sidebar: open it, choose a vault, and capture a first idea. Check that Grove also appears on the **Plugins** page, then ask the model to call `grove_role` in a new session to confirm the tool is registered.
-
-### Try a separate profile
+Install the CLI separately with `npm install --global .` from the repository root, or run `npm install --global dsh-grove` for the published CLI.
 
 ```sh
 export GROVE_VAULT="/absolute/path/to/Obsidian vault"
-npx --yes @deepseek-ai/dsh@0.2.2-rc.3 plugin --profile grove add "$PWD"
-npx --yes @deepseek-ai/dsh@0.2.2-rc.3 --profile grove
+grove capture --body 'Why do the two sides of this street feel so different?'
+grove list
+grove show ASSET_ID --version 1
 ```
 
-Initialize a separate profile once. If the `grove` profile already exists, install or launch directly. In your trial profile, keep host shell access, file editing, general automation, and other extensions from accessing the vault or running confirmation commands on your behalf. Grove’s model tools provide role guidance, drafts, and allowlisted reads. Harness sessions also follow the host’s routing, permissions, and history settings.
+In a Harness session, use `grove_role` for collaboration guidance and `grove_propose` for drafts. Back in your terminal, run `grove preview DRAFT_ID`, then `grove accept DRAFT_ID` to confirm or `grove discard DRAFT_ID` to discard. To share selected assets with the model, configure the read allowlist. [Tools and permissions](docs/DETAIL.en.md)
 
-### Install the command-line tool
-
-A global installation puts the package’s `grove` executable on PATH. Installing the plugin in a profile registers it with the host.
-
-```sh
-npm pack --pack-destination /tmp
-npm install --global /tmp/dsh-grove-0.2.0.tgz
-```
-
-## Everyday use
-
-1. Open **Grove** in the left sidebar, choose your Obsidian vault, and capture a first idea. You can also keep using the terminal: `grove capture --body 'Why might coordination costs increase as an organization grows?'`. Open the `Grove` folder in Obsidian to see the Markdown note.
-2. Explore in Harness. Use `grove_role` for a thinking partner, knowledge assistant, research assistant, critical reviewer, or creation assistant. Ask `grove_propose` to draft a note when you want to keep something, and supply the conversation reference you want to save. You can also end the exploration there.
-3. Run `grove preview DRAFT_ID` in your terminal. Use `grove accept DRAFT_ID` and type `SAVE`, or run `grove discard DRAFT_ID`. Pass `--file` when accepting to supply your edited body.
-4. Use `grove list` and `grove show ASSET_ID --version 1` to revisit your notes. To share selected notes with the model, set `GROVE_READABLE_IDS` to a comma-separated list of asset IDs before starting the host. Restart the host after revoking that access. Content already shared in a session follows the host’s history settings.
-
-## Basic research
-
-```sh
-grove add question --body 'How does team size affect decision speed?'
-grove add research --question QUESTION_ID --body 'Compare decision authority and coordination costs'
-grove add evidence --body 'Add a checkable excerpt' --source 'https://example.org/report' --locator 'Page 12, paragraph 2'
-grove add claim --body 'My current judgment'
-grove update CLAIM_ID --version 1 --link EVIDENCE_ID --relation supports
-grove update RESEARCH_ID --version 1 --link CLAIM_ID --relation related
-grove update RESEARCH_ID --version 2 --stage analysis
-grove update RESEARCH_ID --version 3 --stage review --status closed
-```
-
-Use the IDs returned by the earlier commands. You can revisit stages and pause, reopen, or archive questions and projects. Evidence can support, refute, or qualify a claim. Links target specific versions. When you rewrite a claim, its earlier evidence links stay on the earlier version. You can explicitly adopt evidence again for the new version. A research project can close with or without a deliverable.
-
-## Data and removal
-
-Version files in `Grove/` use YAML properties, Markdown bodies, and Obsidian wikilinks. Grove reads within its own folder. Copy the whole folder, including hidden drafts, to back it up or move it. You can read and edit bodies in Obsidian while preserving file names and Grove metadata. Use `grove update` to retain the earlier version. The current version records source identifiers and locations you supply. See the [plugin details](docs/DETAIL.en.md) for current limits.
-
-To remove the host plugin, run `npx --yes @deepseek-ai/dsh@0.2.2-rc.3 plugin --profile grove remove dsh-grove`. Your vault data stays in place. Remove the command separately with `npm uninstall --global dsh-grove`.
-
-## Brand assets
-
-See the [brand assets](brand/README.en.md) and the visual identity guide ([English](brand/VI.en.md) · [简体中文](brand/VI.md)). Tests check that the package’s `icon.svg` matches `brand/mark.svg` byte for byte.
+Before upgrading, pause writes and run `grove backup /absolute/path/to/snapshot`. To restore, run `grove restore /absolute/path/to/snapshot --destination /absolute/path/to/new-vault`, check the restored files, and switch the panel to that directory. To remove the plugin, run `dsh plugin --profile <profile> remove dsh-grove`. Your vault data stays in place.
 
 ## Contributing
 
-Read the [development contract](AGENTS.en.md) ([简体中文](AGENTS.md)). The Claude Code, Cursor, and Copilot instructions point to the same contract. See the [development guide](docs/development/README.md) for issue structure, acceptance, and review rules, and the [journal](docs/journal/) for handoffs. Before making changes, run the tests and `bash scripts/check-compat.sh`.
-
-## Verify from source
+1. Check open issues. For a bug, include reproduction steps and the expected and actual behavior. For a feature, describe what the user needs and how to verify it. [Issues](https://github.com/kmeng/dsh-grove/issues)
+2. Read the development contract and open a branch for a change reviewers can verify in one PR. Use a temporary vault and include actual test results and any gaps. [Development contract](AGENTS.en.md) · [Development guide](docs/development/README.md)
+3. Run the checks below. Documentation and brand-only changes need the first two. Host checks use an installed dsh and a temporary profile.
 
 ```sh
-npm ci
-npm test
-npm pack
+npm ci && npm test
+npm pack --dry-run --json
+bash scripts/check-compat.sh
+bash scripts/verify-install.sh
 ```
+
+See the [journal](docs/journal/) for handoffs and release history and the [brand guide](brand/README.en.md) for logos and visual identity.
