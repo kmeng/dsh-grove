@@ -136,3 +136,32 @@ test('icon is well-formed, self-contained and within the size limit', async () =
   assert.deepEqual(stack, [], 'icon has unclosed elements')
   assert.ok(Buffer.byteLength(svg) < 256 * 1024)
 })
+
+test('brand assets stay out of the npm package, and icon.svg mirrors the master', async () => {
+  assert.equal(
+    await readFile(join(root, 'icon.svg'), 'utf8'),
+    await readFile(join(root, 'brand', 'mark.svg'), 'utf8'),
+    'icon.svg must be byte-identical to brand/mark.svg',
+  )
+  assert.ok(!(manifest.files ?? []).some(pattern => pattern.startsWith('brand')), 'brand/ must not be shipped')
+
+  const expected = {
+    'brand/exports/icon-180.png': [180, 180],
+    'brand/exports/icon-180-tile.png': [180, 180],
+    'brand/exports/icon-512.png': [512, 512],
+    'brand/exports/icon-1024.png': [1024, 1024],
+    'brand/exports/social-preview-1280x640.png': [1280, 640],
+    'brand/exports/readme-header-1600x480.png': [1600, 480],
+  }
+  for (const [path, [width, height]] of Object.entries(expected)) {
+    const png = await readFile(join(root, path))
+    assert.equal(png.toString('ascii', 1, 4), 'PNG', `${path} is not a PNG`)
+    assert.deepEqual([png.readUInt32BE(16), png.readUInt32BE(20)], [width, height], `${path} size`)
+  }
+
+  for (const file of ['mark.svg', 'mark-on-dark.svg', 'mark-mono.svg', 'logo-light.svg', 'logo-dark.svg', 'logo-zh.svg']) {
+    const svg = await readFile(join(root, 'brand', file), 'utf8')
+    assert.match(svg, /^<svg\b[^>]*>/, `${file} must be an svg element`)
+    assert.match(svg.trim(), /<\/svg>$/, `${file} must be closed`)
+  }
+})

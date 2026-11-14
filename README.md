@@ -1,5 +1,7 @@
 # Grove（知林）
 
+![Grove：让每次对话长成可追溯的知识资产](brand/exports/readme-header-1600x480.png)
+
 Grove 是 DeepSeek Harness 的个人知识成长插件。用 Obsidian vault 保存灵感、问题、知识资产和研究证据。探索是常态，研究是选择，成果自然生长。
 
 ## 安装 v0.1.1
@@ -62,6 +64,10 @@ grove update RESEARCH_ID --version 3 --stage review --status closed
 `Grove/` 内的版本文件使用 YAML 属性、Markdown 正文和 Obsidian 双链。Grove 不读 vault 中其他笔记。复制整个 `Grove/` 文件夹即可备份或迁移，点号开头的草稿文件也会随整目录迁移。可在 Obsidian 阅读及编辑正文，保留文件名和 Grove 元数据。要保留更改前的版本，使用 `grove update`。本版证据使用用户填写的来源标识与定位，附件管理、自动会话定位和专用插件界面留待后续版本。
 
 用 `npx --yes @deepseek-ai/dsh@0.2.2-rc.3 plugin --profile grove remove dsh-grove` 卸载宿主插件。数据留在 vault，终端命令可通过 `npm uninstall --global dsh-grove` 单独卸载。
+
+## 品牌资产
+
+标志、锁定组合、色板、字体与导出图都在 [`brand/`](brand/README.md)，规范见 [`brand/VI.md`](brand/VI.md)。根目录的 `icon.svg` 与 `brand/mark.svg` 保持字节一致，由测试保证。
 
 ## 从源代码验证
 
