@@ -2,7 +2,7 @@
 
 ## 做完
 
-- [#25](https://github.com/kmeng/dsh-grove/issues/25) → [PR #26](https://github.com/kmeng/dsh-grove/pull/26)：新增 Web 客户端（左侧入口 + 未连接 / 首条灵感 / 概览三态）与同源路由 `status` / `config` / `capture`；vault 路径经 `configEditor` 写入 profile；介绍文案重写，详情页收敛为一张 640×300 预览图。测试 21 → 34。
+- [#25](https://github.com/kmeng/dsh-grove/issues/25) → [PR #26](https://github.com/kmeng/dsh-grove/pull/26)：新增 Web 客户端（左侧入口 + 未连接 / 首条灵感 / 概览三态）与同源路由 `status` / `config` / `capture`；vault 路径经 `configEditor` 写入 profile；介绍文案重写，详情页收敛为一张 640×300 预览图。测试 21 → 33。
 - [#27](https://github.com/kmeng/dsh-grove/issues/27) → [PR #28](https://github.com/kmeng/dsh-grove/pull/28)：README / AGENTS 中英同步，去掉「Host-only、没有 Web 界面」，安装步骤补左侧入口，版本与 npm 命令更新到 0.2.0。
 - [#29](https://github.com/kmeng/dsh-grove/issues/29) → [PR #30](https://github.com/kmeng/dsh-grove/pull/30)：中文界面菜单显示「知林」，英文仍是 `Grove`；面板标题保持 `Grove`。
 - 0.2.0 发布：npm latest 0.2.0，tarball 17 文件；宿主 `readPluginMeta` 读发布包，中英标题、介绍、图标齐全。
