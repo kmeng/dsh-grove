@@ -392,3 +392,57 @@ async function waitFor(predicate) {
   }
   assert.fail('Timed out waiting for the research stage')
 }
+
+test('deep research needs a model and web search, and cannot finish after retrieval fails', async t => {
+  const root = await fixture(t)
+  const vault = new Vault(root)
+  let webAvailable = false
+  let plans = 0
+  let writes = 0
+  let queries = 0
+  const provider = {
+    async plan() { plans++; return { topic: 'Walking in the shade', questions: ['What was measured?'] } },
+    async review() {
+      return { claims: [{ text: 'More observations are needed', status: 'insufficient', sources: [], explanation: 'Limited data.' }], followups: [] }
+    },
+    async write() { writes++; return { summary: 'More observations are needed.', nextSteps: [] } },
+  }
+  function mount(options) {
+    const { ctx, registered } = host()
+    registerRoutes(ctx, { current: () => ({ path: root }), ...options })
+    return input => registered.get(routes.deepResearch).fetch(request(routes.deepResearch, input))
+  }
+  const start = { action: 'start', direction: 'Does sunlight affect walking?' }
+  const absentModel = await mount({})(start)
+  assert.equal(absentModel.status, 409)
+  assert.equal((await absentModel.json()).error.code, 'model-disabled')
+
+  const model = { modelConfig: { enabled: true }, model: () => provider }
+  const absentSearch = await mount(model)(start)
+  assert.equal(absentSearch.status, 409)
+  assert.equal((await absentSearch.json()).error.code, 'research-search-disabled')
+  assert.deepEqual(await vault.list(), [])
+  assert.equal(plans, 0)
+
+  const call = mount({ ...model, researchSearch: () => async () => {
+    queries++
+    if (!webAvailable) throw Object.assign(new Error('Network offline'), { code: 'research-search' })
+    return []
+  } })
+  const launched = await call(start)
+  assert.equal(launched.status, 202)
+  const { id, topic } = await launched.json()
+  const latest = async () => (await (await call({ action: 'list', topic })).json()).runs[0]
+  await waitFor(async () => (await latest())?.status === 'failed')
+  assert.equal((await latest()).error.code, 'research-search')
+  assert.equal((await latest()).report, undefined)
+  assert.equal(writes, 0)
+  assert.equal((await vault.list()).some(note => note.meta.type === 'report'), false)
+
+  webAvailable = true
+  assert.equal((await call({ action: 'retry', id })).status, 202)
+  await waitFor(async () => (await latest())?.status === 'complete')
+  assert.equal(plans, 1)
+  assert.equal(queries, 2)
+  assert.equal(writes, 1)
+})
