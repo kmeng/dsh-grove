@@ -59,6 +59,9 @@ function statusOf(error) {
     case 'not-found':
     case 'ENOENT':
       return 404
+    case 'model-dsh-auth':
+    case 'model-dsh-route':
+      return 409
     case 'model-timeout':
       return 504
     case 'model-auth':
@@ -196,12 +199,14 @@ async function readJson(request) {
  */
 export function registerRoutes(ctx, options) {
   const delay = Number.isFinite(options.saveDelay) ? options.saveDelay : 100
+  const dsh = options.dshModels
+  const modelFor = (settings, role, config) => settings.source === 'dsh' ? dsh?.model(settings) : options.model?.(settings, role, config)
   const runs = researchRuns({
     workflow: options.researchWorkflow ?? stagedResearch,
     context() {
-      const settings = selectModel(options.modelConfig, 'research')
+      const settings = selectModel(options.modelConfig, 'research', dsh)
       if (!settings) throw coded('model-disabled', 'Configure and enable a research model')
-      const model = options.model?.(settings, 'research', options.modelConfig)
+      const model = modelFor(settings, 'research', options.modelConfig)
       if (!model) throw coded('model-key', 'Set GROVE_MODEL_KEY for the host')
       if (!['plan', 'review', 'write'].every(step => typeof model[step] === 'function')) {
         throw coded('model-disabled', 'The configured model adapter does not support deep research')
@@ -243,9 +248,9 @@ export function registerRoutes(ctx, options) {
           }
           const note = await readInspiration(vault, input.id, input.version)
           if (input.action === 'discover') {
-            const settings = options.modelConfig
-            if (!settings?.enabled || settings.inspirationLinks !== true) return json({ enabled: false, matches: [] })
-            const provider = options.model?.(settings, 'default', options.modelConfig)
+            const settings = selectModel(options.modelConfig, 'default', dsh)
+            if (!settings || options.modelConfig?.inspirationLinks !== true) return json({ enabled: false, matches: [] })
+            const provider = modelFor(settings, 'default', options.modelConfig)
             if (!provider) throw coded('model-key', 'Set GROVE_MODEL_KEY for the host')
             return json({ enabled: true, matches: await discoverInspirations(vault, provider, note) })
           }
@@ -278,15 +283,19 @@ export function registerRoutes(ctx, options) {
       })
     }
     route(routes.model, ['GET', 'POST'], async request => {
-      if (request.method === 'GET') return json(readModelSettings(options.modelConfig, options.model))
+      if (request.method === 'GET') {
+        const config = readModelSettings(options.modelConfig, modelFor, dsh)
+        if (new URL(request.url).searchParams.has('catalog')) config.catalog = await dsh?.catalog() ?? []
+        return json(config)
+      }
       try {
         const input = await readJson(request)
-        const config = parseModelSettings(input, options.modelConfig)
+        const config = parseModelSettings(input, options.modelConfig, dsh)
         if (input?.test === true) {
-          await testModel(config, input.role === 'research' ? 'research' : 'default', options.model)
+          await testModel(config, input.role === 'research' ? 'research' : 'default', modelFor, dsh)
           return json({ ok: true })
         }
-        const model = await verifyModelSettings(config, options.modelConfig, input?.verify === true, options.model)
+        const model = await verifyModelSettings(config, options.modelConfig, input?.verify === true, modelFor, dsh)
         const editor = ctx.get?.('configEditor')
         const entry = ctx.fiber?.entry
         if (!entry || typeof editor?.edit !== 'function') throw coded('save-unavailable', 'This profile cannot save model settings')
@@ -333,8 +342,9 @@ export function registerRoutes(ctx, options) {
         const question = typeof input?.question === 'string' ? input.question.trim() : ''
         if (!question || question.length > 1000 || !Array.isArray(input.materials) || input.materials.length > 20 ||
           !Number.isSafeInteger(input.version) || input.version < 1) throw coded('invalid-body', 'Enter a research question and select evidence')
-        if (!options.modelConfig?.enabled) throw coded('model-disabled', 'Configure and enable a model first')
-        const provider = options.model?.(options.modelConfig, 'default', options.modelConfig)
+        const settings = selectModel(options.modelConfig, 'default', dsh)
+        if (!settings) throw coded('model-disabled', 'Configure and enable a model first')
+        const provider = modelFor(settings, 'default', options.modelConfig)
         if (!provider) throw coded('model-key', 'Set GROVE_MODEL_KEY for the host')
         return json(await runResearchModel(store, provider, { ...input, question, history: input.includeHistory === true ? findings.map(({ meta, body }) => ({ question: meta.title, text: body })).slice(-8) : [] }))
       } catch (error) {

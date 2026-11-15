@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
+import { createDshModels } from '../src/adapters/models/dsh.js'
+import { parseModelSettings, readModelSettings, selectModel, verifyModelSettings } from '../src/modules/model-settings.js'
 import { httpModel } from '../src/adapters/models/http.js'
 import { tavilySearch } from '../src/adapters/search/tavily.js'
 
@@ -34,4 +36,55 @@ test('the web search adapter returns fetched page text and drops snippets-only r
   assert.deepEqual(await search('shaded walking routes'), [
     { title: 'Walking study', url: 'https://example.org/study', text: 'Source passage' },
   ])
+})
+
+test('dsh model sources follow the profile, record host outcomes and preserve custom settings', async () => {
+  let current = { provider: 'host-provider', model: 'main-a' }
+  const calls = []
+  const llm = {
+    listProviders: () => [{ id: 'host-provider', name: 'Host' }],
+    listModels: async () => [{ id: 'main-a', name: 'First model' }, { id: 'main-b', name: 'Second model' }],
+    async *stream(options) {
+      calls.push([options.provider, options.model])
+      if (options.model === 'broken-model') {
+        yield { type: 'finish', reason: { kind: 'error', failure: { code: 'AUTH' } } }
+      } else {
+        yield { type: 'block-end', index: 0, block: { type: 'text', text: '{"text":"OK","citations":[]}' } }
+        yield { type: 'finish', reason: { kind: 'stop' } }
+      }
+    },
+  }
+  const services = { llm, agentDefaultModel: { currentSelection: () => current } }
+  const dsh = createDshModels({ get: name => services[name] })
+  const modelFor = model => dsh.model(model)
+  const model = () => selectModel(undefined, 'default', dsh)
+  const config = () => readModelSettings(undefined, modelFor, dsh)
+  assert.equal(config().source, 'dsh')
+  const initial = parseModelSettings({ source: 'dsh', enabled: true }, undefined, dsh)
+  assert.deepEqual(JSON.parse(JSON.stringify(initial)), initial)
+  assert.equal(config().connection.status, 'unverified')
+  assert.deepEqual(await dsh.catalog(), [
+    { provider: 'host-provider', providerName: 'Host', model: 'main-a', label: 'First model' },
+    { provider: 'host-provider', providerName: 'Host', model: 'main-b', label: 'Second model' },
+  ])
+  await modelFor(model()).investigate(input)
+  assert.equal(config().connection.status, 'connected')
+  current = { ...current, model: 'broken-model' }
+  assert.equal(config().connection.status, 'unverified')
+  await assert.rejects(modelFor(model()).investigate(input), { code: 'model-dsh-auth' })
+  assert.equal(config().connection.status, 'failed')
+  assert.deepEqual(calls, [['host-provider', 'main-a'], ['host-provider', 'broken-model']])
+
+  const previous = { enabled: true, name: 'old default', endpoint: 'https://old.example/v1',
+    deepResearch: { name: 'old research', endpoint: 'https://research.example/v1' } }
+  const next = parseModelSettings({ enabled: true, source: 'dsh',
+    deepResearch: { source: 'dsh', provider: 'host-provider', model: 'main-b' } }, previous, dsh)
+  assert.equal(next.name, previous.name)
+  assert.equal(next.endpoint, previous.endpoint)
+  assert.deepEqual(next.customResearch, previous.deepResearch)
+  assert.equal(selectModel(next, 'research', dsh).model, 'main-b')
+  const checked = await verifyModelSettings(next, previous, true, modelFor, dsh)
+  const state = readModelSettings(checked, modelFor, dsh)
+  assert.equal(state.connection.status, 'failed')
+  assert.equal(state.researchConnection.status, 'connected')
 })

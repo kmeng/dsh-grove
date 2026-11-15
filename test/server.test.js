@@ -526,3 +526,39 @@ test('legacy settings become the default and a verified research override routes
     ['plan', 'research', 'legacy'], ['plan', 'research', 'dedicated'],
   ])
 })
+
+test('deep research resolves the current dsh model unless the profile chooses another host model', async t => {
+  const root = await fixture(t)
+  const config = { source: 'dsh', enabled: true, webSearch: true }
+  const calls = []
+  let hostDefault = 'default-a'
+  const { ctx, registered } = host()
+  const dshModels = {
+    defaultSelection: () => ({ provider: 'dsh-route', model: hostDefault }),
+    connection: () => undefined,
+    model: selection => ({
+      async plan() {
+        calls.push(selection.model)
+        return { topic: 'Test topic', questions: ['What is known?'] }
+      },
+      async review() {
+        return { claims: [{ text: 'Limited data', explanation: 'No sources.', status: 'insufficient', sources: [] }], followups: [] }
+      },
+      async write() { return { summary: 'Limited data.', nextSteps: [] } },
+    }),
+  }
+  registerRoutes(ctx, { current: () => ({ path: root }), modelConfig: config, dshModels, researchSearch: () => async () => [] })
+  const call = input => registered.get(routes.deepResearch).fetch(request(routes.deepResearch, input))
+  for (const model of ['default-a', 'default-b', 'specialist']) {
+    if (model === 'specialist') config.deepResearch = { source: 'dsh', provider: 'dsh-route', model }
+    else hostDefault = model
+    const response = await call({ action: 'start', direction: 'Test ' + model })
+    assert.equal(response.status, 202)
+    const { topic } = await response.json()
+    await waitFor(async () => {
+      const state = await (await call({ action: 'list', topic })).json()
+      return state.runs[0]?.status === 'complete'
+    })
+  }
+  assert.deepEqual(calls, ['default-a', 'default-b', 'specialist'])
+})
