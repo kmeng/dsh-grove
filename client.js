@@ -45,9 +45,8 @@ window.__ModuleLoader__.load({
       'deep.plan': '拆出这些问题',
       'deep.collected': '找到的资料',
       'deep.noSources': '暂未找到可引用的资料。',
-      'deep.local': '本次查找范围为话题下的库内资料。',
-      'deep.web': '检索范围包含公开网页。',
-      'deep.webSetting': '深度研究时检索公开网页',
+      'deep.setup': '配置深度研究',
+      'deep.webSetting': '启用联网检索（深度研究必需）',
       'deep.webHint': '开启后，研究关键词会发送给 Tavily。请在宿主中设置 GROVE_TAVILY_KEY。',
       'deep.followups': '待补查的证据',
       'deep.verified': '核验结果',
@@ -66,7 +65,9 @@ window.__ModuleLoader__.load({
       'deep.topicSearch': '按标题找话题',
       'deep.noTopics': '没有找到匹配的话题。',
       'err.research-running': '这项研究正在启动，请稍候。',
-      'err.research-search': '联网检索失败。请检查检索服务配置或稍后重试。{message}',
+      'err.research-search': '联网检索失败。请检查网络或检索服务，再继续深挖。',
+      'err.research-search-disabled': '深度研究需要联网检索。请在研究模型设置中开启。',
+      'err.research-search-key': '联网检索缺少 GROVE_TAVILY_KEY。请在 dsh 宿主中设置后重启。',
       'err.research-storage': '无法保存研究进度或报告，请检查笔记库的访问权限后重试。',
       'idea.detail': '从灵感出发',
       'idea.back': '回到这条灵感',
@@ -230,9 +231,8 @@ window.__ModuleLoader__.load({
       'deep.plan': 'Research questions',
       'deep.collected': 'Sources found',
       'deep.noSources': 'No citable sources found yet.',
-      'deep.local': 'This run searches materials imported into the topic.',
-      'deep.web': 'This run also searches the public web.',
-      'deep.webSetting': 'Search the public web during deep research',
+      'deep.setup': 'Set up deep research',
+      'deep.webSetting': 'Enable web search (required for deep research)',
       'deep.webHint': 'When enabled, research queries are sent to Tavily. Set GROVE_TAVILY_KEY in the host environment.',
       'deep.followups': 'Evidence to look for next',
       'deep.verified': 'Evidence review',
@@ -251,7 +251,9 @@ window.__ModuleLoader__.load({
       'deep.topicSearch': 'Find topics by title',
       'deep.noTopics': 'No matching topics.',
       'err.research-running': 'This research is already starting.',
-      'err.research-search': 'Web search failed. Check the search provider or try again. {message}',
+      'err.research-search': 'Web search failed. Check the network or search provider before resuming.',
+      'err.research-search-disabled': 'Deep research requires web search. Enable it in Research model settings.',
+      'err.research-search-key': 'Set GROVE_TAVILY_KEY in the dsh host and restart to enable web search.',
       'err.research-storage': 'Grove could not save research progress or the report. Check vault access and retry.',
       'idea.detail': 'From this idea',
       'idea.back': 'Back to this idea',
@@ -927,12 +929,14 @@ window.__ModuleLoader__.load({
       var [report, setReport] = useState(null)
       var [error, setError] = useState(null)
       var [busy, setBusy] = useState(false)
+      var [failedAction, setFailedAction] = useState(null)
       var [loaded, setLoaded] = useState(false)
       var [refresh, setRefresh] = useState(0)
       var finished = useRef(null)
       var scope = { idea: props.idea, topic: props.topic, knowledge: props.knowledge }
       var optional = !!(props.idea || props.topic || props.knowledge)
       var running = run?.status === 'running'
+      var configurationNeeded = ['model-disabled', 'research-search-disabled'].includes(error?.code)
 
       useEffect(function () {
         if (props.suggestion) setDirection(props.suggestion.text)
@@ -974,13 +978,14 @@ window.__ModuleLoader__.load({
         if (busy || running) return
         setBusy(true)
         setError(null)
+        setFailedAction(null)
         try {
           var language = T('deep.start') === EN['deep.start'] ? 'en' : 'zh'
           var started = await api(DEEP_RESEARCH, Object.assign({ action: action, id: action === 'retry' ? run.id : undefined,
             direction: direction, language: language }, scope))
           setRun(started)
           setRefresh(function (value) { return value + 1 })
-        } catch (problem) { setError(problem) }
+        } catch (problem) { setFailedAction(action); setError(problem) }
         finally { setBusy(false) }
       }
 
@@ -997,13 +1002,15 @@ window.__ModuleLoader__.load({
           h('button', { className: 'gr-btn', disabled: !loaded || busy || running || (!optional && !direction.trim()) }, T('deep.start'))),
         error ? h('div', { className: 'gr-stack' },
           h('p', { role: 'alert' }, messageOf(error)),
-          h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () {
-            setError(null); setRefresh(function (value) { return value + 1 })
+          configurationNeeded ? h(ModelSettings, { title: 'deep.setup', onApplied: function (config) {
+            if (config.enabled && config.webSearch && failedAction) begin(failedAction)
+          } }) : h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () {
+            if (failedAction) begin(failedAction)
+            else { setError(null); setRefresh(function (value) { return value + 1 }) }
           } }, T('err.retry'))) : null,
         run ? h('div', { className: 'gr-stack' },
           run.plan ? h('h3', { className: 'gr-h2' }, run.plan.topic) : null,
           run.direction && run.direction !== direction ? h('p', { className: 'gr-meta' }, T('deep.direction'), ' · ', run.direction) : null,
-          h('p', { className: 'gr-meta' }, T(run.web ? 'deep.web' : 'deep.local')),
           run.plan ? h('div', null, h('h4', null, T('deep.plan')),
             h('ul', null, run.plan.questions.map(function (item) { return h('li', { key: item }, item) }))) : null,
           run.collected ? h('div', null, h('h4', null, T('deep.collected')),
@@ -1091,7 +1098,7 @@ window.__ModuleLoader__.load({
       return h('details', { className: 'gr-card', open: props.initiallyOpen || undefined, onToggle: function (event) {
         if (event.currentTarget.open && !config && !props.initiallyOpen) api(MODEL).then(setConfig, setError)
       } },
-      h('summary', null, T('model.title')),
+      h('summary', null, T(props.title || 'model.title')),
       error ? h('p', { role: 'alert' }, messageOf(error)) : null,
       config ? h('form', { onSubmit: submit },
         h('label', null, h('input', { type: 'checkbox', checked: config.enabled, disabled: busy,

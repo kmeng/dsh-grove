@@ -57,12 +57,13 @@ async function localSources(store, topic, queries) {
 }
 
 async function collect(store, topic, queries, search) {
-  const results = await Promise.all([
-    localSources(store, topic, queries),
-    search ? Promise.all(queries.map(query => search(query))) : [],
-  ])
-  const found = new Map(results[0].map(source => [source.id, source]))
-  for (const candidate of results[1].flat()) {
+  const web = await Promise.all(queries.map(async query => search(query))).catch(error => {
+    if (error?.code === 'research-search') throw error
+    throw problem('research-search', 'Could not retrieve web sources')
+  })
+  const local = await localSources(store, topic, queries)
+  const found = new Map(local.map(source => [source.id, source]))
+  for (const candidate of web.flat()) {
     if (found.size >= 16) break
     const url = typeof candidate.url === 'string' && URL.parse(candidate.url)
     if (!url || !['http:', 'https:'].includes(url.protocol) || url.username || url.password ||
@@ -76,8 +77,8 @@ async function collect(store, topic, queries, search) {
 }
 
 function progress(run, running = false) {
-  const { id, scope, topic, direction, status, created, report, error, web, plan, collected, review, verified, written } = run
-  return { id, scope, topic, direction, created, report, web, error,
+  const { id, scope, topic, direction, status, created, report, error, plan, collected, review, verified, written } = run
+  return { id, scope, topic, direction, created, report, error,
     status: status === 'running' && !running ? 'interrupted' : status,
     plan,
     collected: collected?.map(({ title }) => title),
@@ -91,6 +92,11 @@ const active = new Map()
 const starting = new Set()
 
 export function researchRuns({ context, workflow }) {
+  function providers() {
+    const { model, search } = context()
+    if (typeof search !== 'function') throw problem('research-search-disabled', 'Enable web search to start deep research')
+    return { model, search }
+  }
 
   function key(store, scope) {
     return store.path + ':' + scope
@@ -169,13 +175,13 @@ export function researchRuns({ context, workflow }) {
       try {
         const running = (await jobs.list()).find(run => (run.scope === scope || (existing && run.topic === existing.meta.id)) && run.status === 'running' && active.has(key(store, run.id)))
         if (running) return progress(running, true)
-        const { model, search } = context()
+        const { model, search } = providers()
         const linked = origin && { id: origin.meta.id, version: origin.meta.version,
           ...(inspiration ? { excerpt: inspiration.body.slice(0, 1600) } : {}) }
         const ancestor = existing?.meta.links?.find(link => link.kind === 'derived' && link.excerpt)
         const run = {
           schema: 1, id: randomUUID(), topic: existing?.meta.id ?? randomUUID(), question: existing ? undefined : randomUUID(),
-          scope, topicVersion: existing?.meta.version ?? 1, direction, origin: linked, status: 'running', created: new Date().toISOString(), web: !!search,
+          scope, topicVersion: existing?.meta.version ?? 1, direction, origin: linked, status: 'running', created: new Date().toISOString(), web: true,
           input: { language: input.language === 'en' ? 'en' : 'zh', direction,
             inspiration: linked?.excerpt ?? ancestor?.excerpt, question: existing?.meta.title ?? knowledge?.meta.title,
             background: knowledge?.body.slice(0, 1600) },
@@ -193,12 +199,28 @@ export function researchRuns({ context, workflow }) {
       if (starting.has(lock)) throw problem('research-running', 'Research is already starting')
       starting.add(lock)
       try {
-        const { model, search } = context()
-        if (run.web && !search) throw problem('research-search', 'Restore web search to continue this run')
+        if (!run.web && (await store.versions(run.id)).length) {
+          // A legacy report may have been saved before its final progress checkpoint.
+          const report = await store.get(run.id)
+          run.status = 'complete'
+          run.report = { id: report.meta.id, version: report.meta.version }
+          delete run.error
+          await jobs.write(run)
+          return progress(run)
+        }
+        const { model, search } = providers()
+        if (!run.web) {
+          // Earlier runs could reach the writing stage using local materials alone.
+          delete run.collected
+          delete run.review
+          delete run.verified
+          delete run.written
+          run.web = true
+        }
         run.status = 'running'
         delete run.error
         await jobs.write(run)
-        return launch(store, jobs, run, model, run.web ? search : null)
+        return launch(store, jobs, run, model, search)
       } finally {
         starting.delete(lock)
       }

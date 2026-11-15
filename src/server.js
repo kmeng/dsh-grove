@@ -69,6 +69,8 @@ function statusOf(error) {
     case 'model-unavailable':
     case 'model-response':
       return 502
+    case 'research-search-disabled':
+    case 'research-search-key':
     case 'research-running':
     case 'model-key':
     case 'model-disabled':
