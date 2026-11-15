@@ -115,7 +115,7 @@ test('routes answer status, validate paths, and save after responding', async t 
   const editor = { edit: (_entry, change) => { saved = change({}, {}); return Promise.resolve() } }
   const { ctx, registered } = host(editor)
   registerRoutes(ctx, { current: () => ({ path: root, source: 'config' }), saveDelay: 1 })
-  assert.deepEqual([...registered.keys()].sort(), [routes.capture, routes.config, routes.connection, routes.deepResearch, routes.findings, routes.inspirations, routes.knowledge, routes.model, routes.parsers, routes.reports, routes.research, routes.sources, routes.status, routes.works].sort())
+  assert.deepEqual([...registered.keys()].sort(), [routes.capture, routes.config, routes.connection, routes.deepResearch, routes.findings, routes.inspirations, routes.knowledge, routes.model, routes.modelUpdate, routes.parsers, routes.parsersUpdate, routes.reports, routes.research, routes.researchUpdate, routes.sources, routes.status, routes.works].sort())
 
   const status = await registered.get(routes.status).fetch(request(routes.status))
   assert.equal(status.status, 200)
@@ -188,7 +188,10 @@ test('independent research can be created, edited and reopened', async t => {
   const path = await fixture(t)
   const { ctx, registered } = host(undefined)
   registerRoutes(ctx, { current: () => ({ path, source: 'config' }) })
-  const call = body => registered.get(routes.research).fetch(request(routes.research, body))
+  const call = body => {
+    const route = body === undefined ? routes.research : routes.researchUpdate
+    return registered.get(route).fetch(request(route, body))
+  }
   const created = await (await call({ question: 'Where is the shade?', body: 'Compare on both sides' })).json()
   assert.equal(created.meta.type, 'research')
   const question = await new Vault(path).get(created.meta.question, created.meta.questionVersion)
@@ -204,10 +207,10 @@ test('parser settings persist without changing the active vault', async () => {
   let config = { vault: '/existing', parsers: { other: true } }
   const { ctx, registered } = host({ edit: async (_entry, change) => { config = change(config) } })
   registerRoutes(ctx, { current: () => ({ path: config.vault }), saveDelay: 1 })
-  const route = registered.get(routes.parsers)
-  assert.deepEqual(await (await route.fetch(request(routes.parsers))).json(), { pdf: true })
-  assert.equal((await route.fetch(request(routes.parsers, { pdf: 'false' }))).status, 400)
-  assert.deepEqual(await (await route.fetch(request(routes.parsers, { pdf: false }))).json(), { pending: true })
+  const route = registered.get(routes.parsersUpdate)
+  assert.deepEqual(await (await registered.get(routes.parsers).fetch(request(routes.parsers))).json(), { pdf: true })
+  assert.equal((await route.fetch(request(routes.parsersUpdate, { pdf: 'false' }))).status, 400)
+  assert.deepEqual(await (await route.fetch(request(routes.parsersUpdate, { pdf: false }))).json(), { pending: true })
   await new Promise(resolve => setTimeout(resolve, 20))
   assert.deepEqual(config, { vault: '/existing', parsers: { other: true, pdf: false } })
 })
@@ -216,7 +219,10 @@ test('a question alone creates a research project with optional notes', async t 
   const path = await fixture(t)
   const { ctx, registered } = host()
   registerRoutes(ctx, { current: () => ({ path }) })
-  const call = body => registered.get(routes.research).fetch(request(routes.research, body))
+  const call = body => {
+    const route = body === undefined ? routes.research : routes.researchUpdate
+    return registered.get(route).fetch(request(route, body))
+  }
   const response = await call({ question: 'Where does the shade fall?' })
   assert.equal(response.status, 200)
   const { meta, body } = await response.json()
@@ -260,7 +266,7 @@ test('inspiration discovery is opt-in and research preserves exact origin throug
   modelConfig.inspirationLinks = true
   const { matches } = await call(routes.inspirations, discover)
   assert.deepEqual(matches.map(({ id, version }) => ({ id, version })), [{ id: other.meta.id, version: 1 }])
-  const study = await call(routes.research, { question: matches[0].question, inspirations: [{ ...ref, excerpt: 'Shade and wind' }, matches[0]] })
+  const study = await call(routes.researchUpdate, { question: matches[0].question, inspirations: [{ ...ref, excerpt: 'Shade and wind' }, matches[0]] })
   assert.deepEqual(study.meta.links[0], { kind: 'derived', ...ref, excerpt: 'Shade and wind' })
   const report = await call(routes.reports, { action: 'confirm', research: study.meta.id, body: 'Compare the two conditions separately.' })
   const knowledge = await call(routes.knowledge, { action: 'save', title: 'Compare separately', type: 'method', body: 'Control the wind.',
@@ -272,7 +278,7 @@ test('inspiration discovery is opt-in and research preserves exact origin throug
   assert.equal(detail.studies[0].knowledge[0].id, knowledge.meta.id)
   assert.equal(detail.studies[0].works[0].id, work.meta.id)
   assert.equal((await call(routes.inspirations, { id: other.meta.id, action: 'detail' })).studies[0].id, study.meta.id)
-  assert.deepEqual((await call(routes.research, { question: 'Independent topic' })).meta.links, [])
+  assert.deepEqual((await call(routes.researchUpdate, { question: 'Independent topic' })).meta.links, [])
 })
 
 test('deep research checkpoints progress, verifies citations, and reopens its Markdown report by topic', async t => {
@@ -502,7 +508,7 @@ test('legacy settings become the default and a verified research override routes
   }
 
   async function save(overrides) {
-    const response = await call(routes.model, { ...legacy, ...overrides, verify: true })
+    const response = await call(routes.modelUpdate, { ...legacy, ...overrides, verify: true })
     assert.equal(response.status, 200)
     const { changeId } = await response.json()
     await waitFor(async () => profile.model.changeId === changeId)
