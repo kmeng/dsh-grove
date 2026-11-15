@@ -1,8 +1,12 @@
 # Grove
 
-![Grove. Build knowledge you can revisit and revise.](brand/exports/readme-header-1600x480.en.png)
+![Grove. Start with an idea, form a judgment with evidence, and carry what you learn into the next inquiry.](brand/exports/readme-header-1600x480.en.png)
 
-[简体中文](README.md) · [English](README.en.md) · [MIT license](LICENSE)
+[简体中文](README.md) · [English](README.en.md)
+
+[![MIT license](https://img.shields.io/badge/license-MIT-2F7D5B?style=flat-square)](LICENSE)
+[![DeepSeek Harness >=0.2.2-rc.1 <0.3.0](https://img.shields.io/badge/dsh-%3E%3D0.2.2--rc.1_%3C0.3.0-1B3A2E?style=flat-square)](package.json)
+[![Node.js >=22.13.0](https://img.shields.io/badge/Node.js-22.13%2B-2F7D5B?style=flat-square&logo=nodedotjs&logoColor=white)](package.json)
 
 ## Why Grove exists
 
