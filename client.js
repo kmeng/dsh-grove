@@ -39,7 +39,7 @@ window.__ModuleLoader__.load({
       'idea.studies': '研究过的话题',
       'idea.links': 'AI 发现的关联',
       'idea.linksWaiting': '正在找有没有值得一起看的灵感…',
-      'idea.linksOff': '可在「研究模型」中开启自动发现关联。',
+      'idea.linksOff': 'AI 关联尚未开启。',
       'idea.linksEmpty': '暂时没发现值得一起看的灵感。',
       'idea.suggest': '带着这个问题深挖',
       'idea.report': '打开报告',
@@ -192,7 +192,7 @@ window.__ModuleLoader__.load({
       'idea.studies': 'Research topics',
       'idea.links': 'Connections found by AI',
       'idea.linksWaiting': 'Looking for ideas worth seeing together…',
-      'idea.linksOff': 'Enable automatic connections under Research model.',
+      'idea.linksOff': 'AI connections are off.',
       'idea.linksEmpty': 'No related ideas to show yet.',
       'idea.suggest': 'Explore this question',
       'idea.report': 'Open report',
@@ -561,7 +561,7 @@ window.__ModuleLoader__.load({
         onCancel: changing || connected ? function () { setChanging(false); setManual(false) } : null,
       })
 
-      return h('div', { className: 'gr-root' },
+      return h('div', { className: page === 'idea' && connected && !changing ? 'gr-root gr-origin-active' : 'gr-root' },
         h('style', null, CSS),
         h('div', { className: 'gr-scroll' },
           h('div', { className: 'gr-inner' },
@@ -733,6 +733,7 @@ window.__ModuleLoader__.load({
       var [discovery, setDiscovery] = useState(null)
       var [discoveryError, setDiscoveryError] = useState(null)
       var [retry, setRetry] = useState(0)
+      var [showSettings, setShowSettings] = useState(false)
       var original = useRef(null)
 
       useEffect(function () {
@@ -763,28 +764,28 @@ window.__ModuleLoader__.load({
         props.onNavigate('research', { title: match?.question, inspirations: inspirations, idea: ref })
       }
 
-      return h(React.Fragment, null,
-        h('div', { className: 'gr-row' },
-          h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () {
+      return h('main', { className: 'gr-origin-page' },
+        h('div', { className: 'gr-origin-heading' },
+          h('button', { className: 'gr-btn gr-origin-link', onClick: function () {
             if (ref.back) props.onNavigate('idea', ref.back)
             else props.onNavigate('home')
-          } }, T(ref.back ? 'idea.back' : 'research.back')),
-          h('h2', { className: 'gr-h2' }, T('idea.detail'))),
+          } }, '← ', T(ref.back ? 'idea.back' : 'research.back')),
+          h('h1', null, T('idea.detail'))),
         error ? h('p', { role: 'alert' }, messageOf(error)) : null,
         !detail && !error ? h('p', { role: 'status' }, T('loading')) : null,
         detail ? h(React.Fragment, null,
-          h('article', { className: 'gr-card' },
-            h('div', { className: 'gr-row' }, h('span', { 'aria-hidden': true }, '💡'), inspirationTime(detail.meta.created)),
+          h('article', { className: 'gr-origin-note gr-stack' },
+            h('div', { className: 'gr-row' }, h('span', { className: 'gr-origin-bulb', 'aria-hidden': true }, '💡'), inspirationTime(detail.meta.created)),
             h('p', { className: 'gr-prose', ref: original }, detail.body),
             detail.versions.length > 1 ? h('label', { className: 'gr-row' }, T('idea.version'),
               h('select', { value: detail.meta.version, onChange: function (event) {
                 props.onNavigate('idea', Object.assign({}, ref, { version: Number(event.target.value) }))
               } }, detail.versions.map(function (version) { return h('option', { key: version, value: version }, 'v' + version) }))) : null,
-            h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () { begin() } }, T('idea.from'))),
-          detail.studies.length ? h('section', { className: 'gr-card' },
+            h('button', { className: 'gr-btn gr-origin-primary', onClick: function () { begin() } }, T('idea.from'))),
+          detail.studies.length ? h('section', { className: 'gr-origin-section gr-stack' },
             h('h3', { className: 'gr-h2' }, T('idea.studies')),
             detail.studies.map(function (study) {
-              return h('article', { className: 'gr-stack gr-idea-reader', key: study.id },
+              return h('article', { className: 'gr-stack gr-origin-topic', key: study.id },
                 h('div', { className: 'gr-row' }, h('h4', { className: 'gr-h2' }, study.title),
                   study.status === 'open' ? h('span', { className: 'gr-meta' }, T('idea.ongoing')) : null),
                 study.latest || study.summary ? h('p', { className: 'gr-prose' }, study.latest || study.summary) : null,
@@ -792,7 +793,7 @@ window.__ModuleLoader__.load({
                   props.onNavigate('research', { resume: study.id, idea: ref })
                 } }, T(study.status === 'open' && !study.reports.length ? 'idea.continueStudy' : 'idea.openStudy')),
                 study.reports.map(function (report) {
-                  return h('section', { className: 'gr-card', key: report.id },
+                  return h('section', { className: 'gr-origin-report gr-stack', key: report.id },
                     h('p', { className: 'gr-meta' }, T('idea.savedReport'), ' · ', T('idea.reportVersion', { version: report.version })),
                     h('h4', { className: 'gr-h2' }, report.title),
                     h('p', { className: 'gr-prose' }, report.summary),
@@ -808,13 +809,22 @@ window.__ModuleLoader__.load({
                   })
                 }))
             })) : null,
-          h('section', { className: 'gr-card' },
+          discovery && !discovery.enabled ? h('div', { className: 'gr-origin-section gr-stack' },
+            h('div', { className: 'gr-row' }, h('span', { className: 'gr-meta' }, T('idea.linksOff')),
+              h('button', { className: 'gr-btn gr-origin-link', 'aria-expanded': showSettings,
+                onClick: function () { setShowSettings(!showSettings) } }, T('model.title'))),
+            showSettings ? h(ModelSettings, { initiallyOpen: true, onApplied: function (config) {
+              if (config.inspirationLinks) {
+                setShowSettings(false)
+                setRetry(retry + 1)
+              }
+            } }) : null) :
+          h('section', { className: 'gr-origin-section gr-stack' },
             h('h3', { className: 'gr-h2' }, T('idea.links')),
             discoveryError ? h(ErrorNote, { error: discoveryError, onRetry: function () { setRetry(retry + 1) } }) :
               !discovery ? h('p', { role: 'status' }, T('idea.linksWaiting')) :
-              !discovery.enabled ? h('p', { className: 'gr-meta' }, T('idea.linksOff')) :
               discovery.matches.length ? discovery.matches.map(function (match) {
-                return h('article', { className: 'gr-stack gr-idea-reader', key: match.id },
+                return h('article', { className: 'gr-stack gr-origin-topic', key: match.id },
                   h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () {
                     props.onNavigate('idea', { id: match.id, version: match.version, back: ref })
                   } }, match.title),
@@ -852,6 +862,9 @@ window.__ModuleLoader__.load({
       var [busy, setBusy] = useState(false)
       var [message, setMessage] = useState('')
       var [error, setError] = useState(null)
+      useEffect(function () {
+        if (props.initiallyOpen) api(MODEL).then(setConfig, setError)
+      }, [props.initiallyOpen])
 
       function change(key, value) {
         setConfig(function (current) { return Object.assign({}, current, { [key]: value }) })
@@ -883,8 +896,8 @@ window.__ModuleLoader__.load({
         finally { setBusy(false) }
       }
 
-      return h('details', { className: 'gr-card', onToggle: function (event) {
-        if (event.currentTarget.open && !config) api(MODEL).then(setConfig, setError)
+      return h('details', { className: 'gr-card', open: props.initiallyOpen || undefined, onToggle: function (event) {
+        if (event.currentTarget.open && !config && !props.initiallyOpen) api(MODEL).then(setConfig, setError)
       } },
       h('summary', null, T('model.title')),
       error ? h('p', { role: 'alert' }, messageOf(error)) : null,
@@ -1509,6 +1522,26 @@ window.__ModuleLoader__.load({
       '.gr-records button{width:100%;justify-content:flex-start}',
       '.gr-records button[aria-pressed=true]{background:var(--dsw-alias-bg-layer-2)}',
       '.gr-idea-search,.gr-idea-reader{border-top:1px solid var(--dsw-alias-border-l1);padding-top:12px}',
+      '.gr-origin-active{--gr-origin-paper:light-dark(#f7f8f2,#19211d);--gr-origin-surface:light-dark(#fffefa,#222d26);--gr-origin-ink:light-dark(#24342b,#e5eee5);--gr-origin-muted:light-dark(#55675b,#adbdaf);--gr-origin-line:light-dark(#dce3d8,#43554a);--gr-origin-wash:light-dark(#e9efe3,#293a30);--gr-origin-green:light-dark(#285342,#bce0c9);--gr-origin-on-green:light-dark(#fff,#173629);background:var(--gr-origin-paper);color:var(--gr-origin-ink)}',
+      '.gr-origin-active :is(.gr-head,.gr-foot){border-color:var(--gr-origin-line)}',
+      '.gr-origin-active .gr-head{padding-bottom:14px;border-bottom:1px solid var(--gr-origin-line)}',
+      '.gr-origin-active .gr-foot{width:min(100%,620px);margin-inline:auto}',
+      '.gr-origin-page{width:min(100%,620px);margin-inline:auto;display:grid;gap:20px;min-width:0;overflow-wrap:anywhere;font-size:14px}',
+      '.gr-origin-page :is(h1,h2,h3,h4,p){margin:0}',
+      '.gr-origin-heading{display:grid;gap:5px;justify-items:start}',
+      '.gr-origin-heading h1{font-size:clamp(23px,4vw,32px);line-height:1.25;font-weight:650;letter-spacing:-.025em}',
+      '.gr-origin-page .gr-meta{color:var(--gr-origin-muted)}',
+      '.gr-origin-note{border:1px solid var(--gr-origin-line);border-radius:14px;padding:clamp(14px,3vw,22px);background:var(--gr-origin-wash)}',
+      '.gr-origin-note .gr-prose{font-size:17px;line-height:1.7}',
+      '.gr-origin-bulb{font-size:16px}',
+      '.gr-origin-section{border-top:1px solid var(--gr-origin-line);padding-top:14px}',
+      '.gr-origin-topic{padding-block:8px}',
+      '.gr-origin-topic+.gr-origin-topic{border-top:1px solid var(--gr-origin-line);padding-top:14px}',
+      '.gr-origin-report{padding:12px 14px;border:1px solid var(--gr-origin-line);border-radius:10px;background:var(--gr-origin-surface)}',
+      '.gr-origin-page .gr-origin-link{background:transparent;color:var(--gr-origin-green);padding:4px 0}',
+      '.gr-origin-page .gr-btn-ghost{color:var(--gr-origin-green);border-color:var(--gr-origin-line)}',
+      '.gr-origin-page .gr-origin-primary{background:var(--gr-origin-green);color:var(--gr-origin-on-green)}',
+      '.gr-origin-page .gr-btn:focus-visible{outline:2px solid var(--gr-origin-green);outline-offset:3px}',
       '.gr-prose{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.6}',
       '.gr-h2{font-size:15px;font-weight:600;line-height:1.4}',
       '.gr-body{color:var(--dsw-alias-label-secondary);font-size:13px}',
