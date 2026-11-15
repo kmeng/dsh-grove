@@ -1,8 +1,12 @@
 # Grove（知林）
 
-![Grove 知林，积累可回看、可修正的知识](brand/exports/readme-header-1600x480.zh.png)
+![Grove 知林。从灵感出发，用证据形成判断，带着反思进入下一轮探索。](brand/exports/readme-header-1600x480.zh.png)
 
-[简体中文](README.md) · [English](README.en.md) · [MIT 许可](LICENSE)
+[简体中文](README.md) · [English](README.en.md)
+
+[![MIT 许可](https://img.shields.io/badge/license-MIT-2F7D5B?style=flat-square)](LICENSE)
+[![DeepSeek Harness >=0.2.2-rc.1 <0.3.0](https://img.shields.io/badge/dsh-%3E%3D0.2.2--rc.1_%3C0.3.0-1B3A2E?style=flat-square)](package.json)
+[![Node.js >=22.13.0](https://img.shields.io/badge/Node.js-22.13%2B-2F7D5B?style=flat-square&logo=nodedotjs&logoColor=white)](package.json)
 
 ## 缘起
 

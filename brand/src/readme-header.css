@@ -1,0 +1,38 @@
+@import url('../tokens.css');
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: "SF Pro Display", "Helvetica Neue", "PingFang SC", Arial, sans-serif;
+}
+.cover {
+  width: 1600px;
+  height: 480px;
+  display: grid;
+  grid-template-columns: 57% 43%;
+  color: var(--grove-ink);
+  background: var(--grove-paper);
+}
+.intro {
+  background: var(--grove-ink);
+  color: var(--grove-paper);
+  padding: 55px 64px;
+  display: grid;
+  align-content: center;
+  gap: 21px;
+}
+.wordmark { display: flex; align-items: center; gap: 12px; font-size: 29px; font-weight: 650; }
+.wordmark img { width: 54px; height: 54px; }
+h1 { margin: 0; font-size: 59px; line-height: 1.13; font-weight: 650; letter-spacing: -.045em; }
+.intro p { margin: 0; color: #d4e4d8; font-size: 26px; line-height: 1.45; }
+.practice {
+  display: grid;
+  align-content: center;
+  gap: 19px;
+  padding: 55px 56px;
+}
+.practice h2 { font-size: 24px; color: var(--grove-green); margin: 0 0 3px; font-weight: 650; }
+.practice ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.practice li { display: grid; grid-template-columns: 27px 1fr; align-items: baseline; gap: 10px; font-size: 28px; line-height: 1.23; font-weight: 600; }
+.arrow { color: var(--grove-green); }
+.practice p { margin: 0; padding-top: 17px; border-top: 1px solid var(--grove-line); color: var(--grove-ink-soft); font-size: 23px; line-height: 1.34; }
