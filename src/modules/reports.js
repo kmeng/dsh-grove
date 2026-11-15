@@ -26,7 +26,8 @@ export async function confirmReport(store, input) {
     if (previous.meta.type !== 'report' || !previous.meta.links?.some(link => link.kind === 'related' && link.id === research.meta.id)) {
       throw new Error('Report does not belong to this research')
     }
-    return store.update(input.id, input.version, { body: input.body, links })
+    links[0] = previous.meta.links.find(link => link.kind === 'related' && link.id === research.meta.id)
+    return store.update(input.id, input.version, { body: input.body, links, review: 'confirmed' })
   }
   return store.create({ type: 'report', title: research.meta.title, body: input.body, links })
 }

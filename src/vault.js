@@ -118,6 +118,7 @@ export class Vault {
     if (!types.includes(type)) throw new Error('Unknown asset type')
     const body = type === 'research' && typeof input.body === 'string' ? input.body.trim() : required(input.body, 'body')
     const meta = { grove: 1, id, version: 1, type, title: input.title?.trim() || body.split('\n')[0].slice(0, 100), created: new Date().toISOString() }
+    if (type === 'report' && input.review === 'draft') meta.review = 'draft'
     if (input.origin) meta.origin = required(input.origin, 'origin')
     if (type === 'question' || type === 'research') meta.status = 'open'
     if (type === 'research') {
@@ -170,6 +171,7 @@ export class Vault {
       if (!allowed.includes(change.status)) throw new Error('Invalid status for this asset')
       meta.status = change.status
     }
+    if (meta.type === 'report' && change.review === 'confirmed') meta.review = 'confirmed'
     if (change.stage !== undefined) {
       if (meta.type !== 'research' || !stages.includes(change.stage)) throw new Error('Invalid research stage')
       meta.stage = change.stage

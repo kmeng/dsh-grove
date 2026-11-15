@@ -114,7 +114,7 @@ test('routes answer status, validate paths, and save after responding', async t 
   const editor = { edit: (_entry, change) => { saved = change({}, {}); return Promise.resolve() } }
   const { ctx, registered } = host(editor)
   registerRoutes(ctx, { current: () => ({ path: root, source: 'config' }), saveDelay: 1 })
-  assert.deepEqual([...registered.keys()].sort(), [routes.capture, routes.config, routes.connection, routes.findings, routes.inspirations, routes.knowledge, routes.model, routes.parsers, routes.reports, routes.research, routes.sources, routes.status, routes.works].sort())
+  assert.deepEqual([...registered.keys()].sort(), [routes.capture, routes.config, routes.connection, routes.deepResearch, routes.findings, routes.inspirations, routes.knowledge, routes.model, routes.parsers, routes.reports, routes.research, routes.sources, routes.status, routes.works].sort())
 
   const status = await registered.get(routes.status).fetch(request(routes.status))
   assert.equal(status.status, 200)
@@ -273,3 +273,122 @@ test('inspiration discovery is opt-in and research preserves exact origin throug
   assert.equal((await call(routes.inspirations, { id: other.meta.id, action: 'detail' })).studies[0].id, study.meta.id)
   assert.deepEqual((await call(routes.research, { question: 'Independent topic' })).meta.links, [])
 })
+
+test('deep research checkpoints progress, verifies citations, and reopens its Markdown report by topic', async t => {
+  const root = await fixture(t)
+  const vault = new Vault(root)
+  const idea = await vault.create({ type: 'inspiration', body: '树荫会改变步行路线吗？' })
+  let planCalls = 0
+  let failWrite = true
+  const queries = []
+  const provider = {
+    async plan(input) {
+      planCalls++
+      assert.equal(input.inspiration, idea.body)
+      return { topic: '树荫与步行', questions: ['步行路线', '如何衡量'] }
+    },
+    async review({ sources, prior }) {
+      return {
+        claims: [{ text: '两份资料提到避开日晒', status: 'supported', sources: sources.map(source => source.id), quotes: sources.map(source => ({ id: source.id, text: source.text })), explanation: '两份资料描述了路线选择。' }],
+        followups: prior ? [] : ['冲突研究'],
+      }
+    },
+    async write() {
+      if (failWrite) throw Object.assign(new Error('test timeout'), { code: 'model-timeout' })
+      return { summary: '不同资料有共同发现。', nextSteps: ['检查季节影响'] }
+    },
+  }
+  function mount() {
+    const { ctx, registered } = host()
+    registerRoutes(ctx, {
+      current: () => ({ path: root }),
+      modelConfig: { enabled: true },
+      model: () => provider,
+      researchSearch: () => async query => {
+        queries.push(query)
+        const domain = query === '冲突研究' ? 'study.example' : 'city.example'
+        return [{ title: 'Tree coverage study', url: `https://${domain}/study`, text: 'Participants chose shaded paths.' }]
+      },
+    })
+    return (path, data) => registered.get(path).fetch(request(path, data))
+  }
+  let call = mount()
+  const ideaRef = { id: idea.meta.id, version: 1 }
+  const start = await call(routes.deepResearch, { action: 'start', idea: ideaRef })
+  assert.equal(start.status, 202)
+  const { id, topic } = await start.json()
+  await waitFor(async () => {
+    const { runs } = await (await call(routes.deepResearch, { action: 'list', idea: ideaRef })).json()
+    return runs[0]?.status === 'failed'
+  })
+  const { runs } = await (await call(routes.deepResearch, { action: 'list', idea: ideaRef })).json()
+  assert.equal(runs[0].error.code, 'model-timeout')
+  assert.equal(runs[0].verified[0].status, 'supported')
+  assert.deepEqual(queries, ['步行路线', '如何衡量', '冲突研究'])
+  assert.equal(planCalls, 1)
+
+  call = mount()
+  failWrite = false
+  assert.equal((await call(routes.deepResearch, { action: 'retry', id })).status, 202)
+  await waitFor(async () => {
+    const { runs } = await (await call(routes.deepResearch, { action: 'list', topic })).json()
+    return runs[0]?.status === 'complete'
+  })
+  assert.equal(planCalls, 1)
+  assert.equal(queries.length, 3)
+  const { reports } = await (await call(routes.reports, { action: 'list', research: topic })).json()
+  assert.equal(reports.length, 1)
+  assert.equal(reports[0].meta.id, id)
+  assert.equal(reports[0].meta.review, 'draft')
+  assert.match(reports[0].body, /## 发现与证据/)
+  assert.match(reports[0].body, /https:\/\/study\.example\/study/)
+  assert.equal((await vault.get(topic)).meta.links[0].version, 1)
+  const updated = await call(routes.reports, { action: 'confirm', research: topic, id, version: 1, body: reports[0].body })
+  assert.equal((await updated.json()).meta.review, 'confirmed')
+  const reopened = await (await call(routes.deepResearch, { action: 'list', topic })).json()
+  assert.equal(reopened.runs[0].report.version, 2)
+})
+
+test('local deep research reuses exact imported versions and marks a single source as insufficient', async t => {
+  const root = await fixture(t)
+  const vault = new Vault(root)
+  const question = await vault.create({ type: 'question', body: 'How much sunlight reaches the street?' })
+  const study = await vault.create({ type: 'research', title: 'Sunlight on the street', body: '', question: question.meta.id })
+  const document = await vault.create({
+    type: 'source', title: 'observations.md', body: JSON.stringify({ blocks: [{ locator: 'line 1', text: 'Sunlight reaches the street at noon.' }] }),
+    links: [{ kind: 'related', id: study.meta.id, version: study.meta.version }],
+  })
+  const { ctx, registered } = host()
+  registerRoutes(ctx, {
+    current: () => ({ path: root }),
+    modelConfig: { enabled: true },
+    model: () => ({
+      plan: async () => ({ topic: 'Sunlight', questions: ['Sunlight on the street?'] }),
+      review: async ({ sources }) => ({
+        claims: [{ text: 'Sunlight at noon', status: 'supported', explanation: 'One document records it.', sources: sources.map(source => source.id) }],
+        followups: [],
+      }),
+      write: async () => ({ summary: 'A single document records sunlight at noon.', nextSteps: [] }),
+    }),
+  })
+  const call = (path, data) => registered.get(path).fetch(request(path, data))
+  const started = await call(routes.deepResearch, { action: 'start', topic: study.meta.id, language: 'en' })
+  assert.equal(started.status, 202)
+  const { id } = await started.json()
+  await waitFor(async () => {
+    const { runs } = await (await call(routes.deepResearch, { action: 'list', topic: study.meta.id })).json()
+    return runs[0]?.status === 'complete'
+  })
+  const report = await (await call(routes.reports, { action: 'read', id, version: 1 })).json()
+  assert.match(report.body, /\*\*Insufficient evidence\*\*/)
+  assert.equal(report.evidence[0].original.id, document.meta.id)
+  assert.equal(report.evidence[0].original.version, 1)
+})
+
+async function waitFor(predicate) {
+  for (let attempt = 0; attempt < 150; attempt++) {
+    if (await predicate()) return
+    await new Promise(resolve => setTimeout(resolve, 10))
+  }
+  assert.fail('Timed out waiting for the research stage')
+}

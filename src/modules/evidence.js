@@ -16,7 +16,7 @@ export async function importSource(store, parsers, input) {
   return { meta, blocks }
 }
 
-export async function saveEvidence(store, reference, index) {
+export async function saveEvidence(store, reference, index, id) {
   if (!Number.isSafeInteger(reference.version) || reference.version < 1 || !Number.isSafeInteger(index) || index < 0) {
     throw new Error('Choose an exact source version and passage')
   }
@@ -27,7 +27,7 @@ export async function saveEvidence(store, reference, index) {
   return store.create({
     type: 'evidence', body: block.text, source: note.meta.title, locator: block.locator,
     links: [{ kind: 'derived', id: note.meta.id, version: note.meta.version }],
-  })
+  }, id)
 }
 
 export async function openSource(store, id, version) {
