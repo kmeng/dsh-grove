@@ -37,6 +37,8 @@ window.__ModuleLoader__.load({
     var INSPIRATIONS = '/api/grove/inspirations'
 
     var ZH = {
+      'err.research-search-links-unreadable': '没能读取给出的公开网页。请检查链接，或换一个能直接打开的网页。',
+      'err.research-search-links-unavailable': '当前 dsh 没有可用的公开网页读取服务。',
       'model.source': '默认模型来源',
       'model.followDsh': '跟随 dsh 默认模型',
       'model.custom': '自定义接口',
@@ -77,8 +79,8 @@ window.__ModuleLoader__.load({
       'deep.plan': '拆出这些问题',
       'deep.collected': '找到的资料',
       'deep.noSources': '暂未找到可引用的资料。',
-      'deep.webSetting': '启用联网检索（深度研究必需）',
-      'deep.webHint': '开启后，研究关键词会发送给 Tavily。请在宿主中设置 GROVE_TAVILY_KEY。',
+      'deep.webSetting': '启用 Tavily 搜索',
+      'deep.webHint': '提供公开链接时，知林可以直接读取网页。开启 Tavily 后，未提供链接的研究可以自动搜索，需要 GROVE_TAVILY_KEY。',
       'deep.followups': '待补查的证据',
       'deep.verified': '核验结果',
       'deep.supported': '有证据支持',
@@ -97,8 +99,8 @@ window.__ModuleLoader__.load({
       'deep.noTopics': '没有找到匹配的话题。',
       'err.research-running': '这项研究正在启动，请稍候。',
       'err.research-search': '联网检索失败。请检查网络或检索服务，再继续深挖。',
-      'err.research-search-disabled': '深度研究需要联网检索。请前往「设置」开启。',
-      'err.research-search-key': '联网检索缺少 GROVE_TAVILY_KEY。请在 dsh 宿主中设置后重启。',
+      'err.research-search-disabled': '在研究方向里粘贴一个公开网页链接，就能开始深挖。也可在设置中启用 Tavily 搜索。',
+      'err.research-search-key': 'Tavily 缺少密钥。粘贴公开网页链接也可以开始深挖。',
       'err.research-storage': '无法保存研究进度或报告，请检查笔记库的访问权限后重试。',
       'idea.detail': '从灵感出发',
       'idea.back': '回到这条灵感',
@@ -248,6 +250,8 @@ window.__ModuleLoader__.load({
     }
 
     var EN = {
+      'err.research-search-links-unreadable': 'The supplied pages could not be read. Check the links or try a public page that opens directly.',
+      'err.research-search-links-unavailable': 'Public page reading is unavailable in this dsh host.',
       'model.source': 'Default model source',
       'model.followDsh': 'Follow the dsh default model',
       'model.custom': 'Custom endpoint',
@@ -289,8 +293,8 @@ window.__ModuleLoader__.load({
       'deep.plan': 'Research questions',
       'deep.collected': 'Sources found',
       'deep.noSources': 'No citable sources found yet.',
-      'deep.webSetting': 'Enable web search (required for deep research)',
-      'deep.webHint': 'When enabled, research queries are sent to Tavily. Set GROVE_TAVILY_KEY in the host environment.',
+      'deep.webSetting': 'Enable Tavily search',
+      'deep.webHint': 'Grove can read supplied public links directly. To search automatically when no link is supplied, enable Tavily and set GROVE_TAVILY_KEY.',
       'deep.followups': 'Evidence to look for next',
       'deep.verified': 'Evidence review',
       'deep.supported': 'Supported',
@@ -309,8 +313,8 @@ window.__ModuleLoader__.load({
       'deep.noTopics': 'No matching topics.',
       'err.research-running': 'This research is already starting.',
       'err.research-search': 'Web search failed. Check the network or search provider before resuming.',
-      'err.research-search-disabled': 'Deep research requires web search. Enable it in Settings.',
-      'err.research-search-key': 'Set GROVE_TAVILY_KEY in the dsh host and restart to enable web search.',
+      'err.research-search-disabled': 'Paste a public page link into the research direction, or enable Tavily search in Settings.',
+      'err.research-search-key': 'Tavily needs a key. You can also start with a public page link.',
       'err.research-storage': 'Grove could not save research progress or the report. Check vault access and retry.',
       'idea.detail': 'From this idea',
       'idea.back': 'Back to this idea',

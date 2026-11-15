@@ -624,3 +624,35 @@ test('follow-up web queries cannot carry phrases obtained from an imported priva
   await waitFor(async () => (await (await call({ action: 'list', topic: topic.meta.id })).json()).runs[0]?.status === 'complete')
   assert.deepEqual(queries, ['Sunlight walking', 'outdoor walk in summer'])
 })
+
+test('deep research can use a supplied public page without invoking paid search', async t => {
+  const root = await fixture(t)
+  const vault = new Vault(root)
+  const idea = await vault.create({ type: 'inspiration', body: 'Read [evidence](https://example.org/article).' })
+  const requested = []
+  const { ctx, registered } = host()
+  registerRoutes(ctx, {
+    current: () => ({ path: root }), modelConfig: { enabled: true },
+    researchSearch: () => { assert.fail('The paid search provider should not be used for link-based research') },
+    readResearchPage: async url => {
+      requested.push(url)
+      return { url, title: 'Evidence', text: 'An actual public passage about the subject.' }
+    },
+    model: () => ({
+      async plan() { return { topic: 'Evidence', questions: ['What is the evidence?'] } },
+      async review({ sources }) {
+        return { claims: [{ text: 'A passage exists', explanation: 'Only one source.', status: 'insufficient', sources: sources.map(source => source.id) }],
+          followups: ['Look for more'] }
+      },
+      async write() { return { summary: 'One public source.', nextSteps: [] } },
+    }),
+  })
+  const ideaRef = { id: idea.meta.id, version: 1 }
+  const call = input => registered.get(routes.deepResearch).fetch(request(routes.deepResearch, input))
+  const start = await call({ action: 'start', idea: ideaRef })
+  assert.equal(start.status, 202)
+  const { id, topic } = await start.json()
+  await waitFor(async () => (await (await call({ action: 'list', topic })).json()).runs[0]?.status === 'complete')
+  assert.deepEqual(requested, ['https://example.org/article'])
+  assert.match((await vault.get(id)).body, /https:\/\/example\.org\/article/)
+})

@@ -33,6 +33,7 @@ function assessment(value, sources) {
 
 async function collectFollowups(state, model, retrieve) {
   const { followups } = state.review
+  if (state.links?.length) return retrieve(followups, 'local')
   if (!state.collected.some(source => source.reference)) return retrieve(followups)
 
   // Private passages can inform local retrieval. Only the original plan and

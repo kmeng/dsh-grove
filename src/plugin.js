@@ -4,6 +4,7 @@ import { propose, roles } from './proposals.js'
 import { documentParsers } from './adapters/parsers/documents.js'
 import { createDshModels } from './adapters/models/dsh.js'
 import { httpModel } from './adapters/models/http.js'
+import { readPublicPage } from './adapters/search/public-pages.js'
 import { tavilySearch } from './adapters/search/tavily.js'
 import { registerRoutes } from './server.js'
 
@@ -34,6 +35,7 @@ export function apply(ctx, config = {}) {
     pdfEnabled: config.parsers?.pdf !== false,
     modelConfig: config.model,
     dshModels: createDshModels(ctx),
+    readResearchPage: readPublicPage,
     researchSearch: () => {
       if (config.model?.webSearch !== true) return null
       const provider = tavilySearch(process.env.GROVE_TAVILY_KEY)

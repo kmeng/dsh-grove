@@ -3,6 +3,7 @@ import { test } from 'node:test'
 import { createDshModels } from '../src/adapters/models/dsh.js'
 import { parseModelSettings, readModelSettings, selectModel, verifyModelSettings } from '../src/modules/model-settings.js'
 import { httpModel } from '../src/adapters/models/http.js'
+import { readPublicPage } from '../src/adapters/search/public-pages.js'
 import { tavilySearch } from '../src/adapters/search/tavily.js'
 
 const settings = { endpoint: 'https://example.invalid/v1/chat/completions', name: 'fixture', credential: 'fixture' }
@@ -87,4 +88,12 @@ test('dsh model sources follow the profile, record host outcomes and preserve cu
   const state = readModelSettings(checked, modelFor, dsh)
   assert.equal(state.connection.status, 'failed')
   assert.equal(state.researchConnection.status, 'connected')
+})
+
+test('the anonymous page reader rejects local IP variants, credentials, and nonstandard ports', async () => {
+  for (const link of ['http://127.1/', 'http://169.254.169.254/', 'http://168.63.129.16/', 'http://[::ffff:127.0.0.1]/', 'http://10.0.0.3/']) {
+    await assert.rejects(readPublicPage(link), /public IPv4 address/)
+  }
+  await assert.rejects(readPublicPage('https://user:pass@example.com/'), /public HTTP or HTTPS/)
+  await assert.rejects(readPublicPage('https://example.com:8443/'), /public HTTP or HTTPS/)
 })

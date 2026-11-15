@@ -72,12 +72,14 @@ function statusOf(error) {
     case 'model-auth':
     case 'model-not-found':
     case 'model-rate-limit':
+    case 'research-search-links-unreadable':
     case 'research-search':
     case 'model-network':
     case 'model-rejected':
     case 'model-unavailable':
     case 'model-response':
       return 502
+    case 'research-search-links-unavailable':
     case 'research-search-disabled':
     case 'research-search-key':
     case 'research-running':
@@ -231,7 +233,7 @@ export function registerRoutes(ctx, options) {
   const modelFor = (settings, role, config) => settings.source === 'dsh' ? dsh?.model(settings) : options.model?.(settings, role, config)
   const runs = researchRuns({
     workflow: options.researchWorkflow ?? stagedResearch,
-    context() {
+    context({ links } = {}) {
       const settings = selectModel(options.modelConfig, 'research', dsh)
       if (!settings) throw coded('model-disabled', 'Configure and enable a research model')
       const model = modelFor(settings, 'research', options.modelConfig)
@@ -239,7 +241,7 @@ export function registerRoutes(ctx, options) {
       if (!['plan', 'review', 'write'].every(step => typeof model[step] === 'function')) {
         throw coded('model-disabled', 'The configured model adapter does not support deep research')
       }
-      return { model, search: options.researchSearch?.() }
+      return { model, search: links?.length ? null : options.researchSearch?.(), readPage: options.readResearchPage }
     },
   })
   ctx.inject(['connection'], (scoped) => {
