@@ -562,3 +562,29 @@ test('deep research resolves the current dsh model unless the profile chooses an
   }
   assert.deepEqual(calls, ['default-a', 'default-b', 'specialist'])
 })
+
+test('API JSON rejects oversized streams and non-JSON bodies before creating a note', async t => {
+  const root = await fixture(t)
+  const { ctx, registered } = host()
+  registerRoutes(ctx, { current: () => ({ path: root }) })
+  const route = registered.get(routes.capture)
+  const url = 'http://localhost' + routes.capture
+  const plain = await route.fetch(new Request(url, {
+    method: 'POST', headers: { 'content-type': 'text/plain' }, body: '{"body":"should never be stored"}',
+  }))
+  assert.equal(plain.status, 415)
+  const stream = new ReadableStream({
+    start(controller) {
+      controller.enqueue(Buffer.from('{"body":"tiny","padding":"'))
+      for (let i = 0; i < 18; i++) controller.enqueue(Buffer.alloc(65536, 0x78))
+      controller.enqueue(Buffer.from('"}'))
+      controller.close()
+    },
+  })
+  assert.equal(route.requestBody, 'streaming')
+  const oversized = await route.fetch(new Request(url, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: stream, duplex: 'half',
+  }))
+  assert.equal(oversized.status, 413)
+  assert.deepEqual(await new Vault(root).list(), [])
+})
