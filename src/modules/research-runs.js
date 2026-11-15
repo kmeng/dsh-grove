@@ -56,12 +56,36 @@ async function localSources(store, topic, queries) {
   }))
 }
 
-async function collect(store, topic, queries, search, scope) {
-  const web = scope === 'local' ? [] : await Promise.all(queries.map(async query => search(query))).catch(error => {
+function publicLinks(...texts) {
+  const links = new Set()
+  for (const text of texts) {
+    if (typeof text !== 'string') continue
+    for (const match of text.slice(0, 16_000).matchAll(/https?:\/\/[^\s<>"`，。；？！、]+/gi)) {
+      const value = match[0].replace(/[.,;!?)}\]]+$/, '')
+      const url = value.length <= 2048 && URL.parse(value)
+      if (!url || url.username || url.password) continue
+      url.hash = ''
+      links.add(url.href)
+      if (links.size >= 4) return [...links]
+    }
+  }
+  return [...links]
+}
+
+async function readPages(links, readPage) {
+  const results = await Promise.allSettled(links.map(url => readPage(url)))
+  const usable = results.flatMap(result => result.status === 'fulfilled' && result.value?.text?.trim() ? [result.value] : [])
+  if (!usable.length) throw problem('research-search-links-unreadable', 'Could not read the supplied public pages')
+  return usable
+}
+
+async function collect(store, run, queries, providers, scope) {
+  const web = scope === 'local' ? [] : run.links?.length
+    ? await readPages(run.links, providers.readPage) : await Promise.all(queries.map(async query => providers.search(query))).catch(error => {
     if (error?.code === 'research-search') throw error
     throw problem('research-search', 'Could not retrieve web sources')
   })
-  const local = scope === 'web' ? [] : await localSources(store, topic, queries)
+  const local = scope === 'web' ? [] : await localSources(store, run.topic, queries)
   const found = new Map(local.map(source => [source.id, source]))
   for (const candidate of web.flat()) {
     if (found.size >= 16) break
@@ -92,21 +116,25 @@ const active = new Map()
 const starting = new Set()
 
 export function researchRuns({ context, workflow }) {
-  function providers() {
-    const { model, search } = context()
-    if (typeof search !== 'function') throw problem('research-search-disabled', 'Enable web search to start deep research')
-    return { model, search }
+  function providers(links) {
+    const available = context({ links })
+    if (links?.length) {
+      if (typeof available.readPage !== 'function') throw problem('research-search-links-unavailable', 'Public page reading is unavailable')
+    } else if (typeof available.search !== 'function') {
+      throw problem('research-search-disabled', 'Supply a public link or enable web search')
+    }
+    return available
   }
 
   function key(store, scope) {
     return store.path + ':' + scope
   }
 
-  async function perform(store, jobs, run, model, search) {
+  async function perform(store, jobs, run, available) {
     try {
       const state = await workflow.run({
-        model, initial: run,
-        retrieve: (queries, scope) => collect(store, run.topic, queries, search, scope),
+        model: available.model, initial: run,
+        retrieve: (queries, scope) => collect(store, run, queries, available, scope),
         async checkpoint(step, value) {
           if (step === 'plan' && run.question) {
             await createOnce(store, run.question, { type: 'question', body: value.topic, title: value.topic })
@@ -136,9 +164,9 @@ export function researchRuns({ context, workflow }) {
     }
   }
 
-  function launch(store, jobs, run, model, search) {
+  function launch(store, jobs, run, available) {
     const runKey = key(store, run.id)
-    active.set(runKey, perform(store, jobs, run, model, search)
+    active.set(runKey, perform(store, jobs, run, available)
       .catch(error => console.warn('[grove] unable to save research progress:', error.code || 'internal'))
       .finally(() => active.delete(runKey)))
     return progress(run, true)
@@ -175,19 +203,20 @@ export function researchRuns({ context, workflow }) {
       try {
         const running = (await jobs.list()).find(run => (run.scope === scope || (existing && run.topic === existing.meta.id)) && run.status === 'running' && active.has(key(store, run.id)))
         if (running) return progress(running, true)
-        const { model, search } = providers()
+        const links = publicLinks(input.direction, origin?.body, existing?.meta.title)
+        const available = providers(links)
         const linked = origin && { id: origin.meta.id, version: origin.meta.version,
           ...(inspiration ? { excerpt: inspiration.body.slice(0, 1600) } : {}) }
         const ancestor = existing?.meta.links?.find(link => link.kind === 'derived' && link.excerpt)
         const run = {
           schema: 1, id: randomUUID(), topic: existing?.meta.id ?? randomUUID(), question: existing ? undefined : randomUUID(),
-          scope, topicVersion: existing?.meta.version ?? 1, direction, origin: linked, status: 'running', created: new Date().toISOString(), web: true,
+          scope, ...(links.length ? { links } : {}), topicVersion: existing?.meta.version ?? 1, direction, origin: linked, status: 'running', created: new Date().toISOString(), web: true,
           input: { language: input.language === 'en' ? 'en' : 'zh', direction,
             inspiration: linked?.excerpt ?? ancestor?.excerpt, question: existing?.meta.title ?? knowledge?.meta.title,
             background: knowledge?.body.slice(0, 1600) },
         }
         await jobs.write(run)
-        return launch(store, jobs, run, model, search)
+        return launch(store, jobs, run, available)
       } finally {
         starting.delete(lock)
       }
@@ -208,7 +237,7 @@ export function researchRuns({ context, workflow }) {
           await jobs.write(run)
           return progress(run)
         }
-        const { model, search } = providers()
+        const available = providers(run.links)
         if (!run.web) {
           // Earlier runs could reach the writing stage using local materials alone.
           delete run.collected
@@ -220,7 +249,7 @@ export function researchRuns({ context, workflow }) {
         run.status = 'running'
         delete run.error
         await jobs.write(run)
-        return launch(store, jobs, run, model, search)
+        return launch(store, jobs, run, available)
       } finally {
         starting.delete(lock)
       }
