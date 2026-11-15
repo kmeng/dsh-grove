@@ -25,11 +25,14 @@ window.__ModuleLoader__.load({
     var KNOWLEDGE = '/api/grove/knowledge'
     var WORKS = '/api/grove/works'
     var MODEL = '/api/grove/model'
+    var MODEL_UPDATE = '/api/grove/model/settings'
     var FINDINGS = '/api/grove/findings'
     var PARSERS = '/api/grove/parsers'
+    var PARSERS_UPDATE = '/api/grove/parsers/settings'
     var REPORTS = '/api/grove/reports'
     var SOURCES = '/api/grove/sources'
     var RESEARCH = '/api/grove/research'
+    var RESEARCH_UPDATE = '/api/grove/research/save'
     var DEEP_RESEARCH = '/api/grove/deep-research'
     var INSPIRATIONS = '/api/grove/inspirations'
 
@@ -233,6 +236,8 @@ window.__ModuleLoader__.load({
       'err.save-unavailable': '当前 profile 无法保存插件配置，请手动设置 GROVE_VAULT。',
       'err.not-configured': '还没有连接 vault。',
       'err.invalid-body': '内容不能为空。',
+      'err.request-too-large': '请求内容超过 1 MiB。',
+      'err.unsupported-media': '请求需要使用 JSON 格式。',
       'err.too-large': '内容太长了，请控制在 128 KiB 以内。',
       'err.network': '连不上面板服务，请重启 DSH 后重试。',
       'err.timeout': '配置已提交，但还没生效。请重启 DSH 后再看。',
@@ -441,6 +446,8 @@ window.__ModuleLoader__.load({
       'err.save-unavailable': 'This profile cannot save plugin configuration. Set GROVE_VAULT manually.',
       'err.not-configured': 'No vault is connected yet.',
       'err.invalid-body': 'Write something first.',
+      'err.request-too-large': 'This request exceeds 1 MiB.',
+      'err.unsupported-media': 'This request must use JSON.',
       'err.too-large': 'That is too long. Keep it under 128 KiB.',
       'err.network': 'The panel service is unreachable. Restart DSH and try again.',
       'err.timeout': 'The configuration was submitted but has not taken effect. Restart DSH and check again.',
@@ -1191,7 +1198,7 @@ window.__ModuleLoader__.load({
         setError(null)
         setMessage('')
         try {
-          var receipt = await api(MODEL, {
+          var receipt = await api(MODEL_UPDATE, {
             enabled: config.enabled, source: config.source, name: config.name, endpoint: config.endpoint, deepResearch: config.deepResearch,
             inspirationLinks: config.inspirationLinks, webSearch: config.webSearch, verify: config.enabled,
           })
@@ -1367,7 +1374,7 @@ window.__ModuleLoader__.load({
         setDone(false)
         setError(null)
         try {
-          await api(PARSERS, { pdf: enabled })
+          await api(PARSERS_UPDATE, { pdf: enabled })
           for (var attempt = 0; attempt < 12; attempt++) {
             await new Promise(function (resolve) { setTimeout(resolve, 400) })
             var current = await api(PARSERS).catch(function () { return null })
@@ -1767,7 +1774,7 @@ window.__ModuleLoader__.load({
         setError(null)
         setSaved(false)
         var input = selected ? { id: selected.meta.id, version: selected.meta.version, body: body } : { question: question, body: body, origin: useOrigin ? props.seed?.origin : undefined }
-        api(RESEARCH, input).then(function (note) {
+        api(RESEARCH_UPDATE, input).then(function (note) {
           select(note)
           setSaved(true)
           setStudies(function (items) {

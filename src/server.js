@@ -22,19 +22,24 @@ export const routes = {
   connection: '/api/grove/connection',
   capture: '/api/grove/capture',
   model: '/api/grove/model',
+  modelUpdate: '/api/grove/model/settings',
   findings: '/api/grove/findings',
   knowledge: '/api/grove/knowledge',
   works: '/api/grove/works',
   reports: '/api/grove/reports',
   parsers: '/api/grove/parsers',
+  parsersUpdate: '/api/grove/parsers/settings',
   sources: '/api/grove/sources',
   research: '/api/grove/research',
+  researchUpdate: '/api/grove/research/save',
   deepResearch: '/api/grove/deep-research',
   inspirations: '/api/grove/inspirations',
 }
 
 /** Largest body the panel may post, matching the proposal limit. */
 const maxBody = 128 * 1024
+// Includes Base64 source uploads and JSON escaping overhead.
+const maxJsonBytes = 1024 * 1024
 
 function coded(code, message) {
   return Object.assign(new Error(message), { code })
@@ -81,6 +86,9 @@ function statusOf(error) {
     case 'model-disabled':
     case 'not-configured':
       return 409
+    case 'unsupported-media':
+      return 415
+    case 'request-too-large':
     case 'too-large':
       return 413
     default:
@@ -184,10 +192,30 @@ export function saveVault(ctx, path) {
 }
 
 async function readJson(request) {
+  const contentType = request.headers.get('content-type')?.split(';', 1)[0].trim().toLowerCase() ?? ''
+  const jsonType = /^application\/(?:[a-z0-9!#$&^_.+-]+\+)?json$/.test(contentType)
+  if (Number(request.headers.get('content-length')) > maxJsonBytes) {
+    throw coded('request-too-large', 'The request is too large')
+  }
+  if (!request.body) throw coded('invalid-body', 'Expected a JSON body')
+  const reader = request.body.getReader()
+  const chunks = []
+  let size = 0
   try {
-    return await request.json()
-  } catch {
+    for (;;) {
+      const chunk = await reader.read()
+      if (chunk.done) break
+      size += chunk.value.byteLength
+      if (size > maxJsonBytes) throw coded('request-too-large', 'The request is too large')
+      if (jsonType) chunks.push(chunk.value)
+    }
+    if (!jsonType) throw coded('unsupported-media', 'Expected application/json')
+    return JSON.parse(Buffer.concat(chunks, size).toString('utf8'))
+  } catch (error) {
+    if (error.code === 'request-too-large' || error.code === 'unsupported-media') throw error
     throw coded('invalid-body', 'Expected a JSON body')
+  } finally {
+    reader.releaseLock()
   }
 }
 
@@ -219,7 +247,7 @@ export function registerRoutes(ctx, options) {
     if (!connection?.fetch || typeof connection.fetch.register !== 'function') return
     const route = (path, methods, fetch) => {
       scoped.effect(
-        () => connection.fetch.register({ path, methods, requestBody: 'buffered', fetch }),
+        () => connection.fetch.register({ path, methods, requestBody: methods.includes('POST') ? 'streaming' : 'buffered', fetch }),
         `grove: ${path}`,
       )
     }
@@ -282,12 +310,12 @@ export function registerRoutes(ctx, options) {
         }
       })
     }
-    route(routes.model, ['GET', 'POST'], async request => {
-      if (request.method === 'GET') {
-        const config = readModelSettings(options.modelConfig, modelFor, dsh)
-        if (new URL(request.url).searchParams.has('catalog')) config.catalog = await dsh?.catalog() ?? []
-        return json(config)
-      }
+    route(routes.model, ['GET'], async request => {
+      const config = readModelSettings(options.modelConfig, modelFor, dsh)
+      if (new URL(request.url).searchParams.has('catalog')) config.catalog = await dsh?.catalog() ?? []
+      return json(config)
+    })
+    route(routes.modelUpdate, ['POST'], async request => {
       try {
         const input = await readJson(request)
         const config = parseModelSettings(input, options.modelConfig, dsh)
@@ -351,8 +379,8 @@ export function registerRoutes(ctx, options) {
         return failure(error)
       }
     })
-    route(routes.parsers, ['GET', 'POST'], async request => {
-      if (request.method === 'GET') return json({ pdf: options.pdfEnabled !== false })
+    route(routes.parsers, ['GET'], async () => json({ pdf: options.pdfEnabled !== false }))
+    route(routes.parsersUpdate, ['POST'], async request => {
       try {
         const input = await readJson(request)
         if (typeof input?.pdf !== 'boolean') throw coded('invalid-body', 'Choose whether PDF parsing is enabled')
@@ -429,12 +457,20 @@ export function registerRoutes(ctx, options) {
         return failure(error)
       }
     })
-    route(routes.research, ['GET', 'POST'], async request => {
+    route(routes.research, ['GET'], async () => {
+      try {
+        const { path } = options.current()
+        if (!path) throw coded('not-configured', 'Grove has no vault yet')
+        return json({ studies: await listResearch(new Vault(path)) })
+      } catch (error) {
+        return failure(error)
+      }
+    })
+    route(routes.researchUpdate, ['POST'], async request => {
       try {
         const { path } = options.current()
         if (!path) throw coded('not-configured', 'Grove has no vault yet')
         const vault = new Vault(path)
-        if (request.method === 'GET') return json({ studies: await listResearch(vault) })
         const input = await readJson(request)
         if (!input || (input.body !== undefined && typeof input.body !== 'string')) {
           throw coded('invalid-body', 'Research notes must be text')

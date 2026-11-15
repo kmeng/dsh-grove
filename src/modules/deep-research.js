@@ -31,6 +31,20 @@ function assessment(value, sources) {
   })
 }
 
+async function collectFollowups(state, model, retrieve) {
+  const { followups } = state.review
+  if (!state.collected.some(source => source.reference)) return retrieve(followups)
+
+  // Private passages can inform local retrieval. Only the original plan and
+  // public results are visible to the call that generates more web queries.
+  const publicSources = state.collected.filter(source => !source.reference)
+  const publicReview = await model.review({ plan: state.plan, sources: publicSources })
+  const webQueries = questions(publicReview?.followups, 2)
+  const online = webQueries.length ? await retrieve(webQueries, 'web') : []
+  const local = await retrieve(followups, 'local')
+  return local.concat(online)
+}
+
 export const stagedResearch = {
   async run({ model, retrieve, checkpoint, initial }) {
     const state = { ...initial }
@@ -53,7 +67,7 @@ export const stagedResearch = {
     })
     await step('verified', async () => {
       if (!state.review.followups.length) return { claims: state.review.claims, sources: state.collected }
-      const extra = await retrieve(state.review.followups)
+      const extra = await collectFollowups(state, model, retrieve)
       const existing = new Set(state.collected.map(source => source.id))
       const sources = state.collected.concat(extra.filter(source => !existing.has(source.id))).slice(0, 24)
       if (sources.length === existing.size) return { claims: state.review.claims, sources }

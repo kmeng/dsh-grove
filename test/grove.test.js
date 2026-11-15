@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { cp, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises'
+import { cp, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -9,7 +9,7 @@ import { accept, discard, preview, propose } from '../src/proposals.js'
 import { apply } from '../src/plugin.js'
 
 async function fixture(t) {
-  const path = await mkdtemp(join(tmpdir(), 'grove-test-'))
+  const path = await mkdtemp(join(await realpath(tmpdir()), 'grove-test-'))
   t.after(() => rm(path, { recursive: true, force: true }))
   return new Vault(path)
 }
@@ -111,4 +111,15 @@ test('the plugin exposes a role, drafts, and allowlisted read access only', asyn
   assert.match(await call('grove_read', { id: privateNote.meta.id }), /outside/)
   await call('grove_propose', { type: 'question', body: 'An open question' })
   assert.equal((await vault.list()).length, 2)
+})
+
+test('does not follow a configured vault root after it is replaced with a symlink', async t => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'grove-root-audit-')))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const alias = join(root, 'configured-vault')
+  const elsewhere = await mkdtemp(join(root, 'elsewhere-'))
+  await symlink(elsewhere, alias)
+  const redirected = new Vault(alias)
+  await assert.rejects(redirected.create({ type: 'inspiration', body: 'Should not reach the other vault' }), /real vault/i)
+  assert.deepEqual(await new Vault(elsewhere).list(), [])
 })
