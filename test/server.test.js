@@ -594,3 +594,33 @@ test('API JSON rejects oversized streams and non-JSON bodies before creating a n
   assert.equal(oversized.status, 413)
   assert.deepEqual(await new Vault(root).list(), [])
 })
+
+test('follow-up web queries cannot carry phrases obtained from an imported private document', async t => {
+  const root = await fixture(t)
+  const vault = new Vault(root)
+  const question = await vault.create({ type: 'question', body: 'Sunlight and walking' })
+  const topic = await vault.create({ type: 'research', title: 'Sunlight and walking', body: '', question: question.meta.id })
+  await vault.create({
+    type: 'source', title: 'notes.md',
+    body: JSON.stringify({ blocks: [{ locator: 'Paragraph 1', text: 'Sunlight private meadow code phrase' }] }),
+    links: [{ kind: 'related', id: topic.meta.id, version: 1 }],
+  })
+  const queries = []
+  const { ctx, registered } = host()
+  registerRoutes(ctx, { current: () => ({ path: root }), modelConfig: { enabled: true },
+    researchSearch: () => async query => { queries.push(query); return [] },
+    model: () => ({
+      async plan() { return { topic: 'Sunlight and walking', questions: ['Sunlight walking'] } },
+      async review({ sources }) {
+        const phrase = sources.some(source => source.text.includes('private meadow code phrase'))
+          ? 'private meadow code phrase' : 'outdoor walk in summer'
+        return { claims: [{ text: 'Insufficient', explanation: 'No public sources.', status: 'insufficient', sources: [] }], followups: [phrase] }
+      },
+      async write() { return { summary: 'No public sources.', nextSteps: [] } },
+    }),
+  })
+  const call = input => registered.get(routes.deepResearch).fetch(request(routes.deepResearch, input))
+  assert.equal((await call({ action: 'start', topic: topic.meta.id })).status, 202)
+  await waitFor(async () => (await (await call({ action: 'list', topic: topic.meta.id })).json()).runs[0]?.status === 'complete')
+  assert.deepEqual(queries, ['Sunlight walking', 'outdoor walk in summer'])
+})
