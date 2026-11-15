@@ -36,7 +36,7 @@ dsh plugin --profile grove-trial add "$PWD"
 dsh --profile grove-trial
 ```
 
-Open **Grove** (or **知林** in Chinese) in the sidebar, choose your vault, and save an idea. Open **Research** to save a question and observations, then add sources, capture evidence, or confirm a report as needed. For AI research, enter a Chat Completions-compatible HTTPS endpoint and model name in the research panel, and set `GROVE_MODEL_KEY` in the host environment.
+Open **Grove** (or **知林** in Chinese) in the sidebar, choose your vault, and save an idea. Open **Research** to save a question and observations, then add sources, capture evidence, or confirm a report as needed. Before starting deep research, open **Settings** in Grove and supply a Chat Completions-compatible HTTPS endpoint and default model. Set `GROVE_MODEL_KEY` in the host environment. The same page configures web search (which requires `GROVE_TAVILY_KEY`), an optional dedicated research model, and document parsing.
 
 Install the CLI separately with `npm install --global .` from the repository root, or run `npm install --global dsh-grove` for the published CLI.
 

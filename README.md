@@ -36,7 +36,7 @@ dsh plugin --profile grove-trial add "$PWD"
 dsh --profile grove-trial
 ```
 
-装好后，从左侧打开中文界面的 **知林** 或英文界面的 **Grove**，选择 vault，写下一句并点「💡叮～」。想研究一个问题时，打开「研究」，保存问题和观察，再按需上传资料、保存摘录与确认报告。使用「AI 深挖」前，在研究面板填写兼容 Chat Completions 的 HTTPS 接口和模型名称，并在宿主环境设置 `GROVE_MODEL_KEY`。
+装好后，从左侧打开中文界面的 **知林** 或英文界面的 **Grove**，选择 vault，写下一句并点「💡叮～」。想研究一个问题时，打开「研究」，保存问题和观察，再按需上传资料、保存摘录与确认报告。使用「开始深挖」前，从知林右上角打开「设置」，填写兼容 Chat Completions 的 HTTPS 接口和默认模型，并在宿主设置 `GROVE_MODEL_KEY`。同一页可开启联网检索（需要 `GROVE_TAVILY_KEY`）、配置专用深度研究模型和资料解析。
 
 也可以单独安装终端命令。在仓库根目录执行 `npm install --global .` 可安装源码中的 CLI。执行 `npm install --global dsh-grove` 可安装 npm 已发布的 CLI。
 
