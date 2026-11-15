@@ -454,3 +454,75 @@ test('deep research needs a model and web search, and cannot finish after retrie
   assert.equal(writes, 1)
   assert.doesNotMatch((await vault.get(id)).body, /Old local-only draft/)
 })
+
+test('legacy settings become the default and a verified research override routes only deep research', async t => {
+  const root = await fixture(t)
+  let profile = { model: { enabled: true, name: 'legacy', endpoint: 'https://model.example/v1', inspirationLinks: true, webSearch: true } }
+  const invoked = []
+  function mount() {
+    const { ctx, registered } = host({
+      async edit(_entry, change) { profile = change(profile) },
+    })
+    registerRoutes(ctx, {
+      current: () => ({ path: root }), modelConfig: profile.model, saveDelay: 1, researchSearch: () => async () => [],
+      model: (settings, role) => ({
+        async investigate() {
+          invoked.push(['test', role, settings.name])
+          if (settings.name === 'unreachable') throw Object.assign(new Error('HTTP 401'), { code: 'model-auth' })
+          return { text: 'OK', citations: [] }
+        },
+        async plan() {
+          invoked.push(['plan', role, settings.name])
+          return { topic: 'Test topic', questions: ['What happened?'] }
+        },
+        async review() {
+          return { claims: [{ text: 'Unknown', explanation: 'Limited data.', status: 'insufficient', sources: [] }], followups: [] }
+        },
+        async write() { return { summary: 'Limited data.', nextSteps: [] } },
+      }),
+    })
+    return (route, data) => registered.get(route).fetch(request(route, data))
+  }
+
+  let call = mount()
+  const legacy = await (await call(routes.model)).json()
+  assert.equal(legacy.name, 'legacy')
+  assert.equal(legacy.deepResearch, null)
+  assert.equal(legacy.connection.status, 'unverified')
+  assert.equal(legacy.researchConnection.status, 'unverified')
+
+  async function start(direction) {
+    const response = await call(routes.deepResearch, { action: 'start', direction })
+    assert.equal(response.status, 202)
+    const { topic } = await response.json()
+    await waitFor(async () => {
+      const data = await (await call(routes.deepResearch, { action: 'list', topic })).json()
+      return data.runs[0]?.status === 'complete'
+    })
+  }
+
+  async function save(overrides) {
+    const response = await call(routes.model, { ...legacy, ...overrides, verify: true })
+    assert.equal(response.status, 200)
+    const { changeId } = await response.json()
+    await waitFor(async () => profile.model.changeId === changeId)
+    call = mount()
+    return (await call(routes.model)).json()
+  }
+
+  await start('Inheritance')
+  const configured = await save({ deepResearch: { name: 'dedicated', endpoint: 'https://research.example/v1' } })
+  assert.equal(configured.connection.status, 'connected')
+  assert.equal(configured.researchConnection.status, 'connected')
+  assert.equal(configured.inspirationLinks, true)
+  assert.equal(configured.webSearch, true)
+  await start('Override')
+  const failing = await save({ deepResearch: { name: 'unreachable', endpoint: 'https://research.example/v1' } })
+  assert.equal(failing.connection.status, 'connected')
+  assert.equal(failing.researchConnection.status, 'failed')
+  assert.equal(failing.researchConnection.code, 'model-auth')
+  assert.equal((await save({ deepResearch: null })).researchConnection.status, 'connected')
+  assert.deepEqual(invoked.filter(row => row[0] === 'plan'), [
+    ['plan', 'research', 'legacy'], ['plan', 'research', 'dedicated'],
+  ])
+})

@@ -7,6 +7,7 @@ import { inspirationHistory, discoverInspirations } from './modules/inspiration-
 import { startResearch, listResearch, saveResearch } from './modules/research.js'
 import { importSource, saveEvidence, openSource } from './modules/evidence.js'
 import { listReports, confirmReport, readReport, draftFromFinding } from './modules/reports.js'
+import { parseModelSettings, readModelSettings, selectModel, testModel, verifyModelSettings } from './modules/model-settings.js'
 import { runResearchModel } from './modules/model-research.js'
 import { listKnowledge, readKnowledge, saveKnowledge } from './modules/knowledge.js'
 import { listWorks, readWork, saveWork } from './modules/works.js'
@@ -72,6 +73,7 @@ function statusOf(error) {
     case 'research-search-disabled':
     case 'research-search-key':
     case 'research-running':
+    case 'model-research-key':
     case 'model-key':
     case 'model-disabled':
     case 'not-configured':
@@ -197,8 +199,9 @@ export function registerRoutes(ctx, options) {
   const runs = researchRuns({
     workflow: options.researchWorkflow ?? stagedResearch,
     context() {
-      if (!options.modelConfig?.enabled) throw coded('model-disabled', 'Configure and enable a research model')
-      const model = options.model?.(options.modelConfig)
+      const settings = selectModel(options.modelConfig, 'research')
+      if (!settings) throw coded('model-disabled', 'Configure and enable a research model')
+      const model = options.model?.(settings, 'research', options.modelConfig)
       if (!model) throw coded('model-key', 'Set GROVE_MODEL_KEY for the host')
       if (!['plan', 'review', 'write'].every(step => typeof model[step] === 'function')) {
         throw coded('model-disabled', 'The configured model adapter does not support deep research')
@@ -242,7 +245,7 @@ export function registerRoutes(ctx, options) {
           if (input.action === 'discover') {
             const settings = options.modelConfig
             if (!settings?.enabled || settings.inspirationLinks !== true) return json({ enabled: false, matches: [] })
-            const provider = options.model?.(settings)
+            const provider = options.model?.(settings, 'default', options.modelConfig)
             if (!provider) throw coded('model-key', 'Set GROVE_MODEL_KEY for the host')
             return json({ enabled: true, matches: await discoverInspirations(vault, provider, note) })
           }
@@ -275,28 +278,15 @@ export function registerRoutes(ctx, options) {
       })
     }
     route(routes.model, ['GET', 'POST'], async request => {
-      if (request.method === 'GET') return json({ enabled: options.modelConfig?.enabled === true, inspirationLinks: options.modelConfig?.inspirationLinks === true, webSearch: options.modelConfig?.webSearch === true, endpoint: options.modelConfig?.endpoint, name: options.modelConfig?.name })
+      if (request.method === 'GET') return json(readModelSettings(options.modelConfig, options.model))
       try {
         const input = await readJson(request)
-        const model = input?.enabled === false ? { enabled: false } :
-          { enabled: true, endpoint: input?.endpoint, name: input?.name, inspirationLinks: input?.inspirationLinks === true, webSearch: input?.webSearch === true }
-        if (model.enabled) {
-          if (typeof model.endpoint !== 'string' || typeof model.name !== 'string' || !model.name.trim() ||
-            model.name.length > 200 || model.endpoint.length > 2048) throw coded('model-settings', 'Enter the model endpoint and name')
-          const url = URL.parse(model.endpoint)
-          if (!url || url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) {
-            throw coded('model-endpoint', 'Use an HTTPS endpoint without credentials, query parameters or fragments')
-          }
-          if (input.test === true) {
-            const provider = options.model?.(model)
-            if (!provider) throw coded('model-key', 'Set GROVE_MODEL_KEY for the host')
-            const reply = await provider.investigate({ question: 'This is a connection test. Return only {"text":"OK","citations":[]}.', materials: [], history: [] })
-            if (typeof reply?.text !== 'string' || !reply.text.trim() || !Array.isArray(reply.citations) || reply.citations.length) {
-              throw coded('model-response', 'The model did not return the expected format')
-            }
-            return json({ ok: true })
-          }
+        const config = parseModelSettings(input, options.modelConfig)
+        if (input?.test === true) {
+          await testModel(config, input.role === 'research' ? 'research' : 'default', options.model)
+          return json({ ok: true })
         }
+        const model = await verifyModelSettings(config, options.modelConfig, input?.verify === true, options.model)
         const editor = ctx.get?.('configEditor')
         const entry = ctx.fiber?.entry
         if (!entry || typeof editor?.edit !== 'function') throw coded('save-unavailable', 'This profile cannot save model settings')
@@ -304,7 +294,7 @@ export function registerRoutes(ctx, options) {
           editor.edit(entry, current => ({ ...current, model }))
             .catch(error => console.warn(`[grove] could not save model settings: ${error.message}`))
         }, delay)
-        return json({ pending: true })
+        return json({ pending: true, changeId: model.changeId })
       } catch (error) {
         return failure(error)
       }
@@ -344,7 +334,7 @@ export function registerRoutes(ctx, options) {
         if (!question || question.length > 1000 || !Array.isArray(input.materials) || input.materials.length > 20 ||
           !Number.isSafeInteger(input.version) || input.version < 1) throw coded('invalid-body', 'Enter a research question and select evidence')
         if (!options.modelConfig?.enabled) throw coded('model-disabled', 'Configure and enable a model first')
-        const provider = options.model?.(options.modelConfig)
+        const provider = options.model?.(options.modelConfig, 'default', options.modelConfig)
         if (!provider) throw coded('model-key', 'Set GROVE_MODEL_KEY for the host')
         return json(await runResearchModel(store, provider, { ...input, question, history: input.includeHistory === true ? findings.map(({ meta, body }) => ({ question: meta.title, text: body })).slice(-8) : [] }))
       } catch (error) {

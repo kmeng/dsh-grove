@@ -16,6 +16,10 @@ function requireStub(id) {
   throw new Error(`unexpected require: ${id}`)
 }
 
+function activeView(tree) {
+  return tree.children[1].children[0].children.find(item => item?.props?.className === 'gr-view')
+}
+
 function loadModule() {
   let loaded
   const window = { __ModuleLoader__: { load: value => { loaded = value } } }
@@ -130,7 +134,7 @@ test('the folder button uses the host picker and cancellation leaves manual entr
     loadModule().factory(requireStub).apply(ctx)
     const page = registrations.find(item => item.name === 'main').component
     const tree = page()
-    const connect = tree.children[1].children[0].children.find(item => item?.props?.onPick)
+    const connect = activeView(tree).children.find(item => item?.props?.onPick)
     await connect.props.onPick()
     assert.equal(picks, 1)
     assert.ok(!changes.some(([slot, value]) => slot === 4 && value === true))
@@ -147,7 +151,7 @@ test('the connected home offers recent ideas before searching', () => {
   try {
     loadModule().factory(requireStub).apply(ctx)
     const page = registrations.find(item => item.name === 'main').component
-    const home = page().children[1].children[0].children.find(item => item?.props?.onSearch)
+    const home = activeView(page()).children.find(item => item?.props?.onSearch)
     const fixture = { id: 'test', title: '先前的灵感', version: 1 }
     const tree = home.type({ ...home.props, recent: [fixture] })
     function contains(node, text) {
@@ -174,7 +178,7 @@ test('a slow native picker can complete after a minute', async t => {
 
   loadModule().factory(requireStub).apply(ctx)
   const page = registrations.find(item => item.name === 'main').component
-  const connect = page().children[1].children[0].children.find(item => item?.props?.onPick)
+  const connect = activeView(page()).children.find(item => item?.props?.onPick)
   const pending = connect.props.onPick()
   t.mock.timers.tick(61000)
   resolvePicker({ ok: true, value: '/slow-selection' })
