@@ -9,7 +9,7 @@ import { accept, discard, preview, propose } from '../src/proposals.js'
 import { apply } from '../src/plugin.js'
 
 async function fixture(t) {
-  const path = await mkdtemp(join(tmpdir(), 'grove-test-'))
+  const path = await mkdtemp(join(await realpath(tmpdir()), 'grove-test-'))
   t.after(() => rm(path, { recursive: true, force: true }))
   return new Vault(path)
 }

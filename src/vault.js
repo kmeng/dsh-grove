@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { constants } from 'node:fs'
 import { lstat, realpath, mkdir, open, link, unlink, readdir } from 'node:fs/promises'
-import { isAbsolute, join } from 'node:path'
+import { isAbsolute, join, resolve } from 'node:path'
 import { parse, stringify } from 'yaml'
 
 export const types = ['inspiration', 'question', 'concept', 'theory', 'claim', 'evidence', 'method', 'output', 'exploration', 'research', 'source', 'report', 'finding']
@@ -69,11 +69,14 @@ async function publish(path, target, content) {
 export class Vault {
   constructor(path) {
     if (typeof path !== 'string' || !isAbsolute(path)) throw new Error('Set GROVE_VAULT to an absolute vault path')
-    this.path = path
+    this.path = resolve(path)
   }
 
   async folder(create = false) {
-    return directory(join(await realpath(this.path), 'Grove'), create)
+    if (await realpath(this.path) !== this.path) {
+      throw Object.assign(new Error('Grove requires a real vault path'), { code: 'symlink' })
+    }
+    return directory(join(this.path, 'Grove'), create)
   }
 
   async inventory() {
