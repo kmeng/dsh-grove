@@ -3,6 +3,7 @@ import { Vault, types } from './vault.js'
 import { propose, roles } from './proposals.js'
 import { documentParsers } from './adapters/parsers/documents.js'
 import { httpModel } from './adapters/models/http.js'
+import { tavilySearch } from './adapters/search/tavily.js'
 import { registerRoutes } from './server.js'
 
 export const name = 'grove'
@@ -31,6 +32,12 @@ export function apply(ctx, config = {}) {
     parsers: documentParsers(config.parsers),
     pdfEnabled: config.parsers?.pdf !== false,
     modelConfig: config.model,
+    researchSearch: () => {
+      if (config.model?.webSearch !== true) return null
+      const provider = tavilySearch(process.env.GROVE_TAVILY_KEY)
+      if (!provider) throw Object.assign(new Error('Set GROVE_TAVILY_KEY for the host'), { code: 'research-search' })
+      return provider
+    },
     model: settings => httpModel({ ...settings, credential: process.env.GROVE_MODEL_KEY }),
   })
 

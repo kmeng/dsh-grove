@@ -10,6 +10,9 @@ import { listReports, confirmReport, readReport, draftFromFinding } from './modu
 import { runResearchModel } from './modules/model-research.js'
 import { listKnowledge, readKnowledge, saveKnowledge } from './modules/knowledge.js'
 import { listWorks, readWork, saveWork } from './modules/works.js'
+import { stagedResearch } from './modules/deep-research.js'
+import { researchRuns } from './modules/research-runs.js'
+import { researchRunStore } from './adapters/storage/obsidian/research-runs.js'
 import { Vault } from './vault.js'
 
 export const routes = {
@@ -25,6 +28,7 @@ export const routes = {
   parsers: '/api/grove/parsers',
   sources: '/api/grove/sources',
   research: '/api/grove/research',
+  deepResearch: '/api/grove/deep-research',
   inspirations: '/api/grove/inspirations',
 }
 
@@ -59,11 +63,13 @@ function statusOf(error) {
     case 'model-auth':
     case 'model-not-found':
     case 'model-rate-limit':
+    case 'research-search':
     case 'model-network':
     case 'model-rejected':
     case 'model-unavailable':
     case 'model-response':
       return 502
+    case 'research-running':
     case 'model-key':
     case 'model-disabled':
     case 'not-configured':
@@ -186,6 +192,18 @@ async function readJson(request) {
  */
 export function registerRoutes(ctx, options) {
   const delay = Number.isFinite(options.saveDelay) ? options.saveDelay : 100
+  const runs = researchRuns({
+    workflow: options.researchWorkflow ?? stagedResearch,
+    context() {
+      if (!options.modelConfig?.enabled) throw coded('model-disabled', 'Configure and enable a research model')
+      const model = options.model?.(options.modelConfig)
+      if (!model) throw coded('model-key', 'Set GROVE_MODEL_KEY for the host')
+      if (!['plan', 'review', 'write'].every(step => typeof model[step] === 'function')) {
+        throw coded('model-disabled', 'The configured model adapter does not support deep research')
+      }
+      return { model, search: options.researchSearch?.() }
+    },
+  })
   ctx.inject(['connection'], (scoped) => {
     const connection = scoped.get('connection')
     if (!connection?.fetch || typeof connection.fetch.register !== 'function') return
@@ -255,11 +273,11 @@ export function registerRoutes(ctx, options) {
       })
     }
     route(routes.model, ['GET', 'POST'], async request => {
-      if (request.method === 'GET') return json({ enabled: options.modelConfig?.enabled === true, inspirationLinks: options.modelConfig?.inspirationLinks === true, endpoint: options.modelConfig?.endpoint, name: options.modelConfig?.name })
+      if (request.method === 'GET') return json({ enabled: options.modelConfig?.enabled === true, inspirationLinks: options.modelConfig?.inspirationLinks === true, webSearch: options.modelConfig?.webSearch === true, endpoint: options.modelConfig?.endpoint, name: options.modelConfig?.name })
       try {
         const input = await readJson(request)
         const model = input?.enabled === false ? { enabled: false } :
-          { enabled: true, endpoint: input?.endpoint, name: input?.name, inspirationLinks: input?.inspirationLinks === true }
+          { enabled: true, endpoint: input?.endpoint, name: input?.name, inspirationLinks: input?.inspirationLinks === true, webSearch: input?.webSearch === true }
         if (model.enabled) {
           if (typeof model.endpoint !== 'string' || typeof model.name !== 'string' || !model.name.trim() ||
             model.name.length > 200 || model.endpoint.length > 2048) throw coded('model-settings', 'Enter the model endpoint and name')
@@ -285,6 +303,28 @@ export function registerRoutes(ctx, options) {
             .catch(error => console.warn(`[grove] could not save model settings: ${error.message}`))
         }, delay)
         return json({ pending: true })
+      } catch (error) {
+        return failure(error)
+      }
+    })
+    route(routes.deepResearch, ['POST'], async request => {
+      try {
+        const input = await readJson(request)
+        const { path } = options.current()
+        if (!path) throw coded('not-configured', 'Grove has no vault yet')
+        const store = new Vault(path)
+        const jobs = researchRunStore(store)
+        const isId = value => typeof value === 'string' && /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(value)
+        const refs = [input?.idea, input?.knowledge].filter(ref => ref !== undefined)
+        if (refs.length + Number(input?.topic !== undefined) > 1 ||
+          refs.some(ref => !isId(ref?.id) || !Number.isSafeInteger(ref.version) || ref.version < 1) ||
+          (input?.topic !== undefined && !isId(input.topic))) {
+          throw coded('invalid-body', 'Invalid research scope')
+        }
+        if (input?.action === 'list') return json({ runs: await runs.list(store, jobs, input) })
+        if (input?.action === 'start') return json(await runs.start(store, jobs, input), 202)
+        if (input?.action === 'retry' && isId(input.id)) return json(await runs.retry(store, jobs, input.id), 202)
+        throw coded('invalid-body', 'Choose a research action')
       } catch (error) {
         return failure(error)
       }

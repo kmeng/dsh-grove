@@ -4,7 +4,7 @@ const relatesTo = (note, id) => note.meta.links?.some(link => link.kind === 'rel
 
 function preview({ meta, body }) {
   return {
-    id: meta.id, title: meta.title, version: meta.version, status: meta.status,
+    id: meta.id, title: meta.title, version: meta.version, status: meta.status, review: meta.review,
     summary: body.length > 180 ? body.slice(0, 180) + '…' : body,
   }
 }

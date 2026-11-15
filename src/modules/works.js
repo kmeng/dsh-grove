@@ -10,7 +10,7 @@ export async function saveWork(store, input) {
   const links = []
   if (input.basis) {
     const basis = await store.get(input.basis.id, exactVersion(input.basis.version))
-    if (!basisTypes.has(basis.meta.type)) throw new Error('Choose a report or knowledge entry')
+    if (!basisTypes.has(basis.meta.type) || basis.meta.review === 'draft') throw new Error('Choose a report or knowledge entry')
     links.push({ kind: 'derived', id: basis.meta.id, version: basis.meta.version })
   }
   return store.create({ type: 'output', title: input.title, body: input.body, links })

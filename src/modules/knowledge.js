@@ -12,7 +12,7 @@ export async function saveKnowledge(store, input) {
   const links = []
   if (input.report) {
     const report = await store.get(input.report.id, exactVersion(input.report.version))
-    if (report.meta.type !== 'report') throw new Error('Choose a research report')
+    if (report.meta.type !== 'report' || report.meta.review === 'draft') throw new Error('Choose a research report')
     links.push({ kind: 'derived', id: report.meta.id, version: report.meta.version })
   }
   return store.create({ type: input.type, title: input.title, body: input.body, links })

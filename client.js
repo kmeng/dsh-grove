@@ -30,12 +30,46 @@ window.__ModuleLoader__.load({
     var REPORTS = '/api/grove/reports'
     var SOURCES = '/api/grove/sources'
     var RESEARCH = '/api/grove/research'
+    var DEEP_RESEARCH = '/api/grove/deep-research'
     var INSPIRATIONS = '/api/grove/inspirations'
 
     var ZH = {
+      'deep.title': '来点深度',
+      'deep.direction': '给个方向',
+      'deep.hint': '想往哪儿挖？留空也可以，我先拆几个问题。',
+      'deep.question': '想深挖什么？',
+      'deep.start': '开始深挖',
+      'deep.waiting': '正在拆解研究问题…',
+      'deep.searching': '正在查找资料…',
+      'deep.checking': '正在核对证据和查找缺口…',
+      'deep.plan': '拆出这些问题',
+      'deep.collected': '找到的资料',
+      'deep.noSources': '暂未找到可引用的资料。',
+      'deep.local': '本次查找范围为话题下的库内资料。',
+      'deep.web': '检索范围包含公开网页。',
+      'deep.webSetting': '深度研究时检索公开网页',
+      'deep.webHint': '开启后，研究关键词会发送给 Tavily。请在宿主中设置 GROVE_TAVILY_KEY。',
+      'deep.followups': '待补查的证据',
+      'deep.verified': '核验结果',
+      'deep.supported': '有证据支持',
+      'deep.disputed': '证据有分歧',
+      'deep.insufficient': '证据不足',
+      'deep.writing': '正在起草报告…',
+      'deep.saving': '正在保存 Markdown 报告…',
+      'deep.ready': '报告草稿已保存',
+      'deep.interrupted': '研究中断了，可以接着上次的进度继续。',
+      'deep.retry': '继续深挖',
+      'deep.draft': '待确认草稿',
+      'deep.openReport': '查看 Markdown 报告',
+      'deep.note': '手动建立话题',
+      'deep.topics': '研究话题',
+      'deep.topicSearch': '按标题找话题',
+      'deep.noTopics': '没有找到匹配的话题。',
+      'err.research-running': '这项研究正在启动，请稍候。',
+      'err.research-search': '联网检索失败。请检查检索服务配置或稍后重试。{message}',
+      'err.research-storage': '无法保存研究进度或报告，请检查笔记库的访问权限后重试。',
       'idea.detail': '从灵感出发',
       'idea.back': '回到这条灵感',
-      'idea.from': '从这里深挖',
       'idea.studies': '研究过的话题',
       'idea.links': 'AI 发现的关联',
       'idea.linksWaiting': '正在找有没有值得一起看的灵感…',
@@ -58,7 +92,6 @@ window.__ModuleLoader__.load({
       'idea.recentEmpty': '还没有灵感，先叮一下吧。',
       'idea.results': '搜索结果',
       'idea.query': '搜索灵感',
-      'model.optional': '无需配置模型，也能记录、导入资料、整理证据和写报告。想请 AI 深挖时，再配置研究模型。',
       'model.setup': '先在「研究模型」里启用并配置模型。',
       'model.keyHint': '连接模型需要在 dsh 宿主设置 GROVE_MODEL_KEY。',
       'model.saveFailed': '模型设置还未生效。请检查当前 dsh 配置是否可写，再试一次。',
@@ -104,7 +137,7 @@ window.__ModuleLoader__.load({
       'model.test': '测试连接',
       'model.apply': '应用模型设置',
       'model.tested': '连接通过。',
-      'model.ask': '请 AI 深挖',
+      'model.ask': '单轮分析',
       'model.question': '想往哪儿深挖？',
       'model.scope': '模型会收到勾选的证据、这项研究的灵感片段和先前的发现。',
       'parsers.title': '资料解析设置',
@@ -186,9 +219,42 @@ window.__ModuleLoader__.load({
     }
 
     var EN = {
+      'deep.title': 'Dig a little deeper',
+      'deep.direction': 'Give it a direction',
+      'deep.hint': 'What would you like to focus on? Leave this blank to let Grove break down the idea.',
+      'deep.question': 'What would you like to investigate?',
+      'deep.start': 'Start research',
+      'deep.waiting': 'Breaking down the research question…',
+      'deep.searching': 'Looking for sources…',
+      'deep.checking': 'Checking the evidence and looking for gaps…',
+      'deep.plan': 'Research questions',
+      'deep.collected': 'Sources found',
+      'deep.noSources': 'No citable sources found yet.',
+      'deep.local': 'This run searches materials imported into the topic.',
+      'deep.web': 'This run also searches the public web.',
+      'deep.webSetting': 'Search the public web during deep research',
+      'deep.webHint': 'When enabled, research queries are sent to Tavily. Set GROVE_TAVILY_KEY in the host environment.',
+      'deep.followups': 'Evidence to look for next',
+      'deep.verified': 'Evidence review',
+      'deep.supported': 'Supported',
+      'deep.disputed': 'Disputed',
+      'deep.insufficient': 'Insufficient evidence',
+      'deep.writing': 'Writing the report…',
+      'deep.saving': 'Saving the Markdown report…',
+      'deep.ready': 'Report draft saved',
+      'deep.interrupted': 'Research was interrupted. You can pick up where it stopped.',
+      'deep.retry': 'Resume research',
+      'deep.draft': 'Draft for review',
+      'deep.openReport': 'Read Markdown report',
+      'deep.note': 'Create a topic manually',
+      'deep.topics': 'Research topics',
+      'deep.topicSearch': 'Find topics by title',
+      'deep.noTopics': 'No matching topics.',
+      'err.research-running': 'This research is already starting.',
+      'err.research-search': 'Web search failed. Check the search provider or try again. {message}',
+      'err.research-storage': 'Grove could not save research progress or the report. Check vault access and retry.',
       'idea.detail': 'From this idea',
       'idea.back': 'Back to this idea',
-      'idea.from': 'Explore this idea',
       'idea.studies': 'Research topics',
       'idea.links': 'Connections found by AI',
       'idea.linksWaiting': 'Looking for ideas worth seeing together…',
@@ -211,7 +277,6 @@ window.__ModuleLoader__.load({
       'idea.recentEmpty': 'Your first idea will show up here.',
       'idea.results': 'Search results',
       'idea.query': 'Search ideas',
-      'model.optional': 'Record ideas, import sources, collect evidence, and write reports without a model. Set up a research model when you want AI help.',
       'model.setup': 'Enable and configure a model under Research model first.',
       'model.keyHint': 'Set GROVE_MODEL_KEY in the dsh host to connect a model.',
       'model.saveFailed': 'Model settings have not taken effect. Check that the dsh profile is writable, then try again.',
@@ -256,7 +321,7 @@ window.__ModuleLoader__.load({
       'model.test': 'Test connection',
       'model.apply': 'Apply model settings',
       'model.tested': 'Connection verified.',
-      'model.ask': 'Ask AI to investigate',
+      'model.ask': 'Run a single analysis',
       'model.question': 'What should we investigate?',
       'model.scope': 'The model receives selected evidence, inspiration excerpts, and earlier findings from this study.',
       'parsers.title': 'Parser settings',
@@ -734,7 +799,9 @@ window.__ModuleLoader__.load({
       var [discoveryError, setDiscoveryError] = useState(null)
       var [retry, setRetry] = useState(0)
       var [showSettings, setShowSettings] = useState(false)
-      var original = useRef(null)
+      var [revision, setRevision] = useState(0)
+      var [suggestion, setSuggestion] = useState(null)
+      var researchForm = useRef(null)
 
       useEffect(function () {
         var active = true
@@ -742,7 +809,7 @@ window.__ModuleLoader__.load({
           if (active) setDetail(value)
         }, function (problem) { if (active) setError(problem) })
         return function () { active = false }
-      }, [ref.id, ref.version])
+      }, [ref.id, ref.version, revision])
 
       useEffect(function () {
         if (!detail) return
@@ -753,16 +820,7 @@ window.__ModuleLoader__.load({
           if (active) setDiscovery(value)
         }, function (problem) { if (active) setDiscoveryError(problem) })
         return function () { active = false }
-      }, [detail, retry])
-
-      function begin(match) {
-        var selection = window.getSelection()
-        var excerpt = original.current?.contains(selection?.anchorNode) && original.current.contains(selection?.focusNode)
-          ? selection.toString().trim() : ''
-        var inspirations = [{ id: detail.meta.id, version: detail.meta.version, excerpt: (excerpt || detail.body).slice(0, 1600) }]
-        if (match) inspirations.push({ id: match.id, version: match.version, excerpt: match.excerpt })
-        props.onNavigate('research', { title: match?.question, inspirations: inspirations, idea: ref })
-      }
+      }, [detail?.meta.id, detail?.meta.version, retry])
 
       return h('main', { className: 'gr-origin-page' },
         h('div', { className: 'gr-origin-heading' },
@@ -776,12 +834,14 @@ window.__ModuleLoader__.load({
         detail ? h(React.Fragment, null,
           h('article', { className: 'gr-origin-note gr-stack' },
             h('div', { className: 'gr-row' }, h('span', { className: 'gr-origin-bulb', 'aria-hidden': true }, '💡'), inspirationTime(detail.meta.created)),
-            h('p', { className: 'gr-prose', ref: original }, detail.body),
+            h('p', { className: 'gr-prose' }, detail.body),
             detail.versions.length > 1 ? h('label', { className: 'gr-row' }, T('idea.version'),
               h('select', { value: detail.meta.version, onChange: function (event) {
                 props.onNavigate('idea', Object.assign({}, ref, { version: Number(event.target.value) }))
-              } }, detail.versions.map(function (version) { return h('option', { key: version, value: version }, 'v' + version) }))) : null,
-            h('button', { className: 'gr-btn', onClick: function () { begin() } }, T('idea.from'))),
+              } }, detail.versions.map(function (version) { return h('option', { key: version, value: version }, 'v' + version) }))) : null),
+          h(DeepResearchPanel, { idea: { id: detail.meta.id, version: detail.meta.version }, suggestion: suggestion, field: researchForm,
+            onFinished: function () { setRevision(function (value) { return value + 1 }) },
+            onReport: function (run) { props.onNavigate('report', Object.assign({ idea: ref, studyId: run.topic }, run.report)) } }),
           detail.studies.length ? h('section', { className: 'gr-origin-section gr-stack' },
             h('h3', { className: 'gr-h2' }, T('idea.studies')),
             detail.studies.map(function (study) {
@@ -794,7 +854,7 @@ window.__ModuleLoader__.load({
                 } }, T(study.status === 'open' && !study.reports.length ? 'idea.continueStudy' : 'idea.openStudy')),
                 study.reports.map(function (report) {
                   return h('section', { className: 'gr-origin-report gr-stack', key: report.id },
-                    h('p', { className: 'gr-meta' }, T('idea.savedReport'), ' · ', T('idea.reportVersion', { version: report.version })),
+                    h('p', { className: 'gr-meta' }, T(report.review === 'draft' ? 'deep.draft' : 'idea.savedReport'), ' · ', T('idea.reportVersion', { version: report.version })),
                     h('h4', { className: 'gr-h2' }, report.title),
                     h('p', { className: 'gr-prose' }, report.summary),
                     h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () {
@@ -830,8 +890,139 @@ window.__ModuleLoader__.load({
                   } }, match.title),
                   h('p', { className: 'gr-prose' }, match.reason),
                   match.question ? h(React.Fragment, null, h('p', null, match.question),
-                    h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () { begin(match) } }, T('idea.suggest'))) : null)
+                    h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () { setSuggestion({ text: match.question }); researchForm.current?.focus() } }, T('idea.suggest'))) : null)
               }) : h('p', { className: 'gr-meta' }, T('idea.linksEmpty')))) : null)
+    }
+
+    function ReportMarkdown(props) {
+      function inline(text) {
+        return text.split(/(\*\*[^*]+\*\*|<https?:\/\/[^>\s]+>)/g).map(function (part, index) {
+          if (part.startsWith('**') && part.endsWith('**')) return h('strong', { key: index }, part.slice(2, -2))
+          if (/^<https?:\/\/[^>\s]+>$/.test(part)) {
+            var address = part.slice(1, -1)
+            return h('a', { key: index, href: address, target: '_blank', rel: 'noreferrer' }, address)
+          }
+          return part.replace(/\\([\\`*_\[\]<>])/g, '$1')
+        })
+      }
+
+      return h('div', { className: 'gr-markdown gr-stack' }, props.body.split(/\n\s*\n/).map(function (block, index) {
+        var lines = block.split('\n')
+        var heading = /^(#{1,6}) (.+)$/.exec(block)
+        if (heading) return h('h' + Math.min(6, heading[1].length + 2), { key: index }, inline(heading[2]))
+        var ordered = /^\d+\. /.test(block)
+        if (ordered || /^- /.test(block)) {
+          var entries = block.split(ordered ? /\n(?=\d+\. )/ : /\n(?=- )/)
+          return h(ordered ? 'ol' : 'ul', { key: index }, entries.map(function (item, position) {
+            return h('li', { key: position }, inline(item.replace(ordered ? /^\d+\. / : /^- /, '').replace(/\n +/g, ' ')))
+          }))
+        }
+        return h('p', { key: index, className: 'gr-prose' }, inline(lines.join('\n')))
+      }))
+    }
+
+    function DeepResearchPanel(props) {
+      var [direction, setDirection] = useState(props.direction || '')
+      var [run, setRun] = useState(null)
+      var [report, setReport] = useState(null)
+      var [error, setError] = useState(null)
+      var [busy, setBusy] = useState(false)
+      var [loaded, setLoaded] = useState(false)
+      var [refresh, setRefresh] = useState(0)
+      var finished = useRef(null)
+      var scope = { idea: props.idea, topic: props.topic, knowledge: props.knowledge }
+      var optional = !!(props.idea || props.topic || props.knowledge)
+      var running = run?.status === 'running'
+
+      useEffect(function () {
+        if (props.suggestion) setDirection(props.suggestion.text)
+      }, [props.suggestion])
+
+      useEffect(function () {
+        var mounted = true
+        var timeout
+        function poll() {
+          api(DEEP_RESEARCH, Object.assign({ action: 'list' }, scope)).then(function (result) {
+            if (!mounted) return
+            var latest = result.runs[0]
+            setRun(latest || null)
+            setLoaded(true)
+            if (latest?.status === 'running') timeout = setTimeout(poll, 1000)
+          }, function (problem) {
+            if (mounted) { setError(problem); setLoaded(true) }
+          })
+        }
+        poll()
+        return function () { mounted = false; clearTimeout(timeout) }
+      }, [props.idea?.id, props.idea?.version, props.topic, props.knowledge?.id, props.knowledge?.version, refresh])
+
+      useEffect(function () {
+        var id = run?.report?.id
+        if (!id) { setReport(null); return }
+        if (finished.current !== id) {
+          finished.current = id
+          props.onFinished?.()
+        }
+        var mounted = true
+        api(REPORTS, { action: 'read', id: id, version: run.report.version }).then(function (result) {
+          if (mounted) setReport(result)
+        }, function (problem) { if (mounted) setError(problem) })
+        return function () { mounted = false }
+      }, [run?.report?.id, run?.report?.version, refresh])
+
+      async function begin(action) {
+        if (busy || running) return
+        setBusy(true)
+        setError(null)
+        try {
+          var language = T('deep.start') === EN['deep.start'] ? 'en' : 'zh'
+          var started = await api(DEEP_RESEARCH, Object.assign({ action: action, id: action === 'retry' ? run.id : undefined,
+            direction: direction, language: language }, scope))
+          setRun(started)
+          setRefresh(function (value) { return value + 1 })
+        } catch (problem) { setError(problem) }
+        finally { setBusy(false) }
+      }
+
+      var status = run?.status === 'complete' ? (report?.meta.review === 'confirmed' ? null : 'deep.ready')
+        : !running ? null : run.written ? 'deep.saving'
+          : run.verified ? 'deep.writing' : !run.plan ? 'deep.waiting' : null
+      return h('section', { className: 'gr-card' },
+        h('h2', { className: 'gr-h2' }, T('deep.title')),
+        h('form', { onSubmit: function (event) { event.preventDefault(); begin('start') } },
+          h('label', null, T(optional ? 'deep.direction' : 'deep.question'),
+            h('textarea', { className: 'gr-textarea', ref: props.field, value: direction, maxLength: 1200,
+              placeholder: props.idea ? T('deep.hint') : undefined, required: !optional, disabled: busy || running,
+              onChange: function (event) { setDirection(event.target.value) } })),
+          h('button', { className: 'gr-btn', disabled: !loaded || busy || running || (!optional && !direction.trim()) }, T('deep.start'))),
+        error ? h('div', { className: 'gr-stack' },
+          h('p', { role: 'alert' }, messageOf(error)),
+          h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () {
+            setError(null); setRefresh(function (value) { return value + 1 })
+          } }, T('err.retry'))) : null,
+        run ? h('div', { className: 'gr-stack' },
+          run.plan ? h('h3', { className: 'gr-h2' }, run.plan.topic) : null,
+          run.direction && run.direction !== direction ? h('p', { className: 'gr-meta' }, T('deep.direction'), ' · ', run.direction) : null,
+          h('p', { className: 'gr-meta' }, T(run.web ? 'deep.web' : 'deep.local')),
+          run.plan ? h('div', null, h('h4', null, T('deep.plan')),
+            h('ul', null, run.plan.questions.map(function (item) { return h('li', { key: item }, item) }))) : null,
+          run.collected ? h('div', null, h('h4', null, T('deep.collected')),
+            run.collected.length ? h('ul', null, run.collected.map(function (item, index) { return h('li', { key: index }, item) }))
+              : h('p', { className: 'gr-meta' }, T('deep.noSources'))) : run.plan && running ? h('p', { role: 'status' }, T('deep.searching')) : null,
+          run.review?.followups.length ? h('div', null, h('h4', null, T('deep.followups')),
+            h('ul', null, run.review.followups.map(function (item) { return h('li', { key: item }, item) }))) : null,
+          run.verified ? h('div', null, h('h4', null, T('deep.verified')),
+            h('ul', null, run.verified.map(function (item, index) {
+              return h('li', { key: index }, h('strong', null, T('deep.' + item.status)), ' · ', item.text)
+            }))) : run.collected && running ? h('p', { role: 'status' }, T('deep.checking')) : null,
+          status ? h('p', { role: 'status' }, T(status)) : null,
+          run.status === 'failed' || run.status === 'interrupted' ? h('div', { className: 'gr-stack' },
+            h('p', { role: 'alert' }, run.error ? messageOf(run.error) : T('deep.interrupted')),
+            h('button', { className: 'gr-btn gr-btn-ghost', disabled: busy, onClick: function () { begin('retry') } }, T('deep.retry'))) : null,
+          report && run.report ? h('details', { className: 'gr-origin-report', open: true },
+            h('summary', null, T('deep.openReport')),
+            h(ReportMarkdown, { body: report.body }),
+            h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () { props.onReport(run) } }, T('idea.report'))) : null) : null)
     }
 
     function InspirationReport(props) {
@@ -847,14 +1038,15 @@ window.__ModuleLoader__.load({
       }, [ref.id, ref.version])
       return h(React.Fragment, null,
         h('div', { className: 'gr-row' },
-          h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () { props.onNavigate('idea', ref.idea) } }, T('idea.back')),
+          ref.idea ? h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () { props.onNavigate('idea', ref.idea) } }, T('idea.back')) : null,
           h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () {
             props.onNavigate('research', { resume: ref.studyId, idea: ref.idea, report: ref })
           } }, T('idea.openStudy'))),
         error ? h('p', { role: 'alert' }, messageOf(error)) : null,
         report ? h('article', { className: 'gr-card' }, h('h2', { className: 'gr-h2' }, report.meta.title),
           h('p', { className: 'gr-meta' }, T('idea.reportVersion', { version: report.meta.version })),
-          h('p', { className: 'gr-prose' }, report.body)) : !error ? h('p', { role: 'status' }, T('loading')) : null)
+          report.meta.review === 'draft' ? h('p', { className: 'gr-meta' }, T('deep.draft')) : null,
+          h(ReportMarkdown, { body: report.body })) : !error ? h('p', { role: 'status' }, T('loading')) : null)
     }
 
     function ModelSettings(props) {
@@ -884,7 +1076,7 @@ window.__ModuleLoader__.load({
             await new Promise(function (resolve) { setTimeout(resolve, 400) })
             var current = await api(MODEL).catch(function () { return null })
             if (current && current.enabled === config.enabled &&
-              (!current.enabled || (current.name === config.name && current.endpoint === config.endpoint && current.inspirationLinks === config.inspirationLinks))) {
+              (!current.enabled || (current.name === config.name && current.endpoint === config.endpoint && current.inspirationLinks === config.inspirationLinks && current.webSearch === config.webSearch))) {
               props.onApplied(current)
               setConfig(current)
               setMessage(T('research.saved'))
@@ -912,7 +1104,10 @@ window.__ModuleLoader__.load({
           h('p', { className: 'gr-meta' }, T('model.keyHint')),
           h('label', null, h('input', { type: 'checkbox', checked: !!config.inspirationLinks, disabled: busy,
             onChange: function (event) { change('inspirationLinks', event.target.checked) } }), T('model.inspirationLinks')),
-          h('p', { className: 'gr-meta' }, T('model.inspirationHint'))) : null,
+          h('p', { className: 'gr-meta' }, T('model.inspirationHint')),
+          h('label', null, h('input', { type: 'checkbox', checked: !!config.webSearch, disabled: busy,
+            onChange: function (event) { change('webSearch', event.target.checked) } }), T('deep.webSetting')),
+          h('p', { className: 'gr-meta' }, T('deep.webHint'))) : null,
         h('div', { className: 'gr-row' },
           config.enabled ? h('button', { className: 'gr-btn', value: 'test', disabled: busy }, T('model.test')) : null,
           h('button', { className: 'gr-btn', value: 'apply', disabled: busy }, T('model.apply'))),
@@ -920,9 +1115,7 @@ window.__ModuleLoader__.load({
     }
 
     function ResearchFindings(props) {
-      var [question, setQuestion] = useState(props.initialQuestion || props.title)
-      var panel = useRef(null)
-      var autoStarted = useRef(false)
+      var [question, setQuestion] = useState(props.title)
       var [findings, setFindings] = useState([])
       var [evidence, setEvidence] = useState([])
       var [selected, setSelected] = useState([])
@@ -940,14 +1133,6 @@ window.__ModuleLoader__.load({
         }, setError)
         api(REPORTS, { action: 'list', research: props.id }).then(function (result) { setEvidence(result.evidence) }, setError)
       }
-
-      useEffect(function () {
-        if (props.initialQuestion && !autoStarted.current) {
-          autoStarted.current = true
-          panel.current.open = true
-          ask()
-        }
-      }, [])
 
       async function ask(event) {
         if (event) event.preventDefault()
@@ -967,7 +1152,7 @@ window.__ModuleLoader__.load({
         finally { setBusy(false) }
       }
 
-      return h('details', { className: 'gr-card', ref: panel, onToggle: load },
+      return h('details', { className: 'gr-card', onToggle: load },
         h('summary', null, T('model.ask')),
         error ? h('p', { role: 'alert' }, messageOf(error)) : null,
         findings.map(function (item) {
@@ -1204,7 +1389,7 @@ window.__ModuleLoader__.load({
       h('button', { className: 'gr-btn', disabled: busy, onClick: start }, T('report.new')),
       (catalog ? catalog.reports : []).map(function (entry) {
         return h('button', { key: entry.meta.id, className: 'gr-btn gr-btn-ghost', disabled: busy,
-          onClick: function () { run(function () { return read(entry.meta.id, entry.meta.version) }) } }, entry.meta.title)
+          onClick: function () { run(function () { return read(entry.meta.id, entry.meta.version) }) } }, entry.meta.title, entry.meta.review === 'draft' ? ' · ' + T('deep.draft') : '')
       }),
       report ? h('label', null, T('report.history'), ' ', h('select', {
         value: report.meta.version, disabled: busy,
@@ -1214,7 +1399,7 @@ window.__ModuleLoader__.load({
         },
       }, report.versions.map(function (version) { return h('option', { key: version, value: version }, 'v' + version) }))) : null,
       report ? report.evidence.map(cite) : null,
-      report ? h('div', { className: 'gr-row' },
+      report && report.meta.review !== 'draft' ? h('div', { className: 'gr-row' },
         h('button', { className: 'gr-btn', onClick: function () {
           props.onNavigate('knowledge', { title: report.meta.title, body: report.body, report: { id: report.meta.id, version: report.meta.version } })
         } }, T('asset.derive')),
@@ -1359,11 +1544,11 @@ window.__ModuleLoader__.load({
     function ResearchPage(props) {
       var [reportDraft, setReportDraft] = useState(null)
       var [model, setModel] = useState(null)
-      var [initialQuestion, setInitialQuestion] = useState('')
       var [studies, setStudies] = useState([])
+      var [topicSearch, setTopicSearch] = useState('')
       var [selected, setSelected] = useState(null)
       var [question, setQuestion] = useState(props.seed?.title || '')
-      var [includeOrigins, setIncludeOrigins] = useState(true)
+      var [useOrigin, setUseOrigin] = useState(!!props.seed?.origin)
       var [body, setBody] = useState('')
       var [busy, setBusy] = useState(true)
       var [error, setError] = useState(null)
@@ -1392,7 +1577,6 @@ window.__ModuleLoader__.load({
 
       function select(note) {
         setSelected(note)
-        setInitialQuestion('')
         setReportDraft(null)
         setBody(note ? note.body : '')
         setQuestion('')
@@ -1402,14 +1586,12 @@ window.__ModuleLoader__.load({
       function save(event) {
         event.preventDefault()
         if (busy || (!selected && !question.trim())) return
-        var investigate = !selected && event.nativeEvent.submitter?.value === 'investigate'
         setBusy(true)
         setError(null)
         setSaved(false)
-        var input = selected ? { id: selected.meta.id, version: selected.meta.version, body: body } : { question: question, body: body, origin: includeOrigins ? props.seed?.origin : undefined, inspirations: includeOrigins ? props.seed?.inspirations : undefined }
+        var input = selected ? { id: selected.meta.id, version: selected.meta.version, body: body } : { question: question, body: body, origin: useOrigin ? props.seed?.origin : undefined }
         api(RESEARCH, input).then(function (note) {
           select(note)
-          if (investigate) setInitialQuestion(question.trim())
           setSaved(true)
           setStudies(function (items) {
             return [note].concat(items.filter(function (item) { return item.meta.id !== note.meta.id }))
@@ -1417,46 +1599,57 @@ window.__ModuleLoader__.load({
         }, setError).finally(function () { setBusy(false) })
       }
 
-      var inspirationOrigins = selected ? selected.meta.links?.filter(function (link) { return link.excerpt })
-        : includeOrigins ? props.seed?.inspirations : null
+      var inspirationOrigins = selected?.meta.links?.filter(function (link) { return link.excerpt })
+      var visibleTopics = studies.filter(function (note) {
+        return note.meta.title.toLowerCase().includes(topicSearch.trim().toLowerCase())
+      })
       return h(React.Fragment, null,
         h('div', { className: 'gr-row' },
           h('button', { className: 'gr-btn gr-btn-ghost', disabled: busy, onClick: props.onBack }, T(props.seed?.idea ? 'idea.back' : 'research.back')),
           studies.length ? h('button', { className: 'gr-btn', disabled: busy, onClick: function () { select(studies[0]) } }, T('research.continue')) : null,
-          h('button', { className: 'gr-btn gr-btn-ghost', disabled: busy, onClick: function () { setIncludeOrigins(false); select(null) } }, T('research.new'))),
+          h('button', { className: 'gr-btn gr-btn-ghost', disabled: busy, onClick: function () { setUseOrigin(false); select(null) } }, T('research.new'))),
         error ? h('p', { role: 'alert' }, messageOf(error)) : null,
-        h('form', { className: 'gr-card', onSubmit: save },
-          selected ? h('h2', { className: 'gr-h2' }, selected.meta.title) :
-            h('label', null, T('research.question'),
-              h('input', { className: 'gr-input', value: question, required: true, maxLength: 300,
-                onChange: function (event) { setQuestion(event.target.value) } })),
-          inspirationOrigins?.length ? h('details', { open: !selected },
+        h(DeepResearchPanel, { key: selected?.meta.id || (useOrigin ? props.seed.origin.id : 'independent'), topic: selected?.meta.id,
+          knowledge: selected || !useOrigin ? undefined : props.seed.origin, direction: selected || !useOrigin ? undefined : props.seed.title,
+          onFinished: function () { api(RESEARCH).then(function (data) { setStudies(data.studies) }, setError) },
+          onReport: function (run) { props.onNavigate('report', Object.assign({ idea: props.seed?.idea, studyId: run.topic }, run.report)) } }),
+        selected ? h('form', { className: 'gr-card', onSubmit: save },
+          h('h2', { className: 'gr-h2' }, selected.meta.title),
+          inspirationOrigins?.length ? h('details', null,
             h('summary', null, T('idea.origin')),
             inspirationOrigins.map(function (link) {
               return h('div', { className: 'gr-stack', key: link.id },
-                link.excerpt ? h('p', { className: 'gr-prose' }, link.excerpt) : null,
+                h('p', { className: 'gr-prose' }, link.excerpt),
                 h('button', { type: 'button', className: 'gr-btn gr-btn-ghost', onClick: function () {
                   props.onNavigate('idea', { id: link.id, version: link.version, back: props.seed?.idea?.id === link.id ? undefined : props.seed?.idea })
                 } }, T('idea.openOriginal'), ' · v', link.version))
             })) : null,
-          h('label', null, T(selected ? 'research.notes' : 'research.notesOptional'),
-            h('textarea', { className: 'gr-textarea', value: body,
-              onChange: function (event) { setBody(event.target.value); setSaved(false) } })),
+          h('label', null, T('research.notes'), h('textarea', { className: 'gr-textarea', value: body,
+            onChange: function (event) { setBody(event.target.value); setSaved(false) } })),
           h('div', { className: 'gr-row' },
-            !selected && model?.enabled ? h('button', { className: 'gr-btn', value: 'investigate', disabled: busy }, T('model.ask')) : null,
-            h('button', { className: !selected && model?.enabled ? 'gr-btn gr-btn-ghost' : 'gr-btn', disabled: busy },
-              T(selected ? 'research.save' : 'research.start')),
-            h('span', { role: 'status' }, saved ? T('research.saved') : ''))),
-        h('p', { className: 'gr-body' }, T('model.optional')),
-        h(ModelSettings, { onApplied: setModel }),
-        h(ParserSettings),
-        selected ? h(ResearchFindings, { key: 'findings:' + selected.meta.id, id: selected.meta.id, title: selected.meta.title, version: selected.meta.version, modelEnabled: model?.enabled, initialQuestion: initialQuestion, onDraft: setReportDraft }) : null,
+            h('button', { className: 'gr-btn', disabled: busy }, T('research.save')),
+            h('span', { role: 'status' }, saved ? T('research.saved') : ''))) :
+          h('details', { className: 'gr-card' }, h('summary', null, T('deep.note')),
+          h('form', { onSubmit: save }, h('label', null, T('research.question'),
+              h('input', { className: 'gr-input', value: question, required: true, maxLength: 300,
+                onChange: function (event) { setQuestion(event.target.value) } })),
+          h('label', null, T('research.notesOptional'), h('textarea', { className: 'gr-textarea', value: body,
+            onChange: function (event) { setBody(event.target.value) } })),
+          h('button', { className: 'gr-btn', disabled: busy }, T('research.start')))),
+        selected ? h(ResearchFindings, { key: 'findings:' + selected.meta.id, id: selected.meta.id, title: selected.meta.title, version: selected.meta.version, modelEnabled: model?.enabled, onDraft: setReportDraft }) : null,
         selected ? h(ResearchSources, { key: selected.meta.id, id: selected.meta.id }) : null,
         selected ? h(ResearchReports, { key: 'report:' + selected.meta.id, id: selected.meta.id, onNavigate: props.onNavigate, draft: reportDraft, initialReport: selected.meta.id === props.seed?.resume ? props.seed?.report : null, onDiscard: function () { setReportDraft(null) } }) : null,
-        studies.length ? h('div', { className: 'gr-stack' }, studies.map(function (note) {
-          return h('button', { key: note.meta.id, className: 'gr-btn gr-btn-ghost', disabled: busy,
-            onClick: function () { select(note) } }, note.meta.title)
-        })) : null,
+        studies.length ? h('section', { className: 'gr-card' },
+          h('h2', { className: 'gr-h2' }, T('deep.topics')),
+          h('label', null, T('deep.topicSearch'),
+            h('input', { type: 'search', className: 'gr-input', value: topicSearch, onChange: function (event) { setTopicSearch(event.target.value) } })),
+          visibleTopics.map(function (note) {
+            return h('button', { key: note.meta.id, className: 'gr-btn gr-btn-ghost', disabled: busy,
+              'aria-pressed': note.meta.id === selected?.meta.id, onClick: function () { select(note) } }, note.meta.title)
+          }),
+          visibleTopics.length ? null : h('p', { className: 'gr-meta' }, T('deep.noTopics'))) : null,
+        h(ModelSettings, { onApplied: setModel }),
+        h(ParserSettings),
       )
     }
 
@@ -1535,6 +1728,7 @@ window.__ModuleLoader__.load({
       '.gr-origin-topic+.gr-origin-topic{border-top:1px solid var(--gr-line);padding-top:14px}',
       '.gr-origin-report{padding:12px 14px;border:1px solid var(--gr-line);border-radius:10px;background:var(--gr-surface)}',
       '.gr-origin-page .gr-origin-link{background:transparent;color:var(--gr-green);padding:4px 0}',
+      '.gr-markdown{overflow-wrap:anywhere}.gr-markdown :is(ul,ol){margin:0;padding-inline-start:22px}.gr-markdown :is(h3,h4,h5,h6){margin:0}.gr-markdown a{color:var(--gr-green)}',
       '.gr-prose{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.6}',
       '.gr-h2{font-size:15px;font-weight:600;line-height:1.4}',
       '.gr-body{color:var(--gr-muted);font-size:13px}',
