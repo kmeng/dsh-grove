@@ -56,12 +56,12 @@ async function localSources(store, topic, queries) {
   }))
 }
 
-async function collect(store, topic, queries, search) {
-  const web = await Promise.all(queries.map(async query => search(query))).catch(error => {
+async function collect(store, topic, queries, search, scope) {
+  const web = scope === 'local' ? [] : await Promise.all(queries.map(async query => search(query))).catch(error => {
     if (error?.code === 'research-search') throw error
     throw problem('research-search', 'Could not retrieve web sources')
   })
-  const local = await localSources(store, topic, queries)
+  const local = scope === 'web' ? [] : await localSources(store, topic, queries)
   const found = new Map(local.map(source => [source.id, source]))
   for (const candidate of web.flat()) {
     if (found.size >= 16) break
@@ -106,7 +106,7 @@ export function researchRuns({ context, workflow }) {
     try {
       const state = await workflow.run({
         model, initial: run,
-        retrieve: queries => collect(store, run.topic, queries, search),
+        retrieve: (queries, scope) => collect(store, run.topic, queries, search, scope),
         async checkpoint(step, value) {
           if (step === 'plan' && run.question) {
             await createOnce(store, run.question, { type: 'question', body: value.topic, title: value.topic })
