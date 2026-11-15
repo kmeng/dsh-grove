@@ -2,12 +2,13 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import { Vault, types } from './vault.js'
 import { propose, roles } from './proposals.js'
 import { documentParsers } from './adapters/parsers/documents.js'
+import { createDshModels } from './adapters/models/dsh.js'
 import { httpModel } from './adapters/models/http.js'
 import { tavilySearch } from './adapters/search/tavily.js'
 import { registerRoutes } from './server.js'
 
 export const name = 'grove'
-export const inject = ['tools']
+export const inject = { tools: { required: true }, llm: { required: false }, agentDefaultModel: { required: false } }
 
 const output = {
   schema: { type: 'string' },
@@ -32,6 +33,7 @@ export function apply(ctx, config = {}) {
     parsers: documentParsers(config.parsers),
     pdfEnabled: config.parsers?.pdf !== false,
     modelConfig: config.model,
+    dshModels: createDshModels(ctx),
     researchSearch: () => {
       if (config.model?.webSearch !== true) return null
       const provider = tavilySearch(process.env.GROVE_TAVILY_KEY)
@@ -41,7 +43,7 @@ export function apply(ctx, config = {}) {
     model: (settings, role, modelConfig) => {
       const override = role === 'research' && modelConfig?.deepResearch
       const credential = override
-        ? process.env.GROVE_RESEARCH_MODEL_KEY || (settings.endpoint === modelConfig.endpoint ? process.env.GROVE_MODEL_KEY : undefined)
+        ? process.env.GROVE_RESEARCH_MODEL_KEY || (modelConfig.source !== 'dsh' && settings.endpoint === modelConfig.endpoint ? process.env.GROVE_MODEL_KEY : undefined)
         : process.env.GROVE_MODEL_KEY
       if (override && !credential) {
         throw Object.assign(new Error('Set GROVE_RESEARCH_MODEL_KEY for the host'), { code: 'model-research-key' })

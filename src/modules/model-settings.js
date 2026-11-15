@@ -17,49 +17,101 @@ function modelFields(input) {
   return { name, endpoint }
 }
 
-export function selectModel(config, role) {
-  if (config?.enabled !== true) return null
-  return role === 'research' && config.deepResearch ? config.deepResearch : config
+function source(config, dsh) {
+  return config?.source ?? (config ? 'custom' : dsh ? 'dsh' : 'custom')
 }
 
-export function readModelSettings(config, provider) {
-  const enabled = config?.enabled === true
-  const deepResearch = config?.deepResearch ? { name: config.deepResearch.name, endpoint: config.deepResearch.endpoint } : null
+function usesModel(config, dsh) {
+  return config?.enabled ?? (source(config, dsh) === 'dsh')
+}
+
+export function selectModel(config, role, dsh) {
+  if (!usesModel(config, dsh)) return null
+  if (role === 'research' && config?.deepResearch) return config.deepResearch
+  if (source(config, dsh) !== 'dsh') return config
+  const selected = dsh?.defaultSelection()
+  return selected ? { source: 'dsh', ...selected } : null
+}
+
+function verificationKey(model) {
+  return model.source === 'dsh'
+    ? JSON.stringify(['dsh', model.provider, model.model, model.reasoningEffort])
+    : JSON.stringify(['custom', model.endpoint, model.name])
+}
+
+function matches(result, model) {
+  return !!result && (result.key === verificationKey(model) ||
+    (model.source !== 'dsh' && result.name === model.name && result.endpoint === model.endpoint))
+}
+
+export function readModelSettings(config, provider, dsh) {
+  const enabled = usesModel(config, dsh)
+  const deepResearch = config?.deepResearch ?? null
   function connection(role) {
-    const model = selectModel(config, role)
-    if (!model?.endpoint || !model.name) return { status: 'unconfigured' }
-    try {
-      if (!provider?.(model, role, config)) return { status: 'failed', code: 'model-key' }
-    } catch (error) {
-      return { status: 'failed', code: error.code || 'model-unavailable' }
+    const model = selectModel(config, role, dsh)
+    if (!model) return { status: 'unconfigured' }
+    const result = config?.connections?.[role]
+    if (model.source === 'dsh') {
+      if (!dsh) return { status: 'failed', code: 'model-dsh-route' }
+      const live = dsh.connection(model)
+      if (live && (!live.checkedAt || !matches(result, model) || live.checkedAt > result.checkedAt)) return live
+    } else {
+      if (!model.endpoint || !model.name) return { status: 'unconfigured' }
+      try {
+        if (!provider?.(model, role, config)) return { status: 'failed', code: 'model-key' }
+      } catch (error) {
+        return { status: 'failed', code: error.code || 'model-unavailable' }
+      }
     }
-    const result = config.connections?.[role]
-    if (result?.endpoint !== model.endpoint || result?.name !== model.name) return { status: 'unverified' }
+    if (!matches(result, model)) return { status: 'unverified' }
     return { status: result.status, code: result.code, message: result.message, checkedAt: result.checkedAt }
   }
   const main = connection('default')
-  return { enabled, name: config?.name, endpoint: config?.endpoint, inspirationLinks: config?.inspirationLinks === true,
-    webSearch: config?.webSearch === true, deepResearch, connection: main,
+  const selected = dsh?.defaultSelection()
+  return { enabled, source: source(config, dsh), name: config?.name, endpoint: config?.endpoint,
+    inspirationLinks: config?.inspirationLinks === true, webSearch: config?.webSearch === true,
+    dshDefault: selected, deepResearch, customResearch: config?.customResearch ?? (deepResearch?.source === 'dsh' ? null : deepResearch), connection: main,
     researchConnection: deepResearch ? connection('research') : main, changeId: config?.changeId }
 }
 
-export function parseModelSettings(input, previous) {
+export function parseModelSettings(input, previous, dsh) {
+  const modelSource = input?.source ?? (dsh && input?.endpoint === undefined ? source(previous, dsh) : 'custom')
+  if (!['dsh', 'custom'].includes(modelSource)) throw invalid('model-settings', 'Choose a model source')
   const enabled = input?.enabled !== false
+  const previousCustom = previous?.customResearch ?? (previous?.deepResearch?.source !== 'dsh' ? previous?.deepResearch : null)
+  let deepResearch = previous?.deepResearch ?? null
+  let customResearch = previousCustom ?? null
+  if (enabled && input?.deepResearch !== undefined) {
+    const value = input.deepResearch
+    if (value === null) deepResearch = null
+    else if (value?.source === 'dsh') {
+      if (typeof value.provider !== 'string' || !value.provider.trim() || value.provider.length > 200 ||
+        typeof value.model !== 'string' || !value.model.trim() || value.model.length > 200) {
+        throw invalid('model-dsh-route', 'Choose a dsh model for deep research')
+      }
+      deepResearch = { source: 'dsh', provider: value.provider, model: value.model }
+    } else {
+      customResearch = modelFields(value)
+      deepResearch = customResearch
+    }
+  }
+  const custom = enabled && modelSource === 'custom' ? modelFields(input) : {
+    ...(typeof previous?.name === 'string' ? { name: previous.name } : {}),
+    ...(typeof previous?.endpoint === 'string' ? { endpoint: previous.endpoint } : {}),
+  }
   return {
-    enabled,
-    ...(enabled ? modelFields(input) : { name: previous?.name, endpoint: previous?.endpoint }),
+    enabled, source: modelSource, ...custom,
     inspirationLinks: (input?.inspirationLinks ?? previous?.inspirationLinks) === true,
     webSearch: (input?.webSearch ?? previous?.webSearch) === true,
-    deepResearch: !enabled || input?.deepResearch === undefined ? previous?.deepResearch ?? null
-      : input.deepResearch === null ? null : modelFields(input.deepResearch),
+    deepResearch, customResearch,
   }
 }
 
-export async function testModel(config, role, factory) {
-  const model = selectModel(config, role)
+export async function testModel(config, role, factory, dsh) {
+  const model = selectModel(config, role, dsh)
   if (!model) throw invalid('model-disabled', 'Enable a model before testing')
   const provider = factory?.(model, role, config)
-  if (!provider) throw invalid('model-key', 'Set the model credential in the host environment')
+  if (!provider) throw invalid(model.source === 'dsh' ? 'model-dsh-route' : 'model-key', 'The model is unavailable')
   const reply = await provider.investigate({
     question: 'This is a connection test. Return only {"text":"OK","citations":[]}.', materials: [], history: [],
   })
@@ -68,24 +120,24 @@ export async function testModel(config, role, factory) {
   }
 }
 
-export async function verifyModelSettings(config, previous, verify, factory) {
+export async function verifyModelSettings(config, previous, verify, factory, dsh) {
   const roles = config.deepResearch ? ['default', 'research'] : ['default']
   const connections = await Promise.all(roles.map(async role => {
-    const model = selectModel(config, role)
+    const model = selectModel(config, role, dsh)
     if (!model) return [role, null]
     const existing = previous?.connections?.[role]
     if (!verify) {
-      return [role, existing?.name === model.name && existing?.endpoint === model.endpoint ? existing : null]
+      return [role, matches(existing, model) ? existing : null]
     }
-    const result = { status: 'connected', name: model.name, endpoint: model.endpoint, checkedAt: new Date().toISOString() }
+    const result = { status: 'connected', key: verificationKey(model) }
     try {
-      await testModel(config, role, factory)
+      await testModel(config, role, factory, dsh)
     } catch (error) {
       result.status = 'failed'
       result.code = error.code || 'model-unavailable'
       result.message = error.message
     }
-    return [role, result]
+    return [role, { ...result, checkedAt: new Date().toISOString() }]
   }))
   return { ...config, connections: Object.fromEntries(connections), changeId: randomUUID() }
 }

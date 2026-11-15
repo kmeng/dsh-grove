@@ -34,6 +34,18 @@ window.__ModuleLoader__.load({
     var INSPIRATIONS = '/api/grove/inspirations'
 
     var ZH = {
+      'model.source': '默认模型来源',
+      'model.followDsh': '跟随 dsh 默认模型',
+      'model.custom': '自定义接口',
+      'model.dshMissing': '请先在 dsh 的「设置 → 模型」中配置并选择默认模型。',
+      'model.researchSource': '深度研究使用',
+      'model.inherit': '继承默认模型',
+      'model.dshPicker': '指定 dsh 模型',
+      'model.pickOne': '请选择模型',
+      'model.catalogEmpty': 'dsh 暂无可选的文字模型。',
+      'model.catalogMissing': '当前选择已不在 dsh 模型列表中',
+      'err.model-dsh-auth': 'dsh 模型的认证失败。请在 dsh 的模型设置中检查账号或凭据。',
+      'err.model-dsh-route': 'dsh 当前找不到这个模型或服务商。请检查 dsh 模型设置，或为深度研究另选模型。',
       'settings.title': '设置',
       'settings.models': '模型设置',
       'settings.back': '返回刚才的页面',
@@ -44,11 +56,9 @@ window.__ModuleLoader__.load({
       'settings.saving': '正在保存和检查设置…',
       'model.default': '默认模型',
       'model.research': '深度研究模型',
-      'model.override': '使用专用深度研究模型',
-      'model.overrideOff': '使用专用深度研究模型（当前继承默认模型）',
       'model.researchEndpoint': '深度研究模型接口',
       'model.researchName': '深度研究模型名称',
-      'model.researchKeyHint': '专用模型可使用 GROVE_RESEARCH_MODEL_KEY。接口完全相同时，也可以沿用默认模型凭据。',
+      'model.researchKeyHint': '专用接口使用 GROVE_RESEARCH_MODEL_KEY。默认模型也使用同一个自定义接口时，可沿用默认凭据。',
       'model.unconfigured': 'AI 模型尚未配置',
       'model.unverified': 'AI 模型已配置，待验证',
       'model.connected': 'AI 模型已配置，已连接',
@@ -110,7 +120,7 @@ window.__ModuleLoader__.load({
       'idea.recentEmpty': '还没有灵感，先叮一下吧。',
       'idea.results': '搜索结果',
       'idea.query': '搜索灵感',
-      'model.keyHint': '连接模型需要在 dsh 宿主设置 GROVE_MODEL_KEY。',
+      'model.keyHint': '自定义接口使用 GROVE_MODEL_KEY 提供 API 密钥。',
       'model.saveFailed': '模型设置还未生效。请检查当前 dsh 配置是否可写，再试一次。',
       'model.running': 'AI 正在深挖…',
       'err.model-settings': '请填写模型接口和模型名称。',
@@ -233,6 +243,18 @@ window.__ModuleLoader__.load({
     }
 
     var EN = {
+      'model.source': 'Default model source',
+      'model.followDsh': 'Follow the dsh default model',
+      'model.custom': 'Custom endpoint',
+      'model.dshMissing': 'Configure and select a default model in dsh under Settings → Models.',
+      'model.researchSource': 'Deep research uses',
+      'model.inherit': 'Inherit the default model',
+      'model.dshPicker': 'Choose a dsh model',
+      'model.pickOne': 'Select a model',
+      'model.catalogEmpty': 'dsh has no available text models.',
+      'model.catalogMissing': 'The current choice is no longer listed in dsh',
+      'err.model-dsh-auth': 'The dsh model rejected authentication. Check the account or credentials in dsh model settings.',
+      'err.model-dsh-route': 'dsh could not find this model or provider. Check dsh model settings or select another research model.',
       'err.model-research-key': 'Set GROVE_RESEARCH_MODEL_KEY in the host and restart to use the dedicated model.',
       'settings.title': 'Settings',
       'settings.models': 'Model settings',
@@ -244,11 +266,9 @@ window.__ModuleLoader__.load({
       'settings.saving': 'Saving and checking settings…',
       'model.default': 'Default model',
       'model.research': 'Deep research model',
-      'model.override': 'Use a dedicated deep research model',
-      'model.overrideOff': 'Use a dedicated deep research model (currently inherits the default)',
       'model.researchEndpoint': 'Deep research model endpoint',
       'model.researchName': 'Deep research model name',
-      'model.researchKeyHint': 'Use GROVE_RESEARCH_MODEL_KEY for the dedicated model. It can reuse the default credential when the endpoint matches exactly.',
+      'model.researchKeyHint': 'Use GROVE_RESEARCH_MODEL_KEY for the dedicated endpoint. If the default also uses this exact custom endpoint, the credential can be shared.',
       'model.unconfigured': 'AI model is unconfigured',
       'model.unverified': 'AI model configured, awaiting verification',
       'model.connected': 'AI model configured and connected',
@@ -310,7 +330,7 @@ window.__ModuleLoader__.load({
       'idea.recentEmpty': 'Your first idea will show up here.',
       'idea.results': 'Search results',
       'idea.query': 'Search ideas',
-      'model.keyHint': 'Set GROVE_MODEL_KEY in the dsh host to connect a model.',
+      'model.keyHint': 'Custom endpoints use GROVE_MODEL_KEY for the API key.',
       'model.saveFailed': 'Model settings have not taken effect. Check that the dsh profile is writable, then try again.',
       'model.running': 'AI is investigating…',
       'err.model-settings': 'Enter the model endpoint and name.',
@@ -511,11 +531,21 @@ window.__ModuleLoader__.load({
 
       useEffect(function () {
         var active = true
-        api(MODEL).then(function (data) { if (active) setModelConfig(data) }, function () {
-          if (active) setModelConfig({ connection: { status: 'failed', code: 'network' } })
-        })
-        return function () { active = false }
-      }, [])
+        var timer
+        function refreshModel() {
+          api(MODEL).then(function (data) {
+            if (active) setModelConfig(data)
+          }, function () {
+            if (active) setModelConfig(function (current) {
+              return current || { connection: { status: 'failed', code: 'network' } }
+            })
+          }).finally(function () {
+            if (active && !settingsOpen && (page === 'idea' || page === 'research')) timer = setTimeout(refreshModel, 4000)
+          })
+        }
+        refreshModel()
+        return function () { active = false; clearTimeout(timer) }
+      }, [page, settingsOpen])
 
       useEffect(function () {
         if (settingsOpen) {
@@ -883,7 +913,7 @@ window.__ModuleLoader__.load({
           if (active) setDiscovery(value)
         }, function (problem) { if (active) setDiscoveryError(problem) })
         return function () { active = false }
-      }, [detail?.meta.id, detail?.meta.version, props.modelConfig?.enabled, props.modelConfig?.inspirationLinks, props.modelConfig?.endpoint, props.modelConfig?.name, retry])
+      }, [detail?.meta.id, detail?.meta.version, props.modelConfig?.enabled, props.modelConfig?.inspirationLinks, props.modelConfig?.source, props.modelConfig?.endpoint, props.modelConfig?.name, props.modelConfig?.source === 'dsh' ? props.modelConfig.dshDefault?.provider : null, props.modelConfig?.source === 'dsh' ? props.modelConfig.dshDefault?.model : null, retry])
 
       return h('main', { className: 'gr-origin-page' },
         h('div', { className: 'gr-origin-heading' },
@@ -990,7 +1020,7 @@ window.__ModuleLoader__.load({
       var scope = { idea: props.idea, topic: props.topic, knowledge: props.knowledge }
       var optional = !!(props.idea || props.topic || props.knowledge)
       var running = run?.status === 'running'
-      var setupErrors = ['model-disabled', 'model-key', 'model-research-key', 'research-search-disabled', 'research-search-key']
+      var setupErrors = ['model-disabled', 'model-key', 'model-research-key', 'model-dsh-auth', 'model-dsh-route', 'research-search-disabled', 'research-search-key']
       var configurationNeeded = setupErrors.includes(error?.code)
 
       useEffect(function () {
@@ -1134,18 +1164,21 @@ window.__ModuleLoader__.load({
       useEffect(function () {
         back.current?.focus({ preventScroll: true })
         var active = true
-        api(MODEL).then(function (value) { if (active) setConfig(value) }, function (problem) { if (active) setError(problem) })
+        api(MODEL + '?catalog=1').then(function (value) { if (active) setConfig(value) }, function (problem) { if (active) setError(problem) })
         return function () { active = false }
       }, [])
 
       function change(key, value) {
         setConfig(function (current) {
           var next = Object.assign({}, current, { [key]: value })
-          if (key === 'enabled' || key === 'name' || key === 'endpoint') {
+          if (key === 'enabled' || key === 'source' || key === 'name' || key === 'endpoint') {
             next.connection = { status: next.enabled ? 'unverified' : 'unconfigured' }
           }
           if (key === 'deepResearch' || key === 'enabled') {
             next.researchConnection = value ? { status: 'unverified' } : next.connection
+          }
+          if (key === 'deepResearch' && current.deepResearch?.endpoint && current.deepResearch.source !== 'dsh') {
+            next.customResearch = current.deepResearch
           }
           return next
         })
@@ -1159,14 +1192,14 @@ window.__ModuleLoader__.load({
         setMessage('')
         try {
           var receipt = await api(MODEL, {
-            enabled: config.enabled, name: config.name, endpoint: config.endpoint, deepResearch: config.deepResearch,
+            enabled: config.enabled, source: config.source, name: config.name, endpoint: config.endpoint, deepResearch: config.deepResearch,
             inspirationLinks: config.inspirationLinks, webSearch: config.webSearch, verify: config.enabled,
           })
           for (var attempt = 0; attempt < 12; attempt++) {
             var current = await api(MODEL).catch(function () { return null })
             if (current && current.changeId === receipt.changeId) {
               props.onApplied(current)
-              setConfig(current)
+              setConfig(Object.assign({}, current, { catalog: config.catalog }))
               setMessage(T('research.saved'))
               return
             }
@@ -1188,6 +1221,31 @@ window.__ModuleLoader__.load({
               onChange: function (event) { update('name', event.target.value) } })))
       }
 
+      function modelKey(model) {
+        return model?.provider && model?.model ? JSON.stringify([model.provider, model.model]) : ''
+      }
+
+      var research = config?.deepResearch
+      var researchSource = !research ? 'inherit' : research.source === 'dsh' ? 'dsh' : 'custom'
+      var catalog = config?.catalog || []
+      var defaultModel = config?.dshDefault
+      var defaultEntry = catalog.find(function (entry) { return modelKey(entry) === modelKey(defaultModel) })
+
+      function researchPicker() {
+        var selected = modelKey(research)
+        return h('label', null, T('model.dshPicker'),
+          h('select', { 'aria-label': T('model.dshPicker'), value: selected, required: true, disabled: busy, onChange: function (event) {
+            var entry = catalog.find(function (item) { return modelKey(item) === event.target.value })
+            if (entry) change('deepResearch', { source: 'dsh', provider: entry.provider, model: entry.model })
+          } },
+          h('option', { value: '', disabled: true }, T(catalog.length ? 'model.pickOne' : 'model.catalogEmpty')),
+          selected && !catalog.some(function (entry) { return modelKey(entry) === selected })
+            ? h('option', { value: selected, disabled: true }, research.model + ' · ' + T('model.catalogMissing')) : null,
+          catalog.map(function (entry) {
+            return h('option', { key: modelKey(entry), value: modelKey(entry) }, entry.label + ' · ' + entry.providerName)
+          })))
+      }
+
       return h('main', { className: 'gr-view' },
         h('div', { className: 'gr-origin-heading' },
           h('button', { className: 'gr-btn gr-origin-link', onClick: props.onBack, ref: back }, '← ', T('settings.back')),
@@ -1199,8 +1257,14 @@ window.__ModuleLoader__.load({
             h(ModelConnection, { value: config.connection }),
             h('label', null, h('input', { type: 'checkbox', checked: config.enabled, disabled: busy,
               onChange: function (event) { change('enabled', event.target.checked) } }), T('model.enabled')),
-            config.enabled ? fields(config, change, 'default') : null,
-            config.enabled ? h('p', { className: 'gr-meta' }, T('model.keyHint')) : null,
+            config.enabled ? h('label', null, T('model.source'),
+              h('select', { 'aria-label': T('model.source'), value: config.source, disabled: busy, onChange: function (event) { change('source', event.target.value) } },
+                h('option', { value: 'dsh' }, T('model.followDsh')),
+                h('option', { value: 'custom' }, T('model.custom')))) : null,
+            config.enabled && config.source === 'custom' ? h(React.Fragment, null, fields(config, change, 'default'),
+              h('p', { className: 'gr-meta' }, T('model.keyHint'))) : null,
+            config.enabled && config.source === 'dsh' ? h('p', { className: 'gr-meta' },
+              defaultEntry ? defaultEntry.label + ' · ' + defaultEntry.providerName : defaultModel?.model || T('model.dshMissing')) : null,
             h('label', null, h('input', { type: 'checkbox', checked: config.inspirationLinks, disabled: busy || !config.enabled,
               onChange: function (event) { change('inspirationLinks', event.target.checked) } }), T('model.inspirationLinks')),
             config.enabled ? h('p', { className: 'gr-meta' }, T('model.inspirationHint')) : null,
@@ -1208,16 +1272,19 @@ window.__ModuleLoader__.load({
               h('summary', null, T('settings.byTask')),
               h('div', { className: 'gr-stack' },
                 h('h3', { className: 'gr-h2' }, T('model.research')),
-                h('label', null, h('input', { type: 'checkbox', checked: !!config.deepResearch, disabled: busy,
-                  onChange: function (event) {
-                    change('deepResearch', event.target.checked ? { endpoint: config.endpoint || '', name: '' } : null)
-                  } }), T(config.deepResearch ? 'model.override' : 'model.overrideOff')),
-                config.deepResearch ? h(React.Fragment, null,
-                  fields(config.deepResearch, function (key, value) {
-                    change('deepResearch', Object.assign({}, config.deepResearch, { [key]: value }))
-                  }, 'research'),
-                  h(ModelConnection, { value: config.researchConnection }),
-                  h('p', { className: 'gr-meta' }, T('model.researchKeyHint'))) : null)) : null),
+                h('label', null, T('model.researchSource'),
+                  h('select', { 'aria-label': T('model.researchSource'), value: researchSource, disabled: busy, onChange: function (event) {
+                    var mode = event.target.value
+                    change('deepResearch', mode === 'inherit' ? null : mode === 'dsh' ? { source: 'dsh' }
+                      : config.customResearch || { endpoint: config.endpoint || '', name: '' })
+                  } }, h('option', { value: 'inherit' }, T('model.inherit')),
+                    h('option', { value: 'dsh' }, T('model.dshPicker')),
+                    h('option', { value: 'custom' }, T('model.custom')))),
+                researchSource === 'dsh' ? researchPicker() : null,
+                researchSource === 'custom' ? h(React.Fragment, null,
+                  fields(research, function (key, value) { change('deepResearch', Object.assign({}, research, { [key]: value })) }, 'research'),
+                  h('p', { className: 'gr-meta' }, T('model.researchKeyHint'))) : null,
+                research ? h(ModelConnection, { value: config.researchConnection }) : null)) : null),
           h('section', { className: 'gr-card' },
             h('h2', { className: 'gr-h2' }, T('settings.web')),
             h('label', null, h('input', { type: 'checkbox', checked: config.webSearch, disabled: busy,
