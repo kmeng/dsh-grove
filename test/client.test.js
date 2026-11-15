@@ -181,3 +181,12 @@ test('a slow native picker can complete after a minute', async t => {
   await pending
   assert.ok(changes.includes('connect'))
 })
+
+test('every panel inherits the same Grove surfaces and controls', () => {
+  const root = source.match(/\.gr-root\{([^}]+)\}/)?.[1] ?? ''
+  assert.match(root, /--gr-paper:light-dark\(/)
+  assert.match(root, /background:var\(--gr-paper\)/)
+  assert.match(source, /\.gr-card\{background:var\(--gr-surface\)/)
+  assert.match(source, /\.gr-btn\{[^}]*background:var\(--gr-green\)/)
+  assert.doesNotMatch(source, /--dsw-alias-(bg|label|border|brand)-/)
+})
