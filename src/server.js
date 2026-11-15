@@ -193,9 +193,7 @@ export function saveVault(ctx, path) {
 
 async function readJson(request) {
   const contentType = request.headers.get('content-type')?.split(';', 1)[0].trim().toLowerCase() ?? ''
-  if (!/^application\/(?:[a-z0-9!#$&^_.+-]+\+)?json$/.test(contentType)) {
-    throw coded('unsupported-media', 'Expected application/json')
-  }
+  const jsonType = /^application\/(?:[a-z0-9!#$&^_.+-]+\+)?json$/.test(contentType)
   if (Number(request.headers.get('content-length')) > maxJsonBytes) {
     throw coded('request-too-large', 'The request is too large')
   }
@@ -209,11 +207,12 @@ async function readJson(request) {
       if (chunk.done) break
       size += chunk.value.byteLength
       if (size > maxJsonBytes) throw coded('request-too-large', 'The request is too large')
-      chunks.push(chunk.value)
+      if (jsonType) chunks.push(chunk.value)
     }
+    if (!jsonType) throw coded('unsupported-media', 'Expected application/json')
     return JSON.parse(Buffer.concat(chunks, size).toString('utf8'))
   } catch (error) {
-    if (error.code === 'request-too-large') throw error
+    if (error.code === 'request-too-large' || error.code === 'unsupported-media') throw error
     throw coded('invalid-body', 'Expected a JSON body')
   } finally {
     reader.releaseLock()
