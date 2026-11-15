@@ -38,7 +38,16 @@ export function apply(ctx, config = {}) {
       if (!provider) throw Object.assign(new Error('Set GROVE_TAVILY_KEY for the host'), { code: 'research-search-key' })
       return provider
     },
-    model: settings => httpModel({ ...settings, credential: process.env.GROVE_MODEL_KEY }),
+    model: (settings, role, modelConfig) => {
+      const override = role === 'research' && modelConfig?.deepResearch
+      const credential = override
+        ? process.env.GROVE_RESEARCH_MODEL_KEY || (settings.endpoint === modelConfig.endpoint ? process.env.GROVE_MODEL_KEY : undefined)
+        : process.env.GROVE_MODEL_KEY
+      if (override && !credential) {
+        throw Object.assign(new Error('Set GROVE_RESEARCH_MODEL_KEY for the host'), { code: 'model-research-key' })
+      }
+      return httpModel({ ...settings, credential })
+    },
   })
 
   if (path === undefined) return

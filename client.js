@@ -34,6 +34,25 @@ window.__ModuleLoader__.load({
     var INSPIRATIONS = '/api/grove/inspirations'
 
     var ZH = {
+      'settings.title': '设置',
+      'settings.models': '模型设置',
+      'settings.back': '返回刚才的页面',
+      'settings.byTask': '按任务指定模型',
+      'settings.web': '联网检索',
+      'settings.verifySave': '保存并测试模型',
+      'settings.save': '保存设置',
+      'settings.saving': '正在保存和检查设置…',
+      'model.default': '默认模型',
+      'model.research': '深度研究模型',
+      'model.override': '使用专用深度研究模型',
+      'model.overrideOff': '使用专用深度研究模型（当前继承默认模型）',
+      'model.researchEndpoint': '深度研究模型接口',
+      'model.researchName': '深度研究模型名称',
+      'model.researchKeyHint': '专用模型可使用 GROVE_RESEARCH_MODEL_KEY。接口完全相同时，也可以沿用默认模型凭据。',
+      'model.unconfigured': 'AI 模型尚未配置',
+      'model.unverified': 'AI 模型已配置，待验证',
+      'model.connected': 'AI 模型已配置，已连接',
+      'model.connectionFailed': 'AI 模型连接失败',
       'deep.title': '来点深度',
       'deep.direction': '给个方向',
       'deep.hint': '想往哪儿挖？留空也可以，我先拆几个问题。',
@@ -45,7 +64,6 @@ window.__ModuleLoader__.load({
       'deep.plan': '拆出这些问题',
       'deep.collected': '找到的资料',
       'deep.noSources': '暂未找到可引用的资料。',
-      'deep.setup': '配置深度研究',
       'deep.webSetting': '启用联网检索（深度研究必需）',
       'deep.webHint': '开启后，研究关键词会发送给 Tavily。请在宿主中设置 GROVE_TAVILY_KEY。',
       'deep.followups': '待补查的证据',
@@ -66,7 +84,7 @@ window.__ModuleLoader__.load({
       'deep.noTopics': '没有找到匹配的话题。',
       'err.research-running': '这项研究正在启动，请稍候。',
       'err.research-search': '联网检索失败。请检查网络或检索服务，再继续深挖。',
-      'err.research-search-disabled': '深度研究需要联网检索。请在研究模型设置中开启。',
+      'err.research-search-disabled': '深度研究需要联网检索。请前往「设置」开启。',
       'err.research-search-key': '联网检索缺少 GROVE_TAVILY_KEY。请在 dsh 宿主中设置后重启。',
       'err.research-storage': '无法保存研究进度或报告，请检查笔记库的访问权限后重试。',
       'idea.detail': '从灵感出发',
@@ -74,7 +92,6 @@ window.__ModuleLoader__.load({
       'idea.studies': '研究过的话题',
       'idea.links': 'AI 发现的关联',
       'idea.linksWaiting': '正在找有没有值得一起看的灵感…',
-      'idea.linksOff': 'AI 关联尚未开启。',
       'idea.linksEmpty': '暂时没发现值得一起看的灵感。',
       'idea.suggest': '带着这个问题深挖',
       'idea.report': '打开报告',
@@ -93,13 +110,13 @@ window.__ModuleLoader__.load({
       'idea.recentEmpty': '还没有灵感，先叮一下吧。',
       'idea.results': '搜索结果',
       'idea.query': '搜索灵感',
-      'model.setup': '先在「研究模型」里启用并配置模型。',
       'model.keyHint': '连接模型需要在 dsh 宿主设置 GROVE_MODEL_KEY。',
       'model.saveFailed': '模型设置还未生效。请检查当前 dsh 配置是否可写，再试一次。',
       'model.running': 'AI 正在深挖…',
       'err.model-settings': '请填写模型接口和模型名称。',
       'err.model-endpoint': '请填写 HTTPS 接口地址，地址里不要带密钥、查询参数或片段。',
-      'err.model-disabled': '请先在「研究模型」中启用并应用模型设置。',
+      'err.model-disabled': '请先前往「设置」配置 AI 模型。',
+      'err.model-research-key': '专用深度研究模型缺少 GROVE_RESEARCH_MODEL_KEY。请在宿主设置后重启。',
       'err.model-key': 'dsh 宿主缺少 GROVE_MODEL_KEY。设置后重新启动 dsh。',
       'err.model-auth': '模型服务拒绝了认证（{message}）。请检查密钥及模型访问权限。',
       'err.model-not-found': '找不到模型接口或模型（{message}）。请检查地址和模型名称。',
@@ -131,13 +148,9 @@ window.__ModuleLoader__.load({
       'asset.missing': '来源不可用。',
       'report.review': '审核为报告草稿',
       'report.discard': '丢弃未保存草稿',
-      'model.title': '研究模型',
       'model.enabled': '启用 AI 深挖',
       'model.endpoint': 'HTTPS 模型接口',
       'model.name': '模型名称',
-      'model.test': '测试连接',
-      'model.apply': '应用模型设置',
-      'model.tested': '连接通过。',
       'model.ask': '单轮分析',
       'model.question': '想往哪儿深挖？',
       'model.scope': '模型会收到勾选的证据、这项研究的灵感片段和先前的发现。',
@@ -220,6 +233,26 @@ window.__ModuleLoader__.load({
     }
 
     var EN = {
+      'err.model-research-key': 'Set GROVE_RESEARCH_MODEL_KEY in the host and restart to use the dedicated model.',
+      'settings.title': 'Settings',
+      'settings.models': 'Model settings',
+      'settings.back': 'Back to the previous page',
+      'settings.byTask': 'Models by task',
+      'settings.web': 'Web search',
+      'settings.verifySave': 'Save and test models',
+      'settings.save': 'Save settings',
+      'settings.saving': 'Saving and checking settings…',
+      'model.default': 'Default model',
+      'model.research': 'Deep research model',
+      'model.override': 'Use a dedicated deep research model',
+      'model.overrideOff': 'Use a dedicated deep research model (currently inherits the default)',
+      'model.researchEndpoint': 'Deep research model endpoint',
+      'model.researchName': 'Deep research model name',
+      'model.researchKeyHint': 'Use GROVE_RESEARCH_MODEL_KEY for the dedicated model. It can reuse the default credential when the endpoint matches exactly.',
+      'model.unconfigured': 'AI model is unconfigured',
+      'model.unverified': 'AI model configured, awaiting verification',
+      'model.connected': 'AI model configured and connected',
+      'model.connectionFailed': 'AI model connection failed',
       'deep.title': 'Dig a little deeper',
       'deep.direction': 'Give it a direction',
       'deep.hint': 'What would you like to focus on? Leave this blank to let Grove break down the idea.',
@@ -231,7 +264,6 @@ window.__ModuleLoader__.load({
       'deep.plan': 'Research questions',
       'deep.collected': 'Sources found',
       'deep.noSources': 'No citable sources found yet.',
-      'deep.setup': 'Set up deep research',
       'deep.webSetting': 'Enable web search (required for deep research)',
       'deep.webHint': 'When enabled, research queries are sent to Tavily. Set GROVE_TAVILY_KEY in the host environment.',
       'deep.followups': 'Evidence to look for next',
@@ -252,7 +284,7 @@ window.__ModuleLoader__.load({
       'deep.noTopics': 'No matching topics.',
       'err.research-running': 'This research is already starting.',
       'err.research-search': 'Web search failed. Check the network or search provider before resuming.',
-      'err.research-search-disabled': 'Deep research requires web search. Enable it in Research model settings.',
+      'err.research-search-disabled': 'Deep research requires web search. Enable it in Settings.',
       'err.research-search-key': 'Set GROVE_TAVILY_KEY in the dsh host and restart to enable web search.',
       'err.research-storage': 'Grove could not save research progress or the report. Check vault access and retry.',
       'idea.detail': 'From this idea',
@@ -260,7 +292,6 @@ window.__ModuleLoader__.load({
       'idea.studies': 'Research topics',
       'idea.links': 'Connections found by AI',
       'idea.linksWaiting': 'Looking for ideas worth seeing together…',
-      'idea.linksOff': 'AI connections are off.',
       'idea.linksEmpty': 'No related ideas to show yet.',
       'idea.suggest': 'Explore this question',
       'idea.report': 'Open report',
@@ -279,13 +310,12 @@ window.__ModuleLoader__.load({
       'idea.recentEmpty': 'Your first idea will show up here.',
       'idea.results': 'Search results',
       'idea.query': 'Search ideas',
-      'model.setup': 'Enable and configure a model under Research model first.',
       'model.keyHint': 'Set GROVE_MODEL_KEY in the dsh host to connect a model.',
       'model.saveFailed': 'Model settings have not taken effect. Check that the dsh profile is writable, then try again.',
       'model.running': 'AI is investigating…',
       'err.model-settings': 'Enter the model endpoint and name.',
       'err.model-endpoint': 'Enter an HTTPS endpoint without credentials, query parameters, or a fragment.',
-      'err.model-disabled': 'Enable and apply the settings under Research model first.',
+      'err.model-disabled': 'Configure an AI model in Settings first.',
       'err.model-key': 'The dsh host is missing GROVE_MODEL_KEY. Set it and restart dsh.',
       'err.model-auth': 'The model service rejected authentication ({message}). Check the key and model permissions.',
       'err.model-not-found': 'The endpoint or model was not found ({message}). Check the URL and model name.',
@@ -316,13 +346,9 @@ window.__ModuleLoader__.load({
       'asset.missing': 'The source is unavailable.',
       'report.review': 'Review as report draft',
       'report.discard': 'Discard unsaved draft',
-      'model.title': 'Research model',
       'model.enabled': 'Enable AI research',
       'model.endpoint': 'HTTPS model endpoint',
       'model.name': 'Model name',
-      'model.test': 'Test connection',
-      'model.apply': 'Apply model settings',
-      'model.tested': 'Connection verified.',
       'model.ask': 'Run a single analysis',
       'model.question': 'What should we investigate?',
       'model.scope': 'The model receives selected evidence, inspiration excerpts, and earlier findings from this study.',
@@ -478,6 +504,34 @@ window.__ModuleLoader__.load({
       var [changing, setChanging] = useState(false)
       var [page, setPage] = useState('home')
       var [seed, setSeed] = useState(null)
+      var [settingsOpen, setSettingsOpen] = useState(false)
+      var [modelConfig, setModelConfig] = useState(null)
+      var scroll = useRef(null)
+      var previousView = useRef(null)
+
+      useEffect(function () {
+        var active = true
+        api(MODEL).then(function (data) { if (active) setModelConfig(data) }, function () {
+          if (active) setModelConfig({ connection: { status: 'failed', code: 'network' } })
+        })
+        return function () { active = false }
+      }, [])
+
+      useEffect(function () {
+        if (settingsOpen) {
+          if (scroll.current) scroll.current.scrollTop = 0
+        } else if (previousView.current) {
+          if (scroll.current) scroll.current.scrollTop = previousView.current.top
+          previousView.current.element?.focus({ preventScroll: true })
+          previousView.current = null
+        }
+      }, [settingsOpen])
+
+      function openSettings() {
+        if (settingsOpen) return
+        previousView.current = { top: scroll.current?.scrollTop || 0, element: document.activeElement }
+        setSettingsOpen(true)
+      }
 
       function navigate(destination, draft) {
         setSeed(draft || null)
@@ -630,28 +684,29 @@ window.__ModuleLoader__.load({
 
       return h('div', { className: 'gr-root' },
         h('style', null, CSS),
-        h('div', { className: 'gr-scroll' },
+        h('div', { className: 'gr-scroll', ref: scroll },
           h('div', { className: 'gr-inner' },
             h(Header, {
               status: status, loading: loading, error: error,
-              onChange: connected ? function () {
+              onSettings: settingsOpen ? null : openSettings,
+              onChange: connected && !settingsOpen ? function () {
                 setPathDraft(status.vault || '')
                 setManual(false)
                 setChanging(true)
               } : null,
             }),
             error ? h(ErrorNote, { error: error, onRetry: load }) : null,
-            loading && status === null
+            h('div', { className: 'gr-view', hidden: settingsOpen }, loading && status === null
               ? h('div', { className: 'gr-card' }, h('div', { className: 'gr-body' }, T('loading')))
               : changing || !connected
                 ? connectView
                 : page === 'research'
-                  ? h(ResearchPage, { seed: seed, onNavigate: navigate, onBack: function () {
+                  ? h(ResearchPage, { seed: seed, onNavigate: navigate, modelConfig: modelConfig, onSettings: openSettings, onBack: function () {
                     if (seed?.idea) navigate('idea', seed.idea)
                     else navigate('home')
                   } })
                   : page === 'idea'
-                    ? h(InspirationPage, { key: vault + ':' + seed.id + ':' + seed.version, reference: seed, onNavigate: navigate })
+                    ? h(InspirationPage, { key: vault + ':' + seed.id + ':' + seed.version, reference: seed, onNavigate: navigate, modelConfig: modelConfig, onSettings: openSettings })
                   : page === 'report'
                     ? h(InspirationReport, { key: seed.id + ':' + seed.version, reference: seed, onNavigate: navigate })
                   : page === 'knowledge' || page === 'works'
@@ -674,7 +729,8 @@ window.__ModuleLoader__.load({
                     onSelect: function (id, version) {
                       navigate('idea', { id: id, version: version })
                     },
-                  }),
+                  })),
+            settingsOpen ? h(SettingsPage, { onBack: function () { setSettingsOpen(false) }, onApplied: setModelConfig }) : null,
             h(Footer, null),
           ),
         ),
@@ -692,6 +748,7 @@ window.__ModuleLoader__.load({
           h('div', { className: 'gr-sub' }, status && status.vault ? status.vault : T('subtitle')),
         ),
         h('div', { className: 'gr-head-actions' },
+          props.onSettings ? h('button', { className: 'gr-btn gr-btn-ghost gr-btn-sm', onClick: props.onSettings }, T('settings.title')) : null,
           props.onChange
             ? h('button', { className: 'gr-btn gr-btn-ghost gr-btn-sm', onClick: props.onChange }, T('s1.change'))
             : null,
@@ -800,7 +857,6 @@ window.__ModuleLoader__.load({
       var [discovery, setDiscovery] = useState(null)
       var [discoveryError, setDiscoveryError] = useState(null)
       var [retry, setRetry] = useState(0)
-      var [showSettings, setShowSettings] = useState(false)
       var [revision, setRevision] = useState(0)
       var [suggestion, setSuggestion] = useState(null)
       var researchForm = useRef(null)
@@ -815,6 +871,11 @@ window.__ModuleLoader__.load({
 
       useEffect(function () {
         if (!detail) return
+        if (!props.modelConfig?.enabled || !props.modelConfig.inspirationLinks) {
+          setDiscovery(null)
+          setDiscoveryError(null)
+          return
+        }
         var active = true
         setDiscovery(null)
         setDiscoveryError(null)
@@ -822,7 +883,7 @@ window.__ModuleLoader__.load({
           if (active) setDiscovery(value)
         }, function (problem) { if (active) setDiscoveryError(problem) })
         return function () { active = false }
-      }, [detail?.meta.id, detail?.meta.version, retry])
+      }, [detail?.meta.id, detail?.meta.version, props.modelConfig?.enabled, props.modelConfig?.inspirationLinks, props.modelConfig?.endpoint, props.modelConfig?.name, retry])
 
       return h('main', { className: 'gr-origin-page' },
         h('div', { className: 'gr-origin-heading' },
@@ -841,7 +902,7 @@ window.__ModuleLoader__.load({
               h('select', { value: detail.meta.version, onChange: function (event) {
                 props.onNavigate('idea', Object.assign({}, ref, { version: Number(event.target.value) }))
               } }, detail.versions.map(function (version) { return h('option', { key: version, value: version }, 'v' + version) }))) : null),
-          h(DeepResearchPanel, { idea: { id: detail.meta.id, version: detail.meta.version }, suggestion: suggestion, field: researchForm,
+          h(DeepResearchPanel, { idea: { id: detail.meta.id, version: detail.meta.version }, suggestion: suggestion, field: researchForm, onSettings: props.onSettings, modelConfig: props.modelConfig,
             onFinished: function () { setRevision(function (value) { return value + 1 }) },
             onReport: function (run) { props.onNavigate('report', Object.assign({ idea: ref, studyId: run.topic }, run.report)) } }),
           detail.studies.length ? h('section', { className: 'gr-origin-section gr-stack' },
@@ -871,16 +932,9 @@ window.__ModuleLoader__.load({
                   })
                 }))
             })) : null,
-          discovery && !discovery.enabled ? h('div', { className: 'gr-origin-section gr-stack' },
-            h('div', { className: 'gr-row' }, h('span', { className: 'gr-meta' }, T('idea.linksOff')),
-              h('button', { className: 'gr-btn gr-origin-link', 'aria-expanded': showSettings,
-                onClick: function () { setShowSettings(!showSettings) } }, T('model.title'))),
-            showSettings ? h(ModelSettings, { initiallyOpen: true, onApplied: function (config) {
-              if (config.inspirationLinks) {
-                setShowSettings(false)
-                setRetry(retry + 1)
-              }
-            } }) : null) :
+          h('section', { className: 'gr-origin-section' },
+            h(ModelConnection, { value: props.modelConfig?.connection, loading: !props.modelConfig, onSettings: props.onSettings })),
+          props.modelConfig?.enabled && props.modelConfig.inspirationLinks ?
           h('section', { className: 'gr-origin-section gr-stack' },
             h('h3', { className: 'gr-h2' }, T('idea.links')),
             discoveryError ? h(ErrorNote, { error: discoveryError, onRetry: function () { setRetry(retry + 1) } }) :
@@ -893,7 +947,7 @@ window.__ModuleLoader__.load({
                   h('p', { className: 'gr-prose' }, match.reason),
                   match.question ? h(React.Fragment, null, h('p', null, match.question),
                     h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () { setSuggestion({ text: match.question }); researchForm.current?.focus() } }, T('idea.suggest'))) : null)
-              }) : h('p', { className: 'gr-meta' }, T('idea.linksEmpty')))) : null)
+              }) : h('p', { className: 'gr-meta' }, T('idea.linksEmpty'))) : null) : null)
     }
 
     function ReportMarkdown(props) {
@@ -936,7 +990,12 @@ window.__ModuleLoader__.load({
       var scope = { idea: props.idea, topic: props.topic, knowledge: props.knowledge }
       var optional = !!(props.idea || props.topic || props.knowledge)
       var running = run?.status === 'running'
-      var configurationNeeded = ['model-disabled', 'research-search-disabled'].includes(error?.code)
+      var setupErrors = ['model-disabled', 'model-key', 'model-research-key', 'research-search-disabled', 'research-search-key']
+      var configurationNeeded = setupErrors.includes(error?.code)
+
+      useEffect(function () {
+        setError(function (problem) { return setupErrors.includes(problem?.code) ? null : problem })
+      }, [props.modelConfig?.changeId])
 
       useEffect(function () {
         if (props.suggestion) setDirection(props.suggestion.text)
@@ -1002,9 +1061,7 @@ window.__ModuleLoader__.load({
           h('button', { className: 'gr-btn', disabled: !loaded || busy || running || (!optional && !direction.trim()) }, T('deep.start'))),
         error ? h('div', { className: 'gr-stack' },
           h('p', { role: 'alert' }, messageOf(error)),
-          configurationNeeded ? h(ModelSettings, { title: 'deep.setup', onApplied: function (config) {
-            if (config.enabled && config.webSearch && failedAction) begin(failedAction)
-          } }) : h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () {
+          configurationNeeded ? h('button', { className: 'gr-btn gr-btn-ghost', onClick: props.onSettings }, T('settings.models')) : h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () {
             if (failedAction) begin(failedAction)
             else { setError(null); setRefresh(function (value) { return value + 1 }) }
           } }, T('err.retry'))) : null,
@@ -1056,69 +1113,120 @@ window.__ModuleLoader__.load({
           h(ReportMarkdown, { body: report.body })) : !error ? h('p', { role: 'status' }, T('loading')) : null)
     }
 
-    function ModelSettings(props) {
+    function ModelConnection(props) {
+      var state = props.value?.status || (props.loading ? 'loading' : 'unconfigured')
+      var labels = { loading: 'loading', unconfigured: 'model.unconfigured', unverified: 'model.unverified',
+        connected: 'model.connected', failed: 'model.connectionFailed' }
+      var color = state === 'connected' ? 'gr-dot-ok' : (state === 'unconfigured' || state === 'failed') ? 'gr-dot-error' : ''
+      return h('div', { className: 'gr-row gr-model-status' },
+        h('span', { className: 'gr-row gr-meta', role: 'status', title: props.value?.checkedAt },
+          h('span', { className: 'gr-dot ' + color, 'aria-hidden': true }), T(labels[state] || 'model.unverified')),
+        props.onSettings ? h('button', { type: 'button', className: 'gr-btn gr-origin-link', onClick: props.onSettings }, T('settings.models')) : null,
+        props.value?.code ? h('span', { className: 'gr-meta' }, messageOf({ code: props.value.code, message: props.value.message || '' })) : null)
+    }
+
+    function SettingsPage(props) {
       var [config, setConfig] = useState(null)
       var [busy, setBusy] = useState(false)
       var [message, setMessage] = useState('')
       var [error, setError] = useState(null)
+      var back = useRef(null)
       useEffect(function () {
-        if (props.initiallyOpen) api(MODEL).then(setConfig, setError)
-      }, [props.initiallyOpen])
+        back.current?.focus({ preventScroll: true })
+        var active = true
+        api(MODEL).then(function (value) { if (active) setConfig(value) }, function (problem) { if (active) setError(problem) })
+        return function () { active = false }
+      }, [])
 
       function change(key, value) {
-        setConfig(function (current) { return Object.assign({}, current, { [key]: value }) })
+        setConfig(function (current) {
+          var next = Object.assign({}, current, { [key]: value })
+          if (key === 'enabled' || key === 'name' || key === 'endpoint') {
+            next.connection = { status: next.enabled ? 'unverified' : 'unconfigured' }
+          }
+          if (key === 'deepResearch' || key === 'enabled') {
+            next.researchConnection = value ? { status: 'unverified' } : next.connection
+          }
+          return next
+        })
         setMessage('')
       }
 
       async function submit(event) {
         event.preventDefault()
-        var test = event.nativeEvent.submitter?.value === 'test'
         setBusy(true)
         setError(null)
         setMessage('')
         try {
-          await api(MODEL, Object.assign({}, config, { test: test }))
-          if (test) { setMessage(T('model.tested')); return }
+          var receipt = await api(MODEL, {
+            enabled: config.enabled, name: config.name, endpoint: config.endpoint, deepResearch: config.deepResearch,
+            inspirationLinks: config.inspirationLinks, webSearch: config.webSearch, verify: config.enabled,
+          })
           for (var attempt = 0; attempt < 12; attempt++) {
-            await new Promise(function (resolve) { setTimeout(resolve, 400) })
             var current = await api(MODEL).catch(function () { return null })
-            if (current && current.enabled === config.enabled &&
-              (!current.enabled || (current.name === config.name && current.endpoint === config.endpoint && current.inspirationLinks === config.inspirationLinks && current.webSearch === config.webSearch))) {
+            if (current && current.changeId === receipt.changeId) {
               props.onApplied(current)
               setConfig(current)
               setMessage(T('research.saved'))
               return
             }
+            await new Promise(function (resolve) { setTimeout(resolve, 400) })
           }
           throw new Error(T('model.saveFailed'))
         } catch (problem) { setError(problem) }
         finally { setBusy(false) }
       }
 
-      return h('details', { className: 'gr-card', open: props.initiallyOpen || undefined, onToggle: function (event) {
-        if (event.currentTarget.open && !config && !props.initiallyOpen) api(MODEL).then(setConfig, setError)
-      } },
-      h('summary', null, T(props.title || 'model.title')),
-      error ? h('p', { role: 'alert' }, messageOf(error)) : null,
-      config ? h('form', { onSubmit: submit },
-        h('label', null, h('input', { type: 'checkbox', checked: config.enabled, disabled: busy,
-          onChange: function (event) { change('enabled', event.target.checked) } }), T('model.enabled')),
-        config.enabled ? h(React.Fragment, null,
-          h('label', null, T('model.endpoint'), h('input', { type: 'url', className: 'gr-input', value: config.endpoint || '',
-            required: true, disabled: busy, onChange: function (event) { change('endpoint', event.target.value) } })),
-          h('label', null, T('model.name'), h('input', { className: 'gr-input', value: config.name || '',
-            required: true, disabled: busy, onChange: function (event) { change('name', event.target.value) } })),
-          h('p', { className: 'gr-meta' }, T('model.keyHint')),
-          h('label', null, h('input', { type: 'checkbox', checked: !!config.inspirationLinks, disabled: busy,
-            onChange: function (event) { change('inspirationLinks', event.target.checked) } }), T('model.inspirationLinks')),
-          h('p', { className: 'gr-meta' }, T('model.inspirationHint')),
-          h('label', null, h('input', { type: 'checkbox', checked: !!config.webSearch, disabled: busy,
-            onChange: function (event) { change('webSearch', event.target.checked) } }), T('deep.webSetting')),
-          h('p', { className: 'gr-meta' }, T('deep.webHint'))) : null,
-        h('div', { className: 'gr-row' },
-          config.enabled ? h('button', { className: 'gr-btn', value: 'test', disabled: busy }, T('model.test')) : null,
-          h('button', { className: 'gr-btn', value: 'apply', disabled: busy }, T('model.apply'))),
-        h('p', { role: 'status' }, message)) : null)
+      function fields(value, update, role) {
+        var research = role === 'research'
+        return h(React.Fragment, null,
+          h('label', null, T(research ? 'model.researchEndpoint' : 'model.endpoint'),
+            h('input', { type: 'url', className: 'gr-input', value: value.endpoint || '', required: true, disabled: busy,
+              onChange: function (event) { update('endpoint', event.target.value) } })),
+          h('label', null, T(research ? 'model.researchName' : 'model.name'),
+            h('input', { className: 'gr-input', value: value.name || '', required: true, disabled: busy,
+              onChange: function (event) { update('name', event.target.value) } })))
+      }
+
+      return h('main', { className: 'gr-view' },
+        h('div', { className: 'gr-origin-heading' },
+          h('button', { className: 'gr-btn gr-origin-link', onClick: props.onBack, ref: back }, '← ', T('settings.back')),
+          h('h1', null, T('settings.title'))),
+        error ? h('p', { role: 'alert' }, messageOf(error)) : null,
+        config ? h('form', { className: 'gr-view', onSubmit: submit },
+          h('section', { className: 'gr-card' },
+            h('h2', { className: 'gr-h2' }, T('model.default')),
+            h(ModelConnection, { value: config.connection }),
+            h('label', null, h('input', { type: 'checkbox', checked: config.enabled, disabled: busy,
+              onChange: function (event) { change('enabled', event.target.checked) } }), T('model.enabled')),
+            config.enabled ? fields(config, change, 'default') : null,
+            config.enabled ? h('p', { className: 'gr-meta' }, T('model.keyHint')) : null,
+            h('label', null, h('input', { type: 'checkbox', checked: config.inspirationLinks, disabled: busy || !config.enabled,
+              onChange: function (event) { change('inspirationLinks', event.target.checked) } }), T('model.inspirationLinks')),
+            config.enabled ? h('p', { className: 'gr-meta' }, T('model.inspirationHint')) : null,
+            config.enabled ? h('details', { className: 'gr-model-options', open: config.deepResearch ? true : undefined },
+              h('summary', null, T('settings.byTask')),
+              h('div', { className: 'gr-stack' },
+                h('h3', { className: 'gr-h2' }, T('model.research')),
+                h('label', null, h('input', { type: 'checkbox', checked: !!config.deepResearch, disabled: busy,
+                  onChange: function (event) {
+                    change('deepResearch', event.target.checked ? { endpoint: config.endpoint || '', name: '' } : null)
+                  } }), T(config.deepResearch ? 'model.override' : 'model.overrideOff')),
+                config.deepResearch ? h(React.Fragment, null,
+                  fields(config.deepResearch, function (key, value) {
+                    change('deepResearch', Object.assign({}, config.deepResearch, { [key]: value }))
+                  }, 'research'),
+                  h(ModelConnection, { value: config.researchConnection }),
+                  h('p', { className: 'gr-meta' }, T('model.researchKeyHint'))) : null)) : null),
+          h('section', { className: 'gr-card' },
+            h('h2', { className: 'gr-h2' }, T('settings.web')),
+            h('label', null, h('input', { type: 'checkbox', checked: config.webSearch, disabled: busy,
+              onChange: function (event) { change('webSearch', event.target.checked) } }), T('deep.webSetting')),
+            h('p', { className: 'gr-meta' }, T('deep.webHint'))),
+          h('div', { className: 'gr-row' },
+            h('button', { className: 'gr-btn', disabled: busy }, T(config.enabled ? 'settings.verifySave' : 'settings.save')),
+            h('span', { role: 'status' }, busy ? T('settings.saving') : message))) : !error ? h('p', { role: 'status' }, T('loading')) : null,
+        h(ParserSettings))
     }
 
     function ResearchFindings(props) {
@@ -1168,7 +1276,7 @@ window.__ModuleLoader__.load({
               api(REPORTS, { action: 'draft', research: props.id, id: item.meta.id, version: item.meta.version }).then(props.onDraft, setError)
             } }, T('report.review')))
         }),
-        props.modelEnabled === false ? h('p', { className: 'gr-body' }, T('model.setup')) : null,
+        props.modelEnabled === false ? h('button', { className: 'gr-btn gr-btn-ghost', onClick: props.onSettings }, T('settings.models')) : null,
         props.modelEnabled ? h('form', { className: 'gr-stack', onSubmit: ask },
           h('label', null, T('model.question'), h('textarea', { className: 'gr-textarea', value: question,
             required: true, disabled: busy, maxLength: 1000, onChange: function (event) { setQuestion(event.target.value) } })),
@@ -1209,11 +1317,12 @@ window.__ModuleLoader__.load({
         }
       }
 
-      return h('details', { className: 'gr-card', onToggle: function (event) {
-        if (!event.currentTarget.open || enabled !== null) return
-        api(PARSERS).then(function (current) { setEnabled(current.pdf); setError(null) }, setError)
-      } },
-      h('summary', null, T('parsers.title')),
+      useEffect(function () {
+        api(PARSERS).then(function (current) { setEnabled(current.pdf) }, setError)
+      }, [])
+
+      return h('section', { className: 'gr-card' },
+      h('h2', { className: 'gr-h2' }, T('parsers.title')),
       h('p', { className: 'gr-body' }, T('parsers.hint')),
       error ? h('p', { role: 'alert' }, messageOf(error)) : null,
       enabled === null ? null : h('form', { onSubmit: apply },
@@ -1550,7 +1659,6 @@ window.__ModuleLoader__.load({
 
     function ResearchPage(props) {
       var [reportDraft, setReportDraft] = useState(null)
-      var [model, setModel] = useState(null)
       var [studies, setStudies] = useState([])
       var [topicSearch, setTopicSearch] = useState('')
       var [selected, setSelected] = useState(null)
@@ -1563,11 +1671,6 @@ window.__ModuleLoader__.load({
 
       useEffect(function () {
         var active = true
-        api(MODEL).then(function (data) {
-          if (active) setModel(data)
-        }, function (problem) {
-          if (active) setError(problem)
-        })
         api(RESEARCH).then(function (data) {
           if (!active) return
           setStudies(data.studies)
@@ -1616,7 +1719,7 @@ window.__ModuleLoader__.load({
           studies.length ? h('button', { className: 'gr-btn', disabled: busy, onClick: function () { select(studies[0]) } }, T('research.continue')) : null,
           h('button', { className: 'gr-btn gr-btn-ghost', disabled: busy, onClick: function () { setUseOrigin(false); select(null) } }, T('research.new'))),
         error ? h('p', { role: 'alert' }, messageOf(error)) : null,
-        h(DeepResearchPanel, { key: selected?.meta.id || (useOrigin ? props.seed.origin.id : 'independent'), topic: selected?.meta.id,
+        h(DeepResearchPanel, { key: selected?.meta.id || (useOrigin ? props.seed.origin.id : 'independent'), topic: selected?.meta.id, onSettings: props.onSettings, modelConfig: props.modelConfig,
           knowledge: selected || !useOrigin ? undefined : props.seed.origin, direction: selected || !useOrigin ? undefined : props.seed.title,
           onFinished: function () { api(RESEARCH).then(function (data) { setStudies(data.studies) }, setError) },
           onReport: function (run) { props.onNavigate('report', Object.assign({ idea: props.seed?.idea, studyId: run.topic }, run.report)) } }),
@@ -1643,7 +1746,7 @@ window.__ModuleLoader__.load({
           h('label', null, T('research.notesOptional'), h('textarea', { className: 'gr-textarea', value: body,
             onChange: function (event) { setBody(event.target.value) } })),
           h('button', { className: 'gr-btn', disabled: busy }, T('research.start')))),
-        selected ? h(ResearchFindings, { key: 'findings:' + selected.meta.id, id: selected.meta.id, title: selected.meta.title, version: selected.meta.version, modelEnabled: model?.enabled, onDraft: setReportDraft }) : null,
+        selected ? h(ResearchFindings, { key: 'findings:' + selected.meta.id, id: selected.meta.id, title: selected.meta.title, version: selected.meta.version, modelEnabled: props.modelConfig?.enabled, onSettings: props.onSettings, onDraft: setReportDraft }) : null,
         selected ? h(ResearchSources, { key: selected.meta.id, id: selected.meta.id }) : null,
         selected ? h(ResearchReports, { key: 'report:' + selected.meta.id, id: selected.meta.id, onNavigate: props.onNavigate, draft: reportDraft, initialReport: selected.meta.id === props.seed?.resume ? props.seed?.report : null, onDiscard: function () { setReportDraft(null) } }) : null,
         studies.length ? h('section', { className: 'gr-card' },
@@ -1655,8 +1758,6 @@ window.__ModuleLoader__.load({
               'aria-pressed': note.meta.id === selected?.meta.id, onClick: function () { select(note) } }, note.meta.title)
           }),
           visibleTopics.length ? null : h('p', { className: 'gr-meta' }, T('deep.noTopics'))) : null,
-        h(ModelSettings, { onApplied: setModel }),
-        h(ParserSettings),
       )
     }
 
@@ -1701,10 +1802,14 @@ window.__ModuleLoader__.load({
       '.gr-headtext{min-width:0;flex:1 1 220px}',
       '.gr-title{font-size:20px;font-weight:600;line-height:1.3}',
       '.gr-sub{color:var(--gr-muted);font-size:13px;margin-top:2px;word-break:break-all}',
-      '.gr-head-actions{display:flex;align-items:center;gap:8px;margin-left:auto;flex:none}',
+      '.gr-head-actions{display:flex;align-items:center;gap:8px;margin-left:auto;flex-wrap:wrap;max-width:100%}',
       '.gr-pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--gr-muted);border:1px solid var(--gr-line);border-radius:999px;padding:3px 10px;white-space:nowrap;background:var(--gr-surface)}',
       '.gr-dot{width:6px;height:6px;border-radius:50%;background:var(--gr-muted)}',
       '.gr-dot-ok{background:var(--gr-green)}',
+      '.gr-view:not([hidden]){display:flex;flex-direction:column;gap:18px;min-width:0}',
+      '.gr-dot-error{background:var(--gr-error)}',
+      '.gr-model-options[open]>.gr-stack{margin-top:12px}',
+      '.gr-model-status .gr-btn{align-self:center}',
       '.gr-card{background:var(--gr-surface);border:1px solid var(--gr-line);border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:12px;box-sizing:border-box}',
       '.gr-card :is(h2,h3,p),.gr-inner>.gr-body{margin:0}',
       '.gr-stack{display:flex;flex-direction:column;gap:12px;min-width:0}',
