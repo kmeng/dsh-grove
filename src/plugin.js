@@ -35,7 +35,7 @@ export function apply(ctx, config = {}) {
     researchSearch: () => {
       if (config.model?.webSearch !== true) return null
       const provider = tavilySearch(process.env.GROVE_TAVILY_KEY)
-      if (!provider) throw Object.assign(new Error('Set GROVE_TAVILY_KEY for the host'), { code: 'research-search' })
+      if (!provider) throw Object.assign(new Error('Set GROVE_TAVILY_KEY for the host'), { code: 'research-search-key' })
       return provider
     },
     model: settings => httpModel({ ...settings, credential: process.env.GROVE_MODEL_KEY }),

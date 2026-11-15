@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { test } from 'node:test'
 import { capture, inspectVault, registerRoutes, routes, saveVault, vaultStatus } from '../src/server.js'
 import { Vault } from '../src/vault.js'
+import { researchRunStore } from '../src/adapters/storage/obsidian/research-runs.js'
 
 async function fixture(t) {
   // macOS resolves /var to /private/var; vault paths must be real directories.
@@ -349,7 +350,7 @@ test('deep research checkpoints progress, verifies citations, and reopens its Ma
   assert.equal(reopened.runs[0].report.version, 2)
 })
 
-test('local deep research reuses exact imported versions and marks a single source as insufficient', async t => {
+test('deep research reuses exact imported versions when web search yields no sources', async t => {
   const root = await fixture(t)
   const vault = new Vault(root)
   const question = await vault.create({ type: 'question', body: 'How much sunlight reaches the street?' })
@@ -362,6 +363,7 @@ test('local deep research reuses exact imported versions and marks a single sour
   registerRoutes(ctx, {
     current: () => ({ path: root }),
     modelConfig: { enabled: true },
+    researchSearch: () => async () => [],
     model: () => ({
       plan: async () => ({ topic: 'Sunlight', questions: ['Sunlight on the street?'] }),
       review: async ({ sources }) => ({
@@ -439,10 +441,16 @@ test('deep research needs a model and web search, and cannot finish after retrie
   assert.equal(writes, 0)
   assert.equal((await vault.list()).some(note => note.meta.type === 'report'), false)
 
+  const jobs = researchRunStore(vault)
+  const legacy = await jobs.read(id)
+  await jobs.write({ ...legacy, web: false, collected: [],
+    review: { claims: [], followups: [] }, verified: { claims: [], sources: [] },
+    written: { summary: 'Old local-only draft', nextSteps: [] } })
   webAvailable = true
   assert.equal((await call({ action: 'retry', id })).status, 202)
   await waitFor(async () => (await latest())?.status === 'complete')
   assert.equal(plans, 1)
   assert.equal(queries, 2)
   assert.equal(writes, 1)
+  assert.doesNotMatch((await vault.get(id)).body, /Old local-only draft/)
 })
