@@ -169,7 +169,9 @@ window.__ModuleLoader__.load({
       'asset.works': '作品',
       'asset.title': '标题',
       'asset.body': '正文',
-      'asset.new': '新建',
+      'asset.newKnowledge': '新建知识',
+      'asset.newWork': '新建作品',
+      'asset.backKnowledge': '返回知识笔记',
       'asset.save': '保存',
       'asset.basis': '查看依据',
       'asset.derive': '提炼为知识',
@@ -408,7 +410,9 @@ window.__ModuleLoader__.load({
       'asset.works': 'Works',
       'asset.title': 'Title',
       'asset.body': 'Body',
-      'asset.new': 'New',
+      'asset.newKnowledge': 'New knowledge',
+      'asset.newWork': 'New work',
+      'asset.backKnowledge': 'Back to knowledge note',
       'asset.save': 'Save',
       'asset.basis': 'View basis',
       'asset.derive': 'Save as knowledge',
@@ -897,7 +901,7 @@ window.__ModuleLoader__.load({
             return h('button', { key: item.id, className: 'gr-btn gr-btn-ghost', onClick: function () {
               if (item.type === 'inspiration') props.onSelect(item.id, item.version)
               else if (item.type === 'report') props.onNavigate('report', item)
-              else props.onNavigate('knowledge', { read: item })
+              else props.onNavigate('knowledge', { read: item, returnTo: { page: 'home', label: 'research.back' } })
             } }, item.title)
           }) : h('p', { className: 'gr-meta' }, T('idea.empty'))) : null,
         h('form', { className: 'gr-card gr-stack', onSubmit: function (event) {
@@ -1577,6 +1581,11 @@ window.__ModuleLoader__.load({
           originals[item.meta.id] ? h('pre', { className: 'gr-code' }, originals[item.meta.id]) : null)
       }
 
+      function reportReturn() {
+        return { page: 'research', label: 'report.title',
+          seed: { resume: props.id, report: { id: report.meta.id, version: report.meta.version } } }
+      }
+
       return h('details', { className: 'gr-card', open: props.open || props.draft ? true : undefined, onToggle: function (event) {
         if (event.currentTarget.open) run(async function () {
           await list()
@@ -1608,12 +1617,12 @@ window.__ModuleLoader__.load({
           })
         } }, T(kept ? 'asset.kept' : 'asset.keep')),
         kept ? h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () {
-          props.onNavigate('knowledge', { read: kept })
+          props.onNavigate('knowledge', { read: kept, returnTo: reportReturn() })
         } }, T('asset.openKnowledge')) : null,
         props.inline && !editing ? h('button', { className: 'gr-btn gr-btn-ghost', disabled: report.meta.version !== report.versions[0],
           onClick: function () { setEditing(true) } }, T('report.edit')) : null,
         h('button', { className: 'gr-btn', onClick: function () {
-          props.onNavigate('works', { title: report.meta.title, body: report.body, basis: { id: report.meta.id, version: report.meta.version } })
+          props.onNavigate('works', { title: report.meta.title, body: report.body, basis: { id: report.meta.id, version: report.meta.version }, returnTo: reportReturn() })
         } }, T('asset.compose'))) : null,
       editing ? h('form', { onSubmit: save },
         h('label', null, T('report.body'), h('textarea', { className: 'gr-textarea', required: true,
@@ -1629,6 +1638,12 @@ window.__ModuleLoader__.load({
         h('button', { className: 'gr-btn', disabled: busy || (report && report.meta.version !== report.versions[0]) }, T('report.save')),
         h('button', { type: 'button', className: 'gr-btn gr-btn-ghost', disabled: busy,
           onClick: function () { setEditing(false); props.onDiscard() } }, T('report.discard'))) : null)
+    }
+
+    function PageHeading(props) {
+      return h('div', { className: 'gr-page-heading', ref: props.top },
+        h('h1', null, T(props.title)),
+        h('button', { className: 'gr-btn', disabled: props.busy, onClick: props.onAction }, T(props.action)))
     }
 
     function AssetPage(props) {
@@ -1705,13 +1720,17 @@ window.__ModuleLoader__.load({
 
       function reference() { return { id: selected.meta.id, version: selected.meta.version } }
 
+      var returnTo = props.seed?.returnTo || (props.seed?.idea ?
+        { page: 'idea', seed: props.seed.idea, label: 'idea.back' } : null)
       return h(React.Fragment, null,
-        h('div', { className: 'gr-row' },
-          h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () { props.onNavigate(props.seed?.idea ? 'idea' : 'home', props.seed?.idea) } }, T(props.seed?.idea ? 'idea.back' : 'research.back')),
-          h('h2', { className: 'gr-h2' }, T('asset.' + props.kind)),
-          h('button', { className: 'gr-btn', disabled: busy, onClick: start }, T('asset.new'))),
+        returnTo ? h('div', { className: 'gr-page-back' },
+          h('button', { className: 'gr-btn gr-origin-link', onClick: function () {
+            props.onNavigate(returnTo.page, returnTo.seed)
+          } }, '← ', T(returnTo.label))) : null,
+        h(PageHeading, { title: 'asset.' + props.kind, busy: busy, onAction: start,
+          action: isKnowledge ? 'asset.newKnowledge' : 'asset.newWork' }),
         error ? h('p', { role: 'alert' }, messageOf(error)) : null,
-        h('p', { role: 'status' }, message),
+        message ? h('p', { role: 'status' }, message) : null,
         items.length ? h('div', { className: 'gr-stack' }, items.map(function (entry) {
           return h('button', { key: entry.meta.id, className: 'gr-btn gr-btn-ghost', disabled: busy,
             onClick: function () { run(function () { return read(entry.meta.id, entry.meta.version) }) } }, entry.meta.title)
@@ -1752,7 +1771,8 @@ window.__ModuleLoader__.load({
             props.onNavigate('research', { title: selected.meta.title, origin: reference() })
           } }, T('asset.research')) : null,
           isKnowledge ? h('button', { className: 'gr-btn', onClick: function () {
-            props.onNavigate('works', { title: selected.meta.title, body: selected.body, basis: reference() })
+            props.onNavigate('works', { title: selected.meta.title, body: selected.body, basis: reference(),
+              returnTo: { page: 'knowledge', seed: { read: reference(), returnTo: returnTo }, label: 'asset.backKnowledge' } })
           } }, T('asset.compose')) : null,
           !isKnowledge ? h('button', { className: 'gr-btn', onClick: function () {
             run(async function () { await navigator.clipboard.writeText(selected.body); setMessage(T('asset.copied')) })
@@ -1819,9 +1839,8 @@ window.__ModuleLoader__.load({
 
       var notice = error ? h('p', { role: 'alert' }, messageOf(error)) : null
       if (!selected && !creating) return h(React.Fragment, null,
-        h('div', { className: 'gr-row', ref: top },
-          h('h1', null, T('nav.research')),
-          h('button', { className: 'gr-btn', disabled: busy, onClick: function () { setCreating(true) } }, T('research.newConversation'))),
+        h(PageHeading, { title: 'nav.research', action: 'research.newConversation', top: top,
+          busy: busy, onAction: function () { setCreating(true) } }),
         notice,
         studies.length ? h('section', { className: 'gr-stack' },
           h('label', null, T('deep.topicSearch'), h('input', { type: 'search', className: 'gr-input', value: topicSearch,
@@ -1907,7 +1926,12 @@ window.__ModuleLoader__.load({
       '.gr-nav .gr-btn{text-align:left}.gr-nav [aria-current=page]{background:var(--gr-green);color:var(--gr-on-green)}',
       '.gr-root:has(>.gr-nav){flex-direction:row}.gr-scroll{min-width:0}',
       '@media(max-width:580px){.gr-root:has(>.gr-nav){flex-direction:column}.gr-nav{width:auto;flex-direction:row;flex-wrap:wrap;padding:6px;border-right:0;border-bottom:1px solid var(--gr-line)}.gr-nav .gr-btn{text-align:center;flex:1;white-space:nowrap}}',
-      '.gr-scroll{flex:1 1 auto;min-height:0;overflow:auto}',
+      '.gr-scroll{flex:1 1 auto;min-height:0;overflow:auto;container-type:inline-size}',
+      '.gr-page-heading{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px 16px}',
+      '.gr-page-heading h1{margin:0;font-size:24px;font-weight:650;line-height:1.25;overflow-wrap:anywhere}',
+      '.gr-page-heading>.gr-btn{justify-self:start;align-self:center;min-height:36px}',
+      '.gr-page-back{margin-bottom:-8px}.gr-page-back>.gr-btn{align-self:flex-start}',
+      '@container (max-width:560px){.gr-page-heading{grid-template-columns:minmax(0,1fr)}}',
       '.gr-inner{max-width:760px;margin:0 auto;padding:28px 24px 40px;display:flex;flex-direction:column;gap:18px;box-sizing:border-box}',
       '.gr-head{display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap;padding-bottom:14px;border-bottom:1px solid var(--gr-line)}',
       '.gr-mark{flex:none;width:44px;height:44px;border-radius:12px;background:var(--gr-surface);border:1px solid var(--gr-line);display:grid;place-items:center}',
