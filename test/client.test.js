@@ -219,7 +219,9 @@ test('opening an existing research topic gives each panel a distinct key', t => 
     return research.type(research.props)
   }
   const overview = render(null)
-  overview.children[0].children[1].props.onClick()
+  const resume = overview.children[0].children.find(node => node?.children?.includes('接着上次深挖'))
+  assert.ok(resume.children.includes(topic.meta.title))
+  resume.props.onClick()
   assert.equal(nextTopic, topic)
   const detail = render(nextTopic)
   const keys = detail.children.map(child => child?.props?.key).filter(key => key != null)
