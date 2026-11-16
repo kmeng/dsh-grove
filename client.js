@@ -120,7 +120,7 @@ window.__ModuleLoader__.load({
       'idea.reportVersion': '第 {version} 版',
       'model.inspirationLinks': '自动发现相关灵感',
       'model.inspirationHint': '打开灵感时，会将这条灵感及最多 24 条近期灵感的片段发给所配置的模型。',
-      'research.independent': '独立发起研究',
+      'research.independent': '发起研究',
       'idea.recent': '最近灵感',
       'idea.recentEmpty': '还没有灵感，先叮一下吧。',
       'idea.results': '搜索结果',
@@ -190,7 +190,15 @@ window.__ModuleLoader__.load({
       'source.saved': '证据已保存',
       'source.open': '打开原始文件',
       'research.title': '研究',
-      'research.new': '新建独立研究',
+      'research.overview': '返回研究首页',
+      'research.history': '研究历史',
+      'research.noRuns': '这个课题还没有深挖记录。',
+      'research.noDirection': '沿课题继续深挖',
+      'research.run.running': '进行中',
+      'research.run.complete': '已完成',
+      'research.run.failed': '失败',
+      'research.run.interrupted': '已中断',
+      'research.topicMissing': '找不到这个研究话题。',
       'research.question': '想深挖什么？',
       'research.notes': '研究记录',
       'research.save': '保存研究',
@@ -334,7 +342,7 @@ window.__ModuleLoader__.load({
       'idea.reportVersion': 'Version {version}',
       'model.inspirationLinks': 'Automatically find related ideas',
       'model.inspirationHint': 'When you open an idea, Grove sends excerpts from that idea and up to 24 recent ideas to the configured model.',
-      'research.independent': 'Start independent research',
+      'research.independent': 'Start research',
       'idea.recent': 'Recent ideas',
       'idea.recentEmpty': 'Your first idea will show up here.',
       'idea.results': 'Search results',
@@ -402,7 +410,15 @@ window.__ModuleLoader__.load({
       'source.saved': 'Evidence saved',
       'source.open': 'Open original file',
       'research.title': 'Research',
-      'research.new': 'New independent study',
+      'research.overview': 'Back to research',
+      'research.history': 'Research history',
+      'research.noRuns': 'No research runs for this topic yet.',
+      'research.noDirection': 'Continued from the topic',
+      'research.run.running': 'Running',
+      'research.run.complete': 'Complete',
+      'research.run.failed': 'Failed',
+      'research.run.interrupted': 'Interrupted',
+      'research.topicMissing': 'This research topic could not be found.',
       'research.question': 'What do you want to explore?',
       'research.notes': 'Research notes',
       'research.save': 'Save study',
@@ -1035,6 +1051,7 @@ window.__ModuleLoader__.load({
             if (!mounted) return
             var latest = result.runs[0]
             setRun(latest || null)
+            props.onRuns?.(result.runs)
             setLoaded(true)
             if (latest?.status === 'running') timeout = setTimeout(poll, 1000)
           }, function (problem) {
@@ -1052,6 +1069,7 @@ window.__ModuleLoader__.load({
           finished.current = id
           props.onFinished?.()
         }
+        if (props.topic) return
         var mounted = true
         api(REPORTS, { action: 'read', id: id, version: run.report.version }).then(function (result) {
           if (mounted) setReport(result)
@@ -1074,11 +1092,12 @@ window.__ModuleLoader__.load({
         finally { setBusy(false) }
       }
 
-      var status = run?.status === 'complete' ? (report?.meta.review === 'confirmed' ? null : 'deep.ready')
+      var showRunDetails = !props.topic || running
+      var status = run?.status === 'complete' ? (props.topic ? 'research.run.complete' : report?.meta.review === 'confirmed' ? null : 'deep.ready')
         : !running ? null : run.written ? 'deep.saving'
           : run.verified ? 'deep.writing' : !run.plan ? 'deep.waiting' : null
       return h('section', { className: 'gr-card' },
-        h('h2', { className: 'gr-h2' }, T('deep.title')),
+        h('h2', { className: 'gr-h2' }, T(props.topic ? 'deep.start' : 'deep.title')),
         h('form', { onSubmit: function (event) { event.preventDefault(); begin('start') } },
           h('label', null, T(optional ? 'deep.direction' : 'deep.question'),
             h('textarea', { className: 'gr-textarea', ref: props.field, value: direction, maxLength: 1200,
@@ -1092,16 +1111,16 @@ window.__ModuleLoader__.load({
             else { setError(null); setRefresh(function (value) { return value + 1 }) }
           } }, T('err.retry'))) : null,
         run ? h('div', { className: 'gr-stack' },
-          run.plan ? h('h3', { className: 'gr-h2' }, run.plan.topic) : null,
-          run.direction && run.direction !== direction ? h('p', { className: 'gr-meta' }, T('deep.direction'), ' · ', run.direction) : null,
-          run.plan ? h('div', null, h('h4', null, T('deep.plan')),
+          run.plan && showRunDetails ? h('h3', { className: 'gr-h2' }, run.plan.topic) : null,
+          showRunDetails && run.direction && run.direction !== direction ? h('p', { className: 'gr-meta' }, T('deep.direction'), ' · ', run.direction) : null,
+          run.plan && showRunDetails ? h('div', null, h('h4', null, T('deep.plan')),
             h('ul', null, run.plan.questions.map(function (item) { return h('li', { key: item }, item) }))) : null,
-          run.collected ? h('div', null, h('h4', null, T('deep.collected')),
+          run.collected && showRunDetails ? h('div', null, h('h4', null, T('deep.collected')),
             run.collected.length ? h('ul', null, run.collected.map(function (item, index) { return h('li', { key: index }, item) }))
               : h('p', { className: 'gr-meta' }, T('deep.noSources'))) : run.plan && running ? h('p', { role: 'status' }, T('deep.searching')) : null,
-          run.review?.followups.length ? h('div', null, h('h4', null, T('deep.followups')),
+          showRunDetails && run.review?.followups.length ? h('div', null, h('h4', null, T('deep.followups')),
             h('ul', null, run.review.followups.map(function (item) { return h('li', { key: item }, item) }))) : null,
-          run.verified ? h('div', null, h('h4', null, T('deep.verified')),
+          run.verified && showRunDetails ? h('div', null, h('h4', null, T('deep.verified')),
             h('ul', null, run.verified.map(function (item, index) {
               return h('li', { key: index }, h('strong', null, T('deep.' + item.status)), ' · ', item.text)
             }))) : run.collected && running ? h('p', { role: 'status' }, T('deep.checking')) : null,
@@ -1330,7 +1349,7 @@ window.__ModuleLoader__.load({
         finally { setBusy(false) }
       }
 
-      return h('details', { className: 'gr-card', onToggle: load },
+      return h('details', { onToggle: load },
         h('summary', null, T('model.ask')),
         error ? h('p', { role: 'alert' }, messageOf(error)) : null,
         findings.map(function (item) {
@@ -1450,8 +1469,7 @@ window.__ModuleLoader__.load({
         setTimeout(function () { URL.revokeObjectURL(url) }, 1000)
       }
 
-      return h('section', { className: 'gr-card' },
-        h('h2', { className: 'gr-h2' }, T('source.title')),
+      return h('div', { className: 'gr-stack' },
         h('label', null, T('source.import'), ' ',
           h('input', { type: 'file', accept: '.md,.markdown,.pdf', disabled: busy, onChange: upload })),
         error ? h('p', { role: 'alert' }, messageOf(error)) : null,
@@ -1498,6 +1516,10 @@ window.__ModuleLoader__.load({
       useEffect(function () {
         if (props.initialReport) run(function () { return read(props.initialReport.id, props.initialReport.version) })
       }, [props.initialReport])
+
+      useEffect(function () {
+        if (props.latestReportId) list().catch(setError)
+      }, [props.latestReportId])
 
       function list() {
         return api(REPORTS, { action: 'list', research: props.id }).then(setCatalog)
@@ -1731,15 +1753,24 @@ window.__ModuleLoader__.load({
       var [busy, setBusy] = useState(true)
       var [error, setError] = useState(null)
       var [saved, setSaved] = useState(false)
+      var [runs, setRuns] = useState(null)
+      var [openedReport, setOpenedReport] = useState(null)
+      var top = useRef(null)
+
+      useEffect(function () {
+        top.current?.closest?.('.gr-scroll')?.scrollTo(0, 0)
+      }, [selected?.meta.id])
 
       useEffect(function () {
         var active = true
         api(RESEARCH).then(function (data) {
           if (!active) return
           setStudies(data.studies)
-          if (props.seed?.resume) select(data.studies.find(function (study) {
-            return study.meta.id === props.seed.resume
-          }) || data.studies[0] || null)
+          if (props.seed?.resume) {
+            var study = data.studies.find(function (item) { return item.meta.id === props.seed.resume })
+            if (study) select(study, props.seed.report)
+            else setError(new Error(T('research.topicMissing')))
+          }
         }, function (problem) {
           if (active) setError(problem)
         }).finally(function () {
@@ -1748,7 +1779,11 @@ window.__ModuleLoader__.load({
         return function () { active = false }
       }, [])
 
-      function select(note) {
+      function select(note, initialReport) {
+        if (note?.meta.id !== selected?.meta.id || initialReport) {
+          setRuns(null)
+          setOpenedReport(initialReport || null)
+        }
         setSelected(note)
         setReportDraft(null)
         setBody(note ? note.body : '')
@@ -1777,52 +1812,83 @@ window.__ModuleLoader__.load({
       var visibleTopics = studies.filter(function (note) {
         return note.meta.title.toLowerCase().includes(topicSearch.trim().toLowerCase())
       })
-      return h(React.Fragment, null,
-        h('div', { className: 'gr-row' },
-          h('button', { className: 'gr-btn gr-btn-ghost', disabled: busy, onClick: props.onBack }, T(props.seed?.idea ? 'idea.back' : 'research.back')),
-          !selected && lastStudy ? h('button', { className: 'gr-btn', disabled: busy, onClick: function () { select(lastStudy) } },
-            T('research.continue'), ' · ', lastStudy.meta.title) : null,
-          h('button', { className: 'gr-btn gr-btn-ghost', disabled: busy, onClick: function () { setUseOrigin(false); select(null) } }, T('research.new'))),
-        error ? h('p', { role: 'alert' }, messageOf(error)) : null,
-        h(DeepResearchPanel, { key: selected ? 'deep:topic:' + selected.meta.id : useOrigin ? 'deep:origin:' + props.seed.origin.id : 'deep:independent', topic: selected?.meta.id, onSettings: props.onSettings, modelConfig: props.modelConfig,
+      var deepPanel = h(DeepResearchPanel, { key: selected ? 'deep:topic:' + selected.meta.id : useOrigin ? 'deep:origin:' + props.seed.origin.id : 'deep:independent', topic: selected?.meta.id, onSettings: props.onSettings, modelConfig: props.modelConfig,
           knowledge: selected || !useOrigin ? undefined : props.seed.origin, direction: selected || !useOrigin ? undefined : props.seed.title,
+          onRuns: selected ? setRuns : undefined,
           onFinished: function () { api(RESEARCH).then(function (data) { setStudies(data.studies) }, setError) },
-          onReport: function (run) { props.onNavigate('report', Object.assign({ idea: props.seed?.idea, studyId: run.topic }, run.report)) } }),
-        selected ? h('form', { className: 'gr-card', onSubmit: save },
-          h('h2', { className: 'gr-h2' }, selected.meta.title),
-          inspirationOrigins?.length ? h('details', null,
-            h('summary', null, T('idea.origin')),
-            inspirationOrigins.map(function (link) {
-              return h('div', { className: 'gr-stack', key: link.id },
-                h('p', { className: 'gr-prose' }, link.excerpt),
-                h('button', { type: 'button', className: 'gr-btn gr-btn-ghost', onClick: function () {
-                  props.onNavigate('idea', { id: link.id, version: link.version, back: props.seed?.idea?.id === link.id ? undefined : props.seed?.idea })
-                } }, T('idea.openOriginal'), ' · v', link.version))
-            })) : null,
-          h('label', null, T('research.notes'), h('textarea', { className: 'gr-textarea', value: body,
-            onChange: function (event) { setBody(event.target.value); setSaved(false) } })),
-          h('div', { className: 'gr-row' },
-            h('button', { className: 'gr-btn', disabled: busy }, T('research.save')),
-            h('span', { role: 'status' }, saved ? T('research.saved') : ''))) :
-          h('details', { className: 'gr-card' }, h('summary', null, T('deep.note')),
-          h('form', { onSubmit: save }, h('label', null, T('research.question'),
-              h('input', { className: 'gr-input', value: question, required: true, maxLength: 300,
-                onChange: function (event) { setQuestion(event.target.value) } })),
-          h('label', null, T('research.notesOptional'), h('textarea', { className: 'gr-textarea', value: body,
-            onChange: function (event) { setBody(event.target.value) } })),
-          h('button', { className: 'gr-btn', disabled: busy }, T('research.start')))),
-        selected ? h(ResearchFindings, { key: 'findings:' + selected.meta.id, id: selected.meta.id, title: selected.meta.title, version: selected.meta.version, modelEnabled: props.modelConfig?.enabled, onSettings: props.onSettings, onDraft: setReportDraft }) : null,
-        selected ? h(ResearchSources, { key: selected.meta.id, id: selected.meta.id }) : null,
-        selected ? h(ResearchReports, { key: 'report:' + selected.meta.id, id: selected.meta.id, onNavigate: props.onNavigate, draft: reportDraft, initialReport: selected.meta.id === props.seed?.resume ? props.seed?.report : null, onDiscard: function () { setReportDraft(null) } }) : null,
+          onReport: function (run) { props.onNavigate('report', Object.assign({ idea: props.seed?.idea, studyId: run.topic }, run.report)) } })
+      var notice = error ? h('p', { role: 'alert' }, messageOf(error)) : null
+      if (selected) return h(React.Fragment, null,
+        h('div', { className: 'gr-row', ref: top },
+          h('button', { className: 'gr-btn gr-btn-ghost', disabled: busy, onClick: function () {
+            setUseOrigin(false)
+            select(null)
+          } }, T('research.overview'))),
+        h('h1', { className: 'gr-h2' }, selected.meta.title),
+        notice,
+        deepPanel,
+        h('section', { className: 'gr-card' },
+          h('h2', { className: 'gr-h2' }, T('research.history')),
+          runs?.length === 0 ? h('p', { className: 'gr-meta' }, T('research.noRuns')) : null,
+          runs?.map(function (run) {
+            return h('details', { key: run.id },
+              h('summary', null, run.direction || run.plan?.topic || T('research.noDirection'),
+                ' · ', T('research.run.' + run.status), ' · ', inspirationTime(run.created)),
+              run.plan?.questions?.length ? h('ul', null, run.plan.questions.map(function (question) {
+                return h('li', { key: question }, question)
+              })) : null,
+              run.verified?.length ? h('ul', null, run.verified.map(function (claim, index) {
+                return h('li', { key: index }, T('deep.' + claim.status), ' · ', claim.text)
+              })) : null,
+              run.error ? h('p', null, messageOf(run.error)) : null,
+              run.report ? h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () {
+                setOpenedReport({ id: run.report.id, version: run.report.version })
+              } }, T('deep.openReport')) : null)
+          }),
+          h('details', null, h('summary', null, T('research.notes')),
+            h('form', { className: 'gr-stack', onSubmit: save },
+              inspirationOrigins?.length ? h('details', null,
+                h('summary', null, T('idea.origin')),
+                inspirationOrigins.map(function (link) {
+                  return h('div', { className: 'gr-stack', key: link.id },
+                    h('p', { className: 'gr-prose' }, link.excerpt),
+                    h('button', { type: 'button', className: 'gr-btn gr-btn-ghost', onClick: function () {
+                      props.onNavigate('idea', { id: link.id, version: link.version, back: props.seed?.idea?.id === link.id ? undefined : props.seed?.idea })
+                    } }, T('idea.openOriginal'), ' · v', link.version))
+                })) : null,
+              h('label', null, T('research.notes'), h('textarea', { className: 'gr-textarea', value: body,
+                onChange: function (event) { setBody(event.target.value); setSaved(false) } })),
+              h('div', { className: 'gr-row' },
+                h('button', { className: 'gr-btn', disabled: busy }, T('research.save')),
+                h('span', { role: 'status' }, saved ? T('research.saved') : '')))),
+          h('details', null, h('summary', null, T('source.title')),
+            h(ResearchSources, { id: selected.meta.id })),
+          h(ResearchFindings, { key: 'findings:' + selected.meta.id, id: selected.meta.id, title: selected.meta.title, version: selected.meta.version, modelEnabled: props.modelConfig?.enabled, onSettings: props.onSettings, onDraft: setReportDraft })),
+        h(ResearchReports, { key: 'report:' + selected.meta.id, id: selected.meta.id, onNavigate: props.onNavigate, draft: reportDraft, initialReport: openedReport, latestReportId: runs?.find(function (run) { return run.report })?.report.id, onDiscard: function () { setReportDraft(null) } }))
+
+      return h(React.Fragment, null,
+        h('div', { className: 'gr-row', ref: top },
+          h('button', { className: 'gr-btn gr-btn-ghost', disabled: busy, onClick: props.onBack }, T(props.seed?.idea ? 'idea.back' : 'research.back')),
+          lastStudy ? h('button', { className: 'gr-btn', disabled: busy, onClick: function () { select(lastStudy) } },
+            T('research.continue'), ' · ', lastStudy.meta.title) : null),
+        notice,
         studies.length ? h('section', { className: 'gr-card' },
           h('h2', { className: 'gr-h2' }, T('deep.topics')),
           h('label', null, T('deep.topicSearch'),
             h('input', { type: 'search', className: 'gr-input', value: topicSearch, onChange: function (event) { setTopicSearch(event.target.value) } })),
           visibleTopics.map(function (note) {
             return h('button', { key: note.meta.id, className: 'gr-btn gr-btn-ghost', disabled: busy,
-              'aria-pressed': note.meta.id === selected?.meta.id, onClick: function () { select(note) } }, note.meta.title)
+              onClick: function () { select(note) } }, note.meta.title)
           }),
           visibleTopics.length ? null : h('p', { className: 'gr-meta' }, T('deep.noTopics'))) : null,
+        deepPanel,
+        h('details', { className: 'gr-card' }, h('summary', null, T('deep.note')),
+          h('form', { onSubmit: save }, h('label', null, T('research.question'),
+              h('input', { className: 'gr-input', value: question, required: true, maxLength: 300,
+                onChange: function (event) { setQuestion(event.target.value) } })),
+          h('label', null, T('research.notesOptional'), h('textarea', { className: 'gr-textarea', value: body,
+            onChange: function (event) { setBody(event.target.value) } })),
+          h('button', { className: 'gr-btn', disabled: busy }, T('research.start'))))
       )
     }
 
