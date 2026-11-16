@@ -4,16 +4,19 @@
 
 - 首页入口改为「发起研究」。查找课题和「接着上次深挖」留在研究首页。进入课题后，先显示课题名，再依次显示「开始深挖」「研究历史」「研究报告」。研究记录、资料和单轮分析收进历史区，默认折叠。[Issue #169](https://github.com/kmeng/dsh-grove/issues/169) · [PR #170](https://github.com/kmeng/dsh-grove/pull/170)
 
+- Grove 0.5.10 已发布并设为 npm 的 `latest`。正式包在隔离桌面 profile 安装成功，并通过两个课题的布局复验。[npm 0.5.10](https://www.npmjs.com/package/dsh-grove/v/0.5.10) · [GitHub Release](https://github.com/kmeng/dsh-grove/releases/tag/v0.5.10) · [PR #173](https://github.com/kmeng/dsh-grove/pull/173)
+
 ## 卡住
 
 - 桌面验证覆盖到报告草稿保存。
 
 ## 下一步
 
-- 发布 0.5.10，安装正式 npm 包后复验新布局。
+- 本轮发布和正式包安装复验已完成。
 
 ## 判断依据
 
 - 在 DeepSeek Harness Desktop 0.2.2-rc.3 的隔离 profile 和临时 vault 中，通过「接着上次深挖」进入课题甲，返回研究首页后通过搜索进入课题乙。两页均按新顺序显示，分别只显示各自的历史和报告，话题搜索只出现在研究首页。
 - 在课题乙点击「开始深挖」，以 IANA 公开网页完成一轮真实研究。草稿保存到临时 vault，关联课题乙并出现在其报告区。运行中和完成后至少 15 秒的桌面观察中，深挖表单均只有一份。
 - 61 项测试、打包清单和 dsh 兼容性检查通过，合并后以临时 profile 安装成功。
+- 从 npm 官方 registry 下载 `dsh-grove-0.5.10.tgz`，按 registry 元数据核对 SHA-512 后安装。dsh 配置包含 Grove，已安装 manifest 版本为 `0.5.10`。用该包启动桌面版，确认首页入口为「发起研究」，甲、乙两课题各显示一个深挖表单，并只显示自己的历史和报告。正式包复验覆盖安装与页面行为，完整研究流程见上面的发布前复验。
