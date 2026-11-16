@@ -594,17 +594,6 @@ window.__ModuleLoader__.load({
         })
         return function () { active = false }
       }, [vault, page, recentRevision])
-      var [resumable, setResumable] = useState(null)
-      useEffect(function () {
-        if (!vault || page !== 'home' || changing) return
-        var active = true
-        api(RESEARCH).then(function (data) {
-          if (active) setResumable({ vault: vault, id: data.studies[0]?.meta.id })
-        }, function () {
-          if (active) setResumable(null)
-        })
-        return function () { active = false }
-      }, [vault, page, changing])
       var mounted = useRef(true)
 
       useEffect(function () {
@@ -754,9 +743,6 @@ window.__ModuleLoader__.load({
                     ? h(AssetPage, { key: page, kind: page, seed: seed, onNavigate: navigate })
                     : h(InspirationHome, {
                     onResearch: function () { navigate('research') },
-                    onResume: resumable?.vault === vault && resumable.id ? function () {
-                      navigate('research', { resume: resumable.id })
-                    } : null,
                     onKnowledge: function () { navigate('knowledge') },
                     onWorks: function () { navigate('works') },
                     draft: draft, busy: busy, saved: saved, onSave: saveIdea,
@@ -846,7 +832,6 @@ window.__ModuleLoader__.load({
           ),
         ),
         h('div', { className: 'gr-row' },
-          props.onResume ? h('button', { className: 'gr-btn', disabled: !!props.busy, onClick: props.onResume }, T('research.continue')) : null,
           h('button', { className: 'gr-btn gr-btn-ghost', disabled: !!props.busy, onClick: props.onResearch }, T('research.independent')),
           h('button', { className: 'gr-btn gr-btn-ghost', disabled: !!props.busy, onClick: props.onKnowledge }, T('asset.knowledge')),
           h('button', { className: 'gr-btn gr-btn-ghost', disabled: !!props.busy, onClick: props.onWorks }, T('asset.works'))),
@@ -1787,6 +1772,7 @@ window.__ModuleLoader__.load({
         }, setError).finally(function () { setBusy(false) })
       }
 
+      var lastStudy = studies[0]
       var inspirationOrigins = selected?.meta.links?.filter(function (link) { return link.excerpt })
       var visibleTopics = studies.filter(function (note) {
         return note.meta.title.toLowerCase().includes(topicSearch.trim().toLowerCase())
@@ -1794,10 +1780,11 @@ window.__ModuleLoader__.load({
       return h(React.Fragment, null,
         h('div', { className: 'gr-row' },
           h('button', { className: 'gr-btn gr-btn-ghost', disabled: busy, onClick: props.onBack }, T(props.seed?.idea ? 'idea.back' : 'research.back')),
-          studies.length ? h('button', { className: 'gr-btn', disabled: busy, onClick: function () { select(studies[0]) } }, T('research.continue')) : null,
+          !selected && lastStudy ? h('button', { className: 'gr-btn', disabled: busy, onClick: function () { select(lastStudy) } },
+            T('research.continue'), ' · ', lastStudy.meta.title) : null,
           h('button', { className: 'gr-btn gr-btn-ghost', disabled: busy, onClick: function () { setUseOrigin(false); select(null) } }, T('research.new'))),
         error ? h('p', { role: 'alert' }, messageOf(error)) : null,
-        h(DeepResearchPanel, { key: selected?.meta.id || (useOrigin ? props.seed.origin.id : 'independent'), topic: selected?.meta.id, onSettings: props.onSettings, modelConfig: props.modelConfig,
+        h(DeepResearchPanel, { key: selected ? 'deep:topic:' + selected.meta.id : useOrigin ? 'deep:origin:' + props.seed.origin.id : 'deep:independent', topic: selected?.meta.id, onSettings: props.onSettings, modelConfig: props.modelConfig,
           knowledge: selected || !useOrigin ? undefined : props.seed.origin, direction: selected || !useOrigin ? undefined : props.seed.title,
           onFinished: function () { api(RESEARCH).then(function (data) { setStudies(data.studies) }, setError) },
           onReport: function (run) { props.onNavigate('report', Object.assign({ idea: props.seed?.idea, studyId: run.topic }, run.report)) } }),
