@@ -194,3 +194,34 @@ test('every panel inherits the same Grove surfaces and controls', () => {
   assert.match(source, /\.gr-btn\{[^}]*background:var\(--gr-green\)/)
   assert.doesNotMatch(source, /--dsw-alias-(bg|label|border|brand)-/)
 })
+
+test('opening an existing research topic gives each panel a distinct key', t => {
+  const { ctx, registrations } = mount()
+  const original = React.useState
+  t.after(() => { React.useState = original })
+  let slot = 0
+  const topic = { meta: { id: 'topic-1', title: '先前的课题', version: 1 }, body: '' }
+  const homeState = { 0: { configured: true, usable: true, vault: '/fixture' }, 12: 'research' }
+  let useState = value => [homeState[slot++] ?? value, () => {}]
+  React.useState = value => useState(value)
+  loadModule().factory(requireStub).apply(ctx)
+  const page = registrations.find(item => item.name === 'main').component
+  const research = activeView(page()).children[0]
+
+  let nextTopic
+  function render(selected) {
+    const state = { 1: [topic], 3: selected, 7: false }
+    slot = 0
+    useState = value => {
+      const index = slot++
+      return [state[index] ?? value, next => { if (index === 3) nextTopic = next }]
+    }
+    return research.type(research.props)
+  }
+  const overview = render(null)
+  overview.children[0].children[1].props.onClick()
+  assert.equal(nextTopic, topic)
+  const detail = render(nextTopic)
+  const keys = detail.children.map(child => child?.props?.key).filter(key => key != null)
+  assert.equal(new Set(keys).size, keys.length, 'duplicate sibling keys can leave stale panels after rerendering')
+})
