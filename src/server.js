@@ -1,3 +1,4 @@
+import { searchVault } from './modules/vault-search.js'
 /** Same-origin routes and vault operations for the Grove panel. */
 import { constants } from 'node:fs'
 import { access, realpath, stat } from 'node:fs/promises'
@@ -9,7 +10,7 @@ import { importSource, saveEvidence, openSource } from './modules/evidence.js'
 import { listReports, confirmReport, readReport, draftFromFinding } from './modules/reports.js'
 import { parseModelSettings, readModelSettings, selectModel, testModel, verifyModelSettings } from './modules/model-settings.js'
 import { runResearchModel } from './modules/model-research.js'
-import { listKnowledge, readKnowledge, saveKnowledge } from './modules/knowledge.js'
+import { listKnowledge, readKnowledge, saveKnowledge, keepReportAsKnowledge } from './modules/knowledge.js'
 import { listWorks, readWork, saveWork } from './modules/works.js'
 import { stagedResearch } from './modules/deep-research.js'
 import { researchRuns } from './modules/research-runs.js'
@@ -288,21 +289,23 @@ export function registerRoutes(ctx, options) {
           return json(note)
         }
         const query = typeof input?.query === 'string' ? input.query.trim() : ''
+        if (input?.action === 'search') return json({ notes: await searchVault(vault, query) })
         return json({ notes: (await findInspirations(vault, query)).slice(0, 50) })
       } catch (error) {
         return failure(error)
       }
     })
-    for (const [path, list, read, save] of [
+    for (const [assetRoute, list, read, save] of [
       [routes.knowledge, listKnowledge, readKnowledge, saveKnowledge],
       [routes.works, listWorks, readWork, saveWork],
     ]) {
-      route(path, ['POST'], async request => {
+      route(assetRoute, ['POST'], async request => {
         try {
           const { path } = options.current()
           if (!path) throw coded('not-configured', 'Grove has no vault yet')
           const store = new Vault(path)
           const input = await readJson(request)
+          if (assetRoute === routes.knowledge && input?.action === 'keep-report') return json(await keepReportAsKnowledge(store, input.report))
           if (input?.action === 'list') return json({ items: await list(store, typeof input.query === 'string' ? input.query : '') })
           if (input?.action === 'read') return json(await read(store, input.id, input.version))
           if (input?.action === 'save' && typeof input.body === 'string' && input.body.trim()) return json(await save(store, input))
@@ -463,7 +466,15 @@ export function registerRoutes(ctx, options) {
       try {
         const { path } = options.current()
         if (!path) throw coded('not-configured', 'Grove has no vault yet')
-        return json({ studies: await listResearch(new Vault(path)) })
+        const store = new Vault(path)
+        const studies = await listResearch(store)
+        const activity = new Map()
+        for (const run of await researchRunStore(store).list()) {
+          if (run.topic && run.created > (activity.get(run.topic) ?? '')) activity.set(run.topic, run.created)
+        }
+        const lastActivity = ({ meta }) => [meta.modified ?? meta.created, activity.get(meta.id) ?? ''].sort().at(-1)
+        return json({ studies: studies.map(study => ({ ...study, activity: lastActivity(study) }))
+          .sort((a, b) => b.activity.localeCompare(a.activity)) })
       } catch (error) {
         return failure(error)
       }

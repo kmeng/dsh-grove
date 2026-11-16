@@ -80,7 +80,7 @@ async function readPages(links, readPage) {
 }
 
 async function collect(store, run, queries, providers, scope) {
-  const web = scope === 'local' ? [] : run.links?.length
+  const web = scope === 'local' || run.localOnly ? [] : run.links?.length
     ? await readPages(run.links, providers.readPage) : await Promise.all(queries.map(async query => providers.search(query))).catch(error => {
     if (error?.code === 'research-search') throw error
     throw problem('research-search', 'Could not retrieve web sources')
@@ -109,6 +109,7 @@ function progress(run, running = false) {
     review: review && { followups: review.followups },
     verified: verified?.claims.map(({ text, status }) => ({ text, status })),
     written: !!written,
+    summary: typeof written?.summary === 'string' ? written.summary : undefined,
   }
 }
 
@@ -116,11 +117,11 @@ const active = new Map()
 const starting = new Set()
 
 export function researchRuns({ context, workflow }) {
-  function providers(links) {
+  function providers(links, allowLocal = false) {
     const available = context({ links })
     if (links?.length) {
       if (typeof available.readPage !== 'function') throw problem('research-search-links-unavailable', 'Public page reading is unavailable')
-    } else if (typeof available.search !== 'function') {
+    } else if (!allowLocal && typeof available.search !== 'function') {
       throw problem('research-search-disabled', 'Supply a public link or enable web search')
     }
     return available
@@ -204,13 +205,18 @@ export function researchRuns({ context, workflow }) {
         const running = (await jobs.list()).find(run => (run.scope === scope || (existing && run.topic === existing.meta.id)) && run.status === 'running' && active.has(key(store, run.id)))
         if (running) return progress(running, true)
         const links = publicLinks(input.direction, origin?.body, existing?.meta.title)
-        const available = providers(links)
+        const available = providers(links, input.conversation === true)
+        const localOnly = !links.length && typeof available.search !== 'function'
+        const history = existing ? (await jobs.list())
+          .filter(item => item.topic === existing.meta.id && item.status === 'complete')
+          .sort((a, b) => a.created.localeCompare(b.created)).slice(-4)
+          .map(item => ({ question: item.direction, summary: item.written?.summary })) : []
         const linked = origin && { id: origin.meta.id, version: origin.meta.version,
           ...(inspiration ? { excerpt: inspiration.body.slice(0, 1600) } : {}) }
         const ancestor = existing?.meta.links?.find(link => link.kind === 'derived' && link.excerpt)
         const run = {
           schema: 1, id: randomUUID(), topic: existing?.meta.id ?? randomUUID(), question: existing ? undefined : randomUUID(),
-          scope, ...(links.length ? { links } : {}), topicVersion: existing?.meta.version ?? 1, direction, origin: linked, status: 'running', created: new Date().toISOString(), web: true,
+          scope, ...(links.length ? { links } : {}), ...(localOnly ? { localOnly } : {}), history, topicVersion: existing?.meta.version ?? 1, direction, origin: linked, status: 'running', created: new Date().toISOString(), web: true,
           input: { language: input.language === 'en' ? 'en' : 'zh', direction,
             inspiration: linked?.excerpt ?? ancestor?.excerpt, question: existing?.meta.title ?? knowledge?.meta.title,
             background: knowledge?.body.slice(0, 1600) },
@@ -237,7 +243,7 @@ export function researchRuns({ context, workflow }) {
           await jobs.write(run)
           return progress(run)
         }
-        const available = providers(run.links)
+        const available = providers(run.links, run.localOnly === true)
         if (!run.web) {
           // Earlier runs could reach the writing stage using local materials alone.
           delete run.collected

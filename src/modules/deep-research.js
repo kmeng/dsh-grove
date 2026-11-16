@@ -33,7 +33,7 @@ function assessment(value, sources) {
 
 async function collectFollowups(state, model, retrieve) {
   const { followups } = state.review
-  if (state.links?.length) return retrieve(followups, 'local')
+  if (state.links?.length || state.localOnly) return retrieve(followups, 'local')
   if (!state.collected.some(source => source.reference)) return retrieve(followups)
 
   // Private passages can inform local retrieval. Only the original plan and
@@ -56,7 +56,7 @@ export const stagedResearch = {
     }
 
     await step('plan', async () => {
-      const plan = await model.plan(state.input)
+      const plan = await model.plan(state.localOnly ? { ...state.input, history: state.history } : state.input)
       const items = questions(plan?.questions, 4)
       if (!items.length) throw invalid()
       return { topic: line(plan.topic, 160), questions: items }
@@ -76,7 +76,7 @@ export const stagedResearch = {
       return { claims: assessment(reviewed, sources), sources }
     })
     await step('written', async () => {
-      const result = await model.write({ plan: state.plan, claims: state.verified.claims, language: state.input.language })
+      const result = await model.write({ plan: state.plan, claims: state.verified.claims, language: state.input.language, history: state.history })
       if (!Array.isArray(result?.nextSteps)) throw invalid()
       return { summary: line(result.summary, 3000), nextSteps: questions(result.nextSteps, 6) }
     })

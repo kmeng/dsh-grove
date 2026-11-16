@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { exactVersion } from './version-reference.js'
 
 const knowledgeTypes = new Set(['concept', 'theory', 'claim', 'method'])
@@ -26,4 +27,27 @@ export async function readKnowledge(store, id, version) {
 
 export async function listKnowledge(store, query) {
   return (await store.list(query)).filter(({ meta }) => knowledgeTypes.has(meta.type) && meta.status !== 'archived')
+}
+
+export async function keepReportAsKnowledge(store, ref) {
+  const report = await store.get(ref?.id, exactVersion(ref?.version))
+  if (report.meta.type !== 'report' || report.meta.review === 'draft') throw new Error('Choose a confirmed research report')
+  // Generated reports have a stable structure. Keep the conclusion and its
+  // evidence qualifications together, with the exact full report as the source.
+  const sections = report.body.split(/\n(?=## )/)
+  const retained = sections.filter(section => /^## (摘要|发现与证据|Overview|Findings and evidence)\s*$/m.test(section))
+  const body = retained.length ? retained.join('\n\n').trim() : report.body
+  const key = createHash('sha256').update('grove:report-knowledge:' + report.meta.id).digest('hex').slice(0, 32)
+  const id = key.replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5')
+  try {
+    return await store.create({
+      type: 'concept', title: report.meta.title, body,
+      links: [{ kind: 'derived', id: report.meta.id, version: report.meta.version }],
+    }, id)
+  } catch (error) {
+    if (error.code !== 'EEXIST') throw error
+    const existing = await readKnowledge(store, id, Math.max(...await store.versions(id)))
+    if (!existing.meta.links?.some(link => link.kind === 'derived' && link.id === report.meta.id)) throw error
+    return existing
+  }
 }
