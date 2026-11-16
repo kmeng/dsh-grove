@@ -195,7 +195,7 @@ test('every panel inherits the same Grove surfaces and controls', () => {
   assert.doesNotMatch(source, /--dsw-alias-(bg|label|border|brand)-/)
 })
 
-test('opening an existing research topic gives each panel a distinct key', t => {
+test('resuming a topic opens a scoped detail view without repeating the deep research form', t => {
   const { ctx, registrations } = mount()
   const original = React.useState
   t.after(() => { React.useState = original })
@@ -224,6 +224,13 @@ test('opening an existing research topic gives each panel a distinct key', t => 
   resume.props.onClick()
   assert.equal(nextTopic, topic)
   const detail = render(nextTopic)
+  const [, title, , deepPanel, history, reports] = detail.children
+  assert.equal(title.type, 'h1')
+  assert.deepEqual(title.children, [topic.meta.title])
+  assert.equal(deepPanel.props.topic, topic.meta.id)
+  assert.equal(history.children[0].children[0], '研究历史')
+  assert.equal(reports.props.id, topic.meta.id)
+  assert.ok(!detail.children.some(child => child?.children?.[0]?.children?.includes('研究话题')))
   const keys = detail.children.map(child => child?.props?.key).filter(key => key != null)
   assert.equal(new Set(keys).size, keys.length, 'duplicate sibling keys can leave stale panels after rerendering')
 })
