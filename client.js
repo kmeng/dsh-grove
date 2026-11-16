@@ -51,6 +51,25 @@ window.__ModuleLoader__.load({
       'model.catalogMissing': '当前选择已不在 dsh 模型列表中',
       'err.model-dsh-auth': 'dsh 模型的认证失败。请在 dsh 的模型设置中检查账号或凭据。',
       'err.model-dsh-route': 'dsh 当前找不到这个模型或服务商。请检查 dsh 模型设置，或为深度研究另选模型。',
+      'nav.home': '首页',
+      'nav.ideas': '灵感',
+      'nav.research': '研究',
+      'nav.knowledge': '知识库',
+      'nav.works': '作品',
+      'nav.settings': '设置',
+      'home.ask': '写下灵感，或问问笔记库…',
+      'home.send': '查找',
+      'research.newConversation': '新研究',
+      'research.followUp': '沿着这场研究继续问…',
+      'research.ask': '发送',
+      'asset.keep': '提炼为知识',
+      'asset.kept': '已保存到知识库',
+      'asset.openKnowledge': '查看知识',
+      'asset.edit': '编辑',
+      'idea.startResearch': '由此发起研究',
+      'report.confirmed': '已确认',
+      'report.edit': '编辑报告',
+      'settings.vault': '笔记库',
       'settings.title': '设置',
       'settings.models': '模型设置',
       'settings.back': '返回刚才的页面',
@@ -273,6 +292,25 @@ window.__ModuleLoader__.load({
       'err.model-dsh-auth': 'The dsh model rejected authentication. Check the account or credentials in dsh model settings.',
       'err.model-dsh-route': 'dsh could not find this model or provider. Check dsh model settings or select another research model.',
       'err.model-research-key': 'Set GROVE_RESEARCH_MODEL_KEY in the host and restart to use the dedicated model.',
+      'nav.home': 'Home',
+      'nav.ideas': 'Ideas',
+      'nav.research': 'Research',
+      'nav.knowledge': 'Knowledge',
+      'nav.works': 'Works',
+      'nav.settings': 'Settings',
+      'home.ask': 'Capture an idea or ask your vault…',
+      'home.send': 'Find',
+      'research.newConversation': 'New research',
+      'research.followUp': 'Ask a follow-up…',
+      'research.ask': 'Send',
+      'asset.keep': 'Save to knowledge',
+      'asset.kept': 'Saved to knowledge',
+      'asset.openKnowledge': 'Open knowledge',
+      'asset.edit': 'Edit',
+      'idea.startResearch': 'Start research from this idea',
+      'report.confirmed': 'Confirmed',
+      'report.edit': 'Edit report',
+      'settings.vault': 'Vault',
       'settings.title': 'Settings',
       'settings.models': 'Model settings',
       'settings.back': 'Back to the previous page',
@@ -591,6 +629,7 @@ window.__ModuleLoader__.load({
       }
 
       function navigate(destination, draft) {
+        setSettingsOpen(false)
         setSeed(draft || null)
         setPage(destination)
       }
@@ -600,11 +639,11 @@ window.__ModuleLoader__.load({
       var vault = status?.usable ? status.vault : null
 
       useEffect(function () {
-        if (!vault || page !== 'home') return
+        if (!vault || page !== 'ideas') return
         var active = true
         setRecentError(null)
         api(INSPIRATIONS, {}).then(function (data) {
-          if (active) setRecent(data.notes.slice(0, 5))
+          if (active) setRecent(data.notes)
         }, function (problem) {
           if (active) setRecentError(problem)
         })
@@ -711,6 +750,7 @@ window.__ModuleLoader__.load({
           setSaved(true)
           setRecentRevision(function (revision) { return revision + 1 })
           setNotes(null)
+          setSearchOpen(false)
         }, function (problem) {
           if (mounted.current) setError(problem)
         }).finally(function () {
@@ -719,6 +759,16 @@ window.__ModuleLoader__.load({
       }
 
       var connected = !!(status && status.configured && status.usable)
+      function changeVault() {
+        setSettingsOpen(false)
+        setPathDraft(status?.vault || '')
+        setManual(false)
+        setChanging(true)
+      }
+
+      var navigation = [['home', 'home'], ['ideas', 'ideas'], ['research', 'research'],
+        ['knowledge', 'knowledge'], ['works', 'works'], ['settings', 'settings']]
+      var currentNav = settingsOpen ? 'settings' : page === 'idea' ? 'ideas' : page === 'report' ? 'research' : page
       var connectView = h(Connect, {
         busy: busy, manual: manual, error: error, pathDraft: pathDraft,
         stale: !changing && status && status.configured && !status.usable ? status.vault : null,
@@ -734,12 +784,7 @@ window.__ModuleLoader__.load({
           h('div', { className: 'gr-inner' },
             h(Header, {
               status: status, loading: loading, error: error,
-              onSettings: settingsOpen ? null : openSettings,
-              onChange: connected && !settingsOpen ? function () {
-                setPathDraft(status.vault || '')
-                setManual(false)
-                setChanging(true)
-              } : null,
+
             }),
             error ? h(ErrorNote, { error: error, onRetry: load }) : null,
             h('div', { className: 'gr-view', hidden: settingsOpen }, loading && status === null
@@ -747,7 +792,7 @@ window.__ModuleLoader__.load({
               : changing || !connected
                 ? connectView
                 : page === 'research'
-                  ? h(ResearchPage, { seed: seed, onNavigate: navigate, modelConfig: modelConfig, onSettings: openSettings, onBack: function () {
+                  ? h(ResearchPage, { key: seed?.resume || seed?.idea?.id || seed?.origin?.id || 'overview', seed: seed, onNavigate: navigate, modelConfig: modelConfig, onSettings: openSettings, onBack: function () {
                     if (seed?.idea) navigate('idea', seed.idea)
                     else navigate('home')
                   } })
@@ -758,25 +803,37 @@ window.__ModuleLoader__.load({
                   : page === 'knowledge' || page === 'works'
                     ? h(AssetPage, { key: page, kind: page, seed: seed, onNavigate: navigate })
                     : h(InspirationHome, {
-                    onResearch: function () { navigate('research') },
-                    onKnowledge: function () { navigate('knowledge') },
-                    onWorks: function () { navigate('works') },
+                    history: page === 'ideas',
                     draft: draft, busy: busy, saved: saved, onSave: saveIdea,
                     onDraft: function (value) { setDraft(value); setSaved(false) },
-                    query: query, notes: notes, onQuery: setQuery, searchOpen: searchOpen, onSearchOpen: setSearchOpen,
+                    query: query, notes: notes, searchOpen: searchOpen,
                     recent: recent, recentError: recentError,
                     onRetryRecent: function () { setRecentRevision(function (revision) { return revision + 1 }) },
                     onSearch: function () {
-                      requestNotes({ query: query }, function (data) { setNotes(data.notes) })
+                      var prompt = draft.trim()
+                      if (!prompt) return
+                      requestNotes({ action: 'search', query: prompt }, function (data) {
+                        setQuery(prompt)
+                        setNotes(data.notes)
+                        setSearchOpen(true)
+                        setDraft('')
+                      })
                     },
+                    onNavigate: navigate,
                     onSelect: function (id, version) {
                       navigate('idea', { id: id, version: version })
                     },
                   })),
-            settingsOpen ? h(SettingsPage, { onBack: function () { setSettingsOpen(false) }, onApplied: setModelConfig }) : null,
+            settingsOpen ? h(SettingsPage, { vault: vault, onChangeVault: changeVault, onBack: function () { setSettingsOpen(false) }, onApplied: setModelConfig }) : null,
             h(Footer, null),
           ),
         ),
+        h('nav', { className: 'gr-nav', 'aria-label': T('panel') }, navigation.map(function ([destination, label]) {
+          return h('button', { key: destination, type: 'button', className: 'gr-btn gr-btn-ghost',
+            'aria-current': currentNav === destination ? 'page' : undefined,
+            onClick: destination === 'settings' ? openSettings : function () { navigate(destination) },
+          }, T('nav.' + label))
+        })),
       )
     }
 
@@ -832,44 +889,34 @@ window.__ModuleLoader__.load({
 
     function InspirationHome(props) {
       return h(React.Fragment, null,
-        h('div', { className: 'gr-card' },
-          h('label', { className: 'gr-h2', htmlFor: 'gr-idea' }, T('idea.title')),
-          h('textarea', {
-            id: 'gr-idea', className: 'gr-textarea', value: props.draft,
-            placeholder: T('idea.placeholder'),
-            onChange: function (event) { props.onDraft(event.target.value) },
-            onKeyDown: function (event) {
-              if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') props.onSave()
-            },
-          }),
+        props.history ? h('h1', null, T('nav.ideas')) : null,
+        !props.history && props.searchOpen ? h('section', { className: 'gr-card gr-stack', 'aria-live': 'polite' },
+          h('p', { className: 'gr-prose' }, props.query),
+          h('h2', { className: 'gr-h2' }, T('idea.results')),
+          props.notes?.length ? props.notes.map(function (item) {
+            return h('button', { key: item.id, className: 'gr-btn gr-btn-ghost', onClick: function () {
+              if (item.type === 'inspiration') props.onSelect(item.id, item.version)
+              else if (item.type === 'report') props.onNavigate('report', item)
+              else props.onNavigate('knowledge', { read: item })
+            } }, item.title)
+          }) : h('p', { className: 'gr-meta' }, T('idea.empty'))) : null,
+        h('form', { className: 'gr-card gr-stack', onSubmit: function (event) {
+          event.preventDefault()
+          if (props.history) props.onSave()
+          else props.onSearch()
+        } },
+          h('label', { className: 'gr-h2', htmlFor: 'gr-idea' }, T(props.history ? 'idea.title' : 'home.ask')),
+          h('textarea', { id: 'gr-idea', className: 'gr-textarea', value: props.draft,
+            onChange: function (event) { props.onDraft(event.target.value) } }),
           h('div', { className: 'gr-row' },
-            h('button', { className: 'gr-btn', disabled: !!props.busy || !props.draft.trim(), onClick: props.onSave }, T('idea.save')),
-            h('span', { role: 'status' }, props.saved ? T('idea.saved') : ''),
-          ),
-        ),
-        h('div', { className: 'gr-row' },
-          h('button', { className: 'gr-btn gr-btn-ghost', disabled: !!props.busy, onClick: props.onResearch }, T('research.independent')),
-          h('button', { className: 'gr-btn gr-btn-ghost', disabled: !!props.busy, onClick: props.onKnowledge }, T('asset.knowledge')),
-          h('button', { className: 'gr-btn gr-btn-ghost', disabled: !!props.busy, onClick: props.onWorks }, T('asset.works'))),
-        h('section', { className: 'gr-card' },
+            h('button', { type: 'button', className: 'gr-btn', disabled: !!props.busy || !props.draft.trim(), onClick: props.onSave }, T('idea.save')),
+            props.history ? null : h('button', { className: 'gr-btn gr-btn-ghost', disabled: !!props.busy || !props.draft.trim() }, T('home.send')),
+            h('span', { role: 'status' }, props.saved ? T('idea.saved') : ''))),
+        props.history ? h('section', { className: 'gr-card' },
           h('h2', { className: 'gr-h2' }, T('idea.recent')),
           props.recentError ? h(ErrorNote, { error: props.recentError, onRetry: props.onRetryRecent }) :
             props.recent === null ? h('p', { className: 'gr-meta' }, T('loading')) :
-              props.recent.length ? inspirationList(props.recent, props) : h('p', { className: 'gr-meta' }, T('idea.recentEmpty')),
-          h('details', { className: 'gr-idea-search', open: props.searchOpen, onToggle: function (event) { props.onSearchOpen(event.currentTarget.open) } },
-            h('summary', null, T('idea.find')),
-            h('form', { className: 'gr-search-row', onSubmit: function (event) {
-              event.preventDefault()
-              props.onSearch()
-            } },
-            h('input', { className: 'gr-input', type: 'search', 'aria-label': T('idea.query'),
-              placeholder: T('idea.query'), value: props.query, onChange: function (event) { props.onQuery(event.target.value) } }),
-            h('button', { className: 'gr-btn', disabled: !!props.busy }, T('idea.search'))),
-            props.notes ? h('div', { className: 'gr-stack' },
-              h('h3', { className: 'gr-h2' }, T('idea.results')),
-              props.notes.length ? inspirationList(props.notes, props) : h('p', { className: 'gr-meta' }, T('idea.empty'))) : null),
-        ),
-      )
+              props.recent.length ? inspirationList(props.recent, props) : h('p', { className: 'gr-meta' }, T('idea.recentEmpty'))) : null)
     }
 
     function inspirationTime(value) {
@@ -899,9 +946,6 @@ window.__ModuleLoader__.load({
       var [discovery, setDiscovery] = useState(null)
       var [discoveryError, setDiscoveryError] = useState(null)
       var [retry, setRetry] = useState(0)
-      var [revision, setRevision] = useState(0)
-      var [suggestion, setSuggestion] = useState(null)
-      var researchForm = useRef(null)
 
       useEffect(function () {
         var active = true
@@ -909,7 +953,7 @@ window.__ModuleLoader__.load({
           if (active) setDetail(value)
         }, function (problem) { if (active) setError(problem) })
         return function () { active = false }
-      }, [ref.id, ref.version, revision])
+      }, [ref.id, ref.version])
 
       useEffect(function () {
         if (!detail) return
@@ -931,7 +975,7 @@ window.__ModuleLoader__.load({
         h('div', { className: 'gr-origin-heading' },
           h('button', { className: 'gr-btn gr-origin-link', onClick: function () {
             if (ref.back) props.onNavigate('idea', ref.back)
-            else props.onNavigate('home')
+            else props.onNavigate('ideas')
           } }, '← ', T(ref.back ? 'idea.back' : 'research.back')),
           h('h1', null, T('idea.detail'))),
         error ? h('p', { role: 'alert' }, messageOf(error)) : null,
@@ -944,9 +988,9 @@ window.__ModuleLoader__.load({
               h('select', { value: detail.meta.version, onChange: function (event) {
                 props.onNavigate('idea', Object.assign({}, ref, { version: Number(event.target.value) }))
               } }, detail.versions.map(function (version) { return h('option', { key: version, value: version }, 'v' + version) }))) : null),
-          h(DeepResearchPanel, { idea: { id: detail.meta.id, version: detail.meta.version }, suggestion: suggestion, field: researchForm, onSettings: props.onSettings, modelConfig: props.modelConfig,
-            onFinished: function () { setRevision(function (value) { return value + 1 }) },
-            onReport: function (run) { props.onNavigate('report', Object.assign({ idea: ref, studyId: run.topic }, run.report)) } }),
+          h('button', { className: 'gr-btn', onClick: function () {
+            props.onNavigate('research', { idea: ref, title: detail.meta.title })
+          } }, T('idea.startResearch')),
           detail.studies.length ? h('section', { className: 'gr-origin-section gr-stack' },
             h('h3', { className: 'gr-h2' }, T('idea.studies')),
             detail.studies.map(function (study) {
@@ -988,7 +1032,7 @@ window.__ModuleLoader__.load({
                   } }, match.title),
                   h('p', { className: 'gr-prose' }, match.reason),
                   match.question ? h(React.Fragment, null, h('p', null, match.question),
-                    h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () { setSuggestion({ text: match.question }); researchForm.current?.focus() } }, T('idea.suggest'))) : null)
+                    h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () { props.onNavigate('research', { idea: ref, title: match.question }) } }, T('idea.suggest'))) : null)
               }) : h('p', { className: 'gr-meta' }, T('idea.linksEmpty'))) : null) : null)
     }
 
@@ -1022,15 +1066,14 @@ window.__ModuleLoader__.load({
     function DeepResearchPanel(props) {
       var [direction, setDirection] = useState(props.direction || '')
       var [run, setRun] = useState(null)
-      var [report, setReport] = useState(null)
       var [error, setError] = useState(null)
       var [busy, setBusy] = useState(false)
       var [failedAction, setFailedAction] = useState(null)
       var [loaded, setLoaded] = useState(false)
       var [refresh, setRefresh] = useState(0)
       var finished = useRef(null)
+      var requested = useRef(null)
       var scope = { idea: props.idea, topic: props.topic, knowledge: props.knowledge }
-      var optional = !!(props.idea || props.topic || props.knowledge)
       var running = run?.status === 'running'
       var setupErrors = ['model-disabled', 'model-key', 'model-research-key', 'model-dsh-auth', 'model-dsh-route', 'research-search-disabled', 'research-search-key']
       var configurationNeeded = setupErrors.includes(error?.code)
@@ -1040,17 +1083,14 @@ window.__ModuleLoader__.load({
       }, [props.modelConfig?.changeId])
 
       useEffect(function () {
-        if (props.suggestion) setDirection(props.suggestion.text)
-      }, [props.suggestion])
-
-      useEffect(function () {
         var mounted = true
         var timeout
         function poll() {
           api(DEEP_RESEARCH, Object.assign({ action: 'list' }, scope)).then(function (result) {
             if (!mounted) return
             var latest = result.runs[0]
-            setRun(latest || null)
+            if (!props.topic && latest?.status === 'running') requested.current = latest.id
+            setRun(props.topic || latest?.id === requested.current ? latest || null : null)
             props.onRuns?.(result.runs)
             setLoaded(true)
             if (latest?.status === 'running') timeout = setTimeout(poll, 1000)
@@ -1064,17 +1104,11 @@ window.__ModuleLoader__.load({
 
       useEffect(function () {
         var id = run?.report?.id
-        if (!id) { setReport(null); return }
+        if (!id) return
         if (finished.current !== id) {
           finished.current = id
-          props.onFinished?.()
+          props.onFinished?.(run)
         }
-        if (props.topic) return
-        var mounted = true
-        api(REPORTS, { action: 'read', id: id, version: run.report.version }).then(function (result) {
-          if (mounted) setReport(result)
-        }, function (problem) { if (mounted) setError(problem) })
-        return function () { mounted = false }
       }, [run?.report?.id, run?.report?.version, refresh])
 
       async function begin(action) {
@@ -1083,27 +1117,28 @@ window.__ModuleLoader__.load({
         setError(null)
         setFailedAction(null)
         try {
-          var language = T('deep.start') === EN['deep.start'] ? 'en' : 'zh'
+          var language = T('research.ask') === EN['research.ask'] ? 'en' : 'zh'
           var started = await api(DEEP_RESEARCH, Object.assign({ action: action, id: action === 'retry' ? run.id : undefined,
-            direction: direction, language: language }, scope))
+            direction: direction, language: language, conversation: true }, scope))
+          requested.current = started.id
           setRun(started)
+          setDirection('')
           setRefresh(function (value) { return value + 1 })
         } catch (problem) { setFailedAction(action); setError(problem) }
         finally { setBusy(false) }
       }
 
-      var showRunDetails = !props.topic || running
-      var status = run?.status === 'complete' ? (props.topic ? 'research.run.complete' : report?.meta.review === 'confirmed' ? null : 'deep.ready')
+      var showRunDetails = running
+      var status = run?.status === 'complete' ? 'research.run.complete'
         : !running ? null : run.written ? 'deep.saving'
           : run.verified ? 'deep.writing' : !run.plan ? 'deep.waiting' : null
       return h('section', { className: 'gr-card' },
-        h('h2', { className: 'gr-h2' }, T(props.topic ? 'deep.start' : 'deep.title')),
         h('form', { onSubmit: function (event) { event.preventDefault(); begin('start') } },
-          h('label', null, T(optional ? 'deep.direction' : 'deep.question'),
-            h('textarea', { className: 'gr-textarea', ref: props.field, value: direction, maxLength: 1200,
-              placeholder: props.idea ? T('deep.hint') : undefined, required: !optional, disabled: busy || running,
+          h('label', null, T(props.topic ? 'research.followUp' : 'deep.question'),
+            h('textarea', { className: 'gr-textarea', value: direction, maxLength: 1200,
+              placeholder: props.topic ? T('research.followUp') : undefined, required: true, disabled: busy || running,
               onChange: function (event) { setDirection(event.target.value) } })),
-          h('button', { className: 'gr-btn', disabled: !loaded || busy || running || (!optional && !direction.trim()) }, T('deep.start'))),
+          h('button', { className: 'gr-btn', disabled: !loaded || busy || running || !direction.trim() }, T('research.ask'))),
         error ? h('div', { className: 'gr-stack' },
           h('p', { role: 'alert' }, messageOf(error)),
           configurationNeeded ? h('button', { className: 'gr-btn gr-btn-ghost', onClick: props.onSettings }, T('settings.models')) : h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () {
@@ -1127,11 +1162,7 @@ window.__ModuleLoader__.load({
           status ? h('p', { role: 'status' }, T(status)) : null,
           run.status === 'failed' || run.status === 'interrupted' ? h('div', { className: 'gr-stack' },
             h('p', { role: 'alert' }, run.error ? messageOf(run.error) : T('deep.interrupted')),
-            h('button', { className: 'gr-btn gr-btn-ghost', disabled: busy, onClick: function () { begin('retry') } }, T('deep.retry'))) : null,
-          report && run.report ? h('details', { className: 'gr-origin-report', open: true },
-            h('summary', null, T('deep.openReport')),
-            h(ReportMarkdown, { body: report.body }),
-            h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () { props.onReport(run) } }, T('idea.report'))) : null) : null)
+            h('button', { className: 'gr-btn gr-btn-ghost', disabled: busy, onClick: function () { begin('retry') } }, T('deep.retry'))) : null ) : null)
     }
 
     function InspirationReport(props) {
@@ -1148,9 +1179,9 @@ window.__ModuleLoader__.load({
       return h(React.Fragment, null,
         h('div', { className: 'gr-row' },
           ref.idea ? h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () { props.onNavigate('idea', ref.idea) } }, T('idea.back')) : null,
-          h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () {
+          ref.studyId ? h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () {
             props.onNavigate('research', { resume: ref.studyId, idea: ref.idea, report: ref })
-          } }, T('idea.openStudy'))),
+          } }, T('idea.openStudy')) : null),
         error ? h('p', { role: 'alert' }, messageOf(error)) : null,
         report ? h('article', { className: 'gr-card' }, h('h2', { className: 'gr-h2' }, report.meta.title),
           h('p', { className: 'gr-meta' }, T('idea.reportVersion', { version: report.meta.version })),
@@ -1265,6 +1296,10 @@ window.__ModuleLoader__.load({
         h('div', { className: 'gr-origin-heading' },
           h('button', { className: 'gr-btn gr-origin-link', onClick: props.onBack, ref: back }, '← ', T('settings.back')),
           h('h1', null, T('settings.title'))),
+        h('section', { className: 'gr-card gr-stack' },
+          h('h2', { className: 'gr-h2' }, T('settings.vault')),
+          props.vault ? h('p', { className: 'gr-sub' }, props.vault) : null,
+          h('div', null, h('button', { className: 'gr-btn gr-btn-ghost', onClick: props.onChangeVault }, T('s1.change')))),
         error ? h('p', { role: 'alert' }, messageOf(error)) : null,
         config ? h('form', { className: 'gr-view', onSubmit: submit },
           h('section', { className: 'gr-card' },
@@ -1311,63 +1346,21 @@ window.__ModuleLoader__.load({
         h(ParserSettings))
     }
 
-    function ResearchFindings(props) {
-      var [question, setQuestion] = useState(props.title)
-      var [findings, setFindings] = useState([])
-      var [evidence, setEvidence] = useState([])
-      var [selected, setSelected] = useState([])
-      var [busy, setBusy] = useState(false)
+    function LegacyFindings(props) {
+      var [items, setItems] = useState(null)
       var [error, setError] = useState(null)
-
-      function load(event) {
-        if (!event.currentTarget.open) return
+      useEffect(function () {
+        var active = true
         api(FINDINGS, { action: 'list', id: props.id }).then(function (result) {
-          setFindings(function (items) {
-            return result.findings.concat(items.filter(function (item) {
-              return !result.findings.some(function (loaded) { return loaded.meta.id === item.meta.id })
-            }))
-          })
-        }, setError)
-        api(REPORTS, { action: 'list', research: props.id }).then(function (result) { setEvidence(result.evidence) }, setError)
-      }
-
-      async function ask(event) {
-        if (event) event.preventDefault()
-        if (!props.modelEnabled || busy) return
-        setBusy(true)
-        setError(null)
-        try {
-          var finding = await api(FINDINGS, { id: props.id, version: props.version, question: question,
-            includeHistory: true, materials: evidence.filter(function (item) { return selected.includes(item.id) }).map(function (item) {
-              return { id: item.id, version: item.version }
-            }) })
-          setFindings(function (items) {
-            return items.some(function (item) { return item.meta.id === finding.meta.id }) ? items : items.concat(finding)
-          })
-          setQuestion('')
-        } catch (problem) { setError(problem) }
-        finally { setBusy(false) }
-      }
-
-      return h('details', { onToggle: load },
-        h('summary', null, T('model.ask')),
-        error ? h('p', { role: 'alert' }, messageOf(error)) : null,
-        findings.map(function (item) {
-          return h('article', { key: item.meta.id }, h('h3', null, item.meta.title), h('pre', { className: 'gr-code' }, item.body),
-            h('button', { className: 'gr-btn gr-btn-ghost', disabled: busy, onClick: function () {
-              api(REPORTS, { action: 'draft', research: props.id, id: item.meta.id, version: item.meta.version }).then(props.onDraft, setError)
-            } }, T('report.review')))
-        }),
-        props.modelEnabled === false ? h('button', { className: 'gr-btn gr-btn-ghost', onClick: props.onSettings }, T('settings.models')) : null,
-        props.modelEnabled ? h('form', { className: 'gr-stack', onSubmit: ask },
-          h('label', null, T('model.question'), h('textarea', { className: 'gr-textarea', value: question,
-            required: true, disabled: busy, maxLength: 1000, onChange: function (event) { setQuestion(event.target.value) } })),
-          h('p', { className: 'gr-meta' }, T('model.scope')),
-          evidence.map(function (item) {
-            return h('label', { key: item.id }, h('input', { type: 'checkbox', checked: selected.includes(item.id),
-              onChange: function (event) { setSelected(event.target.checked ? selected.concat(item.id) : selected.filter(function (id) { return id !== item.id })) } }), item.title)
-          }),
-          h('button', { className: 'gr-btn', disabled: busy }, T(busy ? 'model.running' : 'model.ask'))) : null)
+          if (active) setItems(result.findings)
+        }, function (problem) { if (active) setError(problem) })
+        return function () { active = false }
+      }, [props.id])
+      return error ? h('p', { role: 'alert' }, messageOf(error)) : items?.length ? h('details', null,
+        h('summary', null, T('research.history')),
+        items.map(function (item) {
+          return h('article', { key: item.meta.id }, h('h3', null, item.meta.title), h(ReportMarkdown, { body: item.body }))
+        })) : null
     }
 
     function ParserSettings() {
@@ -1503,6 +1496,7 @@ window.__ModuleLoader__.load({
       var [busy, setBusy] = useState(false)
       var [error, setError] = useState(null)
       var [editing, setEditing] = useState(false)
+      var [kept, setKept] = useState(null)
 
       useEffect(function () {
         if (!props.draft) return
@@ -1514,7 +1508,7 @@ window.__ModuleLoader__.load({
       }, [props.draft])
 
       useEffect(function () {
-        if (props.initialReport) run(function () { return read(props.initialReport.id, props.initialReport.version) })
+        if (props.initialReport && props.inline) run(function () { return read(props.initialReport.id, props.initialReport.version) })
       }, [props.initialReport])
 
       useEffect(function () {
@@ -1541,7 +1535,8 @@ window.__ModuleLoader__.load({
           return { id: item.meta.id, version: item.meta.version }
         }))
         setOriginals({})
-        setEditing(true)
+        setKept(null)
+        setEditing(result.meta.review === 'draft')
       }
 
       function start() {
@@ -1582,13 +1577,18 @@ window.__ModuleLoader__.load({
           originals[item.meta.id] ? h('pre', { className: 'gr-code' }, originals[item.meta.id]) : null)
       }
 
-      return h('details', { className: 'gr-card', open: props.draft || props.initialReport ? true : undefined, onToggle: function (event) {
-        if (event.currentTarget.open) run(list)
+      return h('details', { className: 'gr-card', open: props.open || props.draft ? true : undefined, onToggle: function (event) {
+        if (event.currentTarget.open) run(async function () {
+          await list()
+          if (props.initialReport && !report) await read(props.initialReport.id, props.initialReport.version)
+        })
       } },
-      h('summary', null, T('report.title')),
+      h('summary', null, props.inline && report ? report.meta.title + ' · ' +
+        T(report.meta.review === 'draft' ? 'deep.draft' : 'report.confirmed') : T('report.title')),
+      report && !editing ? h(ReportMarkdown, { body: report.body }) : null,
       error ? h('p', { role: 'alert' }, messageOf(error)) : null,
-      h('button', { className: 'gr-btn', disabled: busy, onClick: start }, T('report.new')),
-      (catalog ? catalog.reports : []).map(function (entry) {
+      props.inline ? null : h('button', { className: 'gr-btn', disabled: busy, onClick: start }, T('report.new')),
+      (!props.inline && catalog ? catalog.reports.filter(function (entry) { return !props.excluded?.includes(entry.meta.id) }) : []).map(function (entry) {
         return h('button', { key: entry.meta.id, className: 'gr-btn gr-btn-ghost', disabled: busy,
           onClick: function () { run(function () { return read(entry.meta.id, entry.meta.version) }) } }, entry.meta.title, entry.meta.review === 'draft' ? ' · ' + T('deep.draft') : '')
       }),
@@ -1601,9 +1601,17 @@ window.__ModuleLoader__.load({
       }, report.versions.map(function (version) { return h('option', { key: version, value: version }, 'v' + version) }))) : null,
       report ? report.evidence.map(cite) : null,
       report && report.meta.review !== 'draft' ? h('div', { className: 'gr-row' },
-        h('button', { className: 'gr-btn', onClick: function () {
-          props.onNavigate('knowledge', { title: report.meta.title, body: report.body, report: { id: report.meta.id, version: report.meta.version } })
-        } }, T('asset.derive')),
+        h('button', { className: 'gr-btn', disabled: busy || !!kept, onClick: function () {
+          run(async function () {
+            var entry = await api(KNOWLEDGE, { action: 'keep-report', report: { id: report.meta.id, version: report.meta.version } })
+            setKept({ id: entry.meta.id, version: entry.meta.version })
+          })
+        } }, T(kept ? 'asset.kept' : 'asset.keep')),
+        kept ? h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () {
+          props.onNavigate('knowledge', { read: kept })
+        } }, T('asset.openKnowledge')) : null,
+        props.inline && !editing ? h('button', { className: 'gr-btn gr-btn-ghost', disabled: report.meta.version !== report.versions[0],
+          onClick: function () { setEditing(true) } }, T('report.edit')) : null,
         h('button', { className: 'gr-btn', onClick: function () {
           props.onNavigate('works', { title: report.meta.title, body: report.body, basis: { id: report.meta.id, version: report.meta.version } })
         } }, T('asset.compose'))) : null,
@@ -1656,7 +1664,7 @@ window.__ModuleLoader__.load({
       async function read(id, version) {
         var entry = await api(endpoint, { action: 'read', id: id, version: version })
         setSelected(entry)
-        setDraft({})
+        setDraft(null)
         setTitle(entry.meta.title)
         setBody(entry.body)
         setBasis(null)
@@ -1708,6 +1716,18 @@ window.__ModuleLoader__.load({
           return h('button', { key: entry.meta.id, className: 'gr-btn gr-btn-ghost', disabled: busy,
             onClick: function () { run(function () { return read(entry.meta.id, entry.meta.version) }) } }, entry.meta.title)
         })) : null,
+        selected && !draft ? h('article', { className: 'gr-card gr-stack' },
+          h('h2', { className: 'gr-h2' }, selected.meta.title),
+          h(ReportMarkdown, { body: selected.body }),
+          h('div', { className: 'gr-row' },
+            h('label', null, T('report.history'), ' ', h('select', { value: selected.meta.version, disabled: busy,
+              onChange: function (event) {
+                var version = Number(event.target.value)
+                run(function () { return read(selected.meta.id, version) })
+              }
+            }, selected.versions.map(function (version) { return h('option', { key: version, value: version }, 'v' + version) }))),
+            h('button', { className: 'gr-btn gr-btn-ghost', disabled: selected.meta.version !== selected.versions[0],
+              onClick: function () { setDraft({}) } }, T('asset.edit')))) : null,
         draft ? h('form', { className: 'gr-card', onSubmit: save },
           selected ? h('h3', null, selected.meta.title) : h('label', null, T('asset.title'),
             h('input', { className: 'gr-input', value: title, maxLength: 300, required: true, onChange: function (event) { setTitle(event.target.value) } })),
@@ -1739,27 +1759,23 @@ window.__ModuleLoader__.load({
           } }, T('asset.copy')) : null) : null,
         basis ? h('article', { className: 'gr-card' },
           basis.meta ? h('h3', null, basis.meta.title, ' · v', basis.meta.version) : null,
-          h('pre', { className: 'gr-code' }, basis.body)) : null)
+          h(ReportMarkdown, { body: basis.body }),
+          basis.meta?.type === 'report' ? h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () {
+            props.onNavigate('report', { id: basis.meta.id, version: basis.meta.version, studyId: basis.meta.links?.find(function (link) { return link.kind === 'related' })?.id })
+          } }, T('report.title')) : null) : null)
     }
 
     function ResearchPage(props) {
-      var [reportDraft, setReportDraft] = useState(null)
       var [studies, setStudies] = useState([])
-      var [topicSearch, setTopicSearch] = useState('')
       var [selected, setSelected] = useState(null)
-      var [question, setQuestion] = useState(props.seed?.title || '')
-      var [useOrigin, setUseOrigin] = useState(!!props.seed?.origin)
-      var [body, setBody] = useState('')
+      var [creating, setCreating] = useState(!!(props.seed?.idea || props.seed?.origin || props.seed?.title) && !props.seed?.resume)
+      var [sourceSeed, setSourceSeed] = useState(creating ? props.seed : null)
+      var [runs, setRuns] = useState([])
       var [busy, setBusy] = useState(true)
       var [error, setError] = useState(null)
-      var [saved, setSaved] = useState(false)
-      var [runs, setRuns] = useState(null)
-      var [openedReport, setOpenedReport] = useState(null)
+      var [topicSearch, setTopicSearch] = useState('')
       var top = useRef(null)
-
-      useEffect(function () {
-        top.current?.closest?.('.gr-scroll')?.scrollTo(0, 0)
-      }, [selected?.meta.id])
+      var visit = useRef(0)
 
       useEffect(function () {
         var active = true
@@ -1768,128 +1784,88 @@ window.__ModuleLoader__.load({
           setStudies(data.studies)
           if (props.seed?.resume) {
             var study = data.studies.find(function (item) { return item.meta.id === props.seed.resume })
-            if (study) select(study, props.seed.report)
+            if (study) select(study)
             else setError(new Error(T('research.topicMissing')))
           }
-        }, function (problem) {
-          if (active) setError(problem)
-        }).finally(function () {
-          if (active) setBusy(false)
-        })
-        return function () { active = false }
+        }, function (problem) { if (active) setError(problem) })
+          .finally(function () { if (active) setBusy(false) })
+        return function () { active = false; visit.current++ }
       }, [])
 
-      function select(note, initialReport) {
-        if (note?.meta.id !== selected?.meta.id || initialReport) {
-          setRuns(null)
-          setOpenedReport(initialReport || null)
-        }
-        setSelected(note)
-        setReportDraft(null)
-        setBody(note ? note.body : '')
-        setQuestion('')
-        setSaved(false)
-      }
+      useEffect(function () {
+        top.current?.closest?.('.gr-scroll')?.scrollTo(0, 0)
+      }, [selected?.meta.id, creating])
 
-      function save(event) {
-        event.preventDefault()
-        if (busy || (!selected && !question.trim())) return
-        setBusy(true)
+      function select(study) {
+        visit.current++
+        setSourceSeed(null)
+        setRuns([])
+        setSelected(study)
+        setCreating(false)
         setError(null)
-        setSaved(false)
-        var input = selected ? { id: selected.meta.id, version: selected.meta.version, body: body } : { question: question, body: body, origin: useOrigin ? props.seed?.origin : undefined }
-        api(RESEARCH_UPDATE, input).then(function (note) {
-          select(note)
-          setSaved(true)
-          setStudies(function (items) {
-            return [note].concat(items.filter(function (item) { return item.meta.id !== note.meta.id }))
-          })
-        }, setError).finally(function () { setBusy(false) })
       }
 
-      var lastStudy = studies[0]
-      var inspirationOrigins = selected?.meta.links?.filter(function (link) { return link.excerpt })
-      var visibleTopics = studies.filter(function (note) {
-        return note.meta.title.toLowerCase().includes(topicSearch.trim().toLowerCase())
-      })
-      var deepPanel = h(DeepResearchPanel, { key: selected ? 'deep:topic:' + selected.meta.id : useOrigin ? 'deep:origin:' + props.seed.origin.id : 'deep:independent', topic: selected?.meta.id, onSettings: props.onSettings, modelConfig: props.modelConfig,
-          knowledge: selected || !useOrigin ? undefined : props.seed.origin, direction: selected || !useOrigin ? undefined : props.seed.title,
-          onRuns: selected ? setRuns : undefined,
-          onFinished: function () { api(RESEARCH).then(function (data) { setStudies(data.studies) }, setError) },
-          onReport: function (run) { props.onNavigate('report', Object.assign({ idea: props.seed?.idea, studyId: run.topic }, run.report)) } })
-      var notice = error ? h('p', { role: 'alert' }, messageOf(error)) : null
-      if (selected) return h(React.Fragment, null,
-        h('div', { className: 'gr-row', ref: top },
-          h('button', { className: 'gr-btn gr-btn-ghost', disabled: busy, onClick: function () {
-            setUseOrigin(false)
-            select(null)
-          } }, T('research.overview'))),
-        h('h1', { className: 'gr-h2' }, selected.meta.title),
-        notice,
-        deepPanel,
-        h('section', { className: 'gr-card' },
-          h('h2', { className: 'gr-h2' }, T('research.history')),
-          runs?.length === 0 ? h('p', { className: 'gr-meta' }, T('research.noRuns')) : null,
-          runs?.map(function (run) {
-            return h('details', { key: run.id },
-              h('summary', null, run.direction || run.plan?.topic || T('research.noDirection'),
-                ' · ', T('research.run.' + run.status), ' · ', inspirationTime(run.created)),
-              run.plan?.questions?.length ? h('ul', null, run.plan.questions.map(function (question) {
-                return h('li', { key: question }, question)
-              })) : null,
-              run.verified?.length ? h('ul', null, run.verified.map(function (claim, index) {
-                return h('li', { key: index }, T('deep.' + claim.status), ' · ', claim.text)
-              })) : null,
-              run.error ? h('p', null, messageOf(run.error)) : null,
-              run.report ? h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () {
-                setOpenedReport({ id: run.report.id, version: run.report.version })
-              } }, T('deep.openReport')) : null)
-          }),
-          h('details', null, h('summary', null, T('research.notes')),
-            h('form', { className: 'gr-stack', onSubmit: save },
-              inspirationOrigins?.length ? h('details', null,
-                h('summary', null, T('idea.origin')),
-                inspirationOrigins.map(function (link) {
-                  return h('div', { className: 'gr-stack', key: link.id },
-                    h('p', { className: 'gr-prose' }, link.excerpt),
-                    h('button', { type: 'button', className: 'gr-btn gr-btn-ghost', onClick: function () {
-                      props.onNavigate('idea', { id: link.id, version: link.version, back: props.seed?.idea?.id === link.id ? undefined : props.seed?.idea })
-                    } }, T('idea.openOriginal'), ' · v', link.version))
-                })) : null,
-              h('label', null, T('research.notes'), h('textarea', { className: 'gr-textarea', value: body,
-                onChange: function (event) { setBody(event.target.value); setSaved(false) } })),
-              h('div', { className: 'gr-row' },
-                h('button', { className: 'gr-btn', disabled: busy }, T('research.save')),
-                h('span', { role: 'status' }, saved ? T('research.saved') : '')))),
-          h('details', null, h('summary', null, T('source.title')),
-            h(ResearchSources, { id: selected.meta.id })),
-          h(ResearchFindings, { key: 'findings:' + selected.meta.id, id: selected.meta.id, title: selected.meta.title, version: selected.meta.version, modelEnabled: props.modelConfig?.enabled, onSettings: props.onSettings, onDraft: setReportDraft })),
-        h(ResearchReports, { key: 'report:' + selected.meta.id, id: selected.meta.id, onNavigate: props.onNavigate, draft: reportDraft, initialReport: openedReport, latestReportId: runs?.find(function (run) { return run.report })?.report.id, onDiscard: function () { setReportDraft(null) } }))
+      function finished(run) {
+        var current = visit.current
+        api(RESEARCH).then(function (data) {
+          if (visit.current !== current) return
+          setStudies(data.studies)
+          if (!selected) {
+            var study = data.studies.find(function (item) { return item.meta.id === run.topic })
+            if (study) select(study)
+          }
+        }, function (problem) { if (visit.current === current) setError(problem) })
+      }
 
+      var notice = error ? h('p', { role: 'alert' }, messageOf(error)) : null
+      if (!selected && !creating) return h(React.Fragment, null,
+        h('div', { className: 'gr-row', ref: top },
+          h('h1', null, T('nav.research')),
+          h('button', { className: 'gr-btn', disabled: busy, onClick: function () { setCreating(true) } }, T('research.newConversation'))),
+        notice,
+        studies.length ? h('section', { className: 'gr-stack' },
+          h('label', null, T('deep.topicSearch'), h('input', { type: 'search', className: 'gr-input', value: topicSearch,
+            onChange: function (event) { setTopicSearch(event.target.value) } })),
+          studies.filter(function (study) { return study.meta.title.toLowerCase().includes(topicSearch.trim().toLowerCase()) })
+            .map(function (study) {
+              return h('button', { key: study.meta.id, className: 'gr-btn gr-btn-ghost', onClick: function () {
+                select(study)
+              } }, study.meta.title, ' · ', inspirationTime(study.activity || study.meta.modified || study.meta.created))
+            })) : null)
+
+      var id = selected?.meta.id
+      var idea = !id && sourceSeed?.idea ? { id: sourceSeed.idea.id, version: sourceSeed.idea.version } : undefined
+      var origin = selected?.meta.links?.find(function (link) { return link.kind === 'derived' && link.excerpt })
       return h(React.Fragment, null,
         h('div', { className: 'gr-row', ref: top },
-          h('button', { className: 'gr-btn gr-btn-ghost', disabled: busy, onClick: props.onBack }, T(props.seed?.idea ? 'idea.back' : 'research.back')),
-          lastStudy ? h('button', { className: 'gr-btn', disabled: busy, onClick: function () { select(lastStudy) } },
-            T('research.continue'), ' · ', lastStudy.meta.title) : null),
+          h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () {
+            if (creating && sourceSeed?.idea) props.onBack()
+            else select(null)
+          } }, T(creating && sourceSeed?.idea ? 'idea.back' : 'research.overview'))),
+        h('h1', null, selected?.meta.title || T('research.newConversation')),
         notice,
-        studies.length ? h('section', { className: 'gr-card' },
-          h('h2', { className: 'gr-h2' }, T('deep.topics')),
-          h('label', null, T('deep.topicSearch'),
-            h('input', { type: 'search', className: 'gr-input', value: topicSearch, onChange: function (event) { setTopicSearch(event.target.value) } })),
-          visibleTopics.map(function (note) {
-            return h('button', { key: note.meta.id, className: 'gr-btn gr-btn-ghost', disabled: busy,
-              onClick: function () { select(note) } }, note.meta.title)
-          }),
-          visibleTopics.length ? null : h('p', { className: 'gr-meta' }, T('deep.noTopics'))) : null,
-        deepPanel,
-        h('details', { className: 'gr-card' }, h('summary', null, T('deep.note')),
-          h('form', { onSubmit: save }, h('label', null, T('research.question'),
-              h('input', { className: 'gr-input', value: question, required: true, maxLength: 300,
-                onChange: function (event) { setQuestion(event.target.value) } })),
-          h('label', null, T('research.notesOptional'), h('textarea', { className: 'gr-textarea', value: body,
-            onChange: function (event) { setBody(event.target.value) } })),
-          h('button', { className: 'gr-btn', disabled: busy }, T('research.start'))))
-      )
+        idea || origin ? h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () {
+          var ref = origin || idea
+          props.onNavigate('idea', { id: ref.id, version: ref.version })
+        } }, T('idea.openOriginal')) : null,
+        runs.slice().reverse().map(function (run) {
+          if (run.status !== 'complete') return null
+          return h('article', { key: run.id, className: 'gr-stack' },
+            h('p', { className: 'gr-prompt' }, run.direction || run.plan?.topic || selected.meta.title),
+            run.summary ? h('p', { className: 'gr-prose' }, run.summary) : null,
+            run.report ? h(ResearchReports, { id: id, inline: true, initialReport: run.report,
+              open: props.seed?.report?.id === run.report.id, onNavigate: props.onNavigate, onDiscard: function () {} }) : null)
+        }),
+        id ? h('details', null,
+          h('summary', null, T('source.title')),
+          selected.body ? h('p', { className: 'gr-prose' }, selected.body) : null,
+          h(ResearchSources, { key: id, id: id }),
+          h(LegacyFindings, { key: 'findings:' + id, id: id }),
+          h(ResearchReports, { id: id, excluded: runs.map(function (run) { return run.report?.id }), onNavigate: props.onNavigate, onDiscard: function () {} })) : null,
+        h(DeepResearchPanel, { key: id || 'new', idea: idea, topic: id,
+          knowledge: !id ? sourceSeed?.origin : undefined, direction: !id ? sourceSeed?.title : undefined,
+          onSettings: props.onSettings, modelConfig: props.modelConfig,
+          onRuns: id ? setRuns : undefined, onFinished: finished }))
     }
 
     function ErrorNote(props) {
@@ -1926,6 +1902,11 @@ window.__ModuleLoader__.load({
 
     var CSS = [
       '.gr-root{--gr-paper:light-dark(#f7f8f2,#19211d);--gr-surface:light-dark(#fffefa,#222d26);--gr-ink:light-dark(#24342b,#e5eee5);--gr-muted:light-dark(#55675b,#adbdaf);--gr-line:light-dark(#dce3d8,#43554a);--gr-wash:light-dark(#e9efe3,#293a30);--gr-green:light-dark(#285342,#bce0c9);--gr-on-green:light-dark(#fff,#173629);--gr-error:light-dark(#a52d25,#ffb4aa);height:100%;min-height:0;display:flex;flex-direction:column;background:var(--gr-paper);color:var(--gr-ink);font-family:inherit;font-size:13px;line-height:1.6;box-sizing:border-box;padding-top:min(var(--dsh-frame-top-clearance,0px),28px)}',
+      '.gr-prompt{margin-left:12%;padding:10px 13px;background:var(--gr-wash);border-radius:12px;overflow-wrap:anywhere}',
+      '.gr-nav{order:-1;display:flex;flex-direction:column;gap:5px;flex:none;width:130px;padding:20px 10px;border-right:1px solid var(--gr-line);background:var(--gr-wash)}',
+      '.gr-nav .gr-btn{text-align:left}.gr-nav [aria-current=page]{background:var(--gr-green);color:var(--gr-on-green)}',
+      '.gr-root:has(>.gr-nav){flex-direction:row}.gr-scroll{min-width:0}',
+      '@media(max-width:580px){.gr-root:has(>.gr-nav){flex-direction:column}.gr-nav{width:auto;flex-direction:row;flex-wrap:wrap;padding:6px;border-right:0;border-bottom:1px solid var(--gr-line)}.gr-nav .gr-btn{text-align:center;flex:1;white-space:nowrap}}',
       '.gr-scroll{flex:1 1 auto;min-height:0;overflow:auto}',
       '.gr-inner{max-width:760px;margin:0 auto;padding:28px 24px 40px;display:flex;flex-direction:column;gap:18px;box-sizing:border-box}',
       '.gr-head{display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap;padding-bottom:14px;border-bottom:1px solid var(--gr-line)}',

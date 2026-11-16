@@ -656,3 +656,50 @@ test('deep research can use a supplied public page without invoking paid search'
   assert.deepEqual(requested, ['https://example.org/article'])
   assert.match((await vault.get(id)).body, /https:\/\/example\.org\/article/)
 })
+
+test('a confirmed report can be kept once in knowledge and found by a natural-language query', async t => {
+  const root = await fixture(t)
+  const store = new Vault(root)
+  const { ctx, registered } = host()
+  registerRoutes(ctx, { current: () => ({ path: root }) })
+  const draft = await store.create({ type: 'report', title: '智能体 UX 设计', body: '保留可接管的操作', review: 'draft' })
+  const keep = version => registered.get(routes.knowledge).fetch(request(routes.knowledge, {
+    action: 'keep-report', report: { id: draft.meta.id, version },
+  }))
+  assert.notEqual((await keep(1)).status, 200)
+  await store.update(draft.meta.id, 1, { review: 'confirmed' })
+  const results = await Promise.all([keep(2), keep(2)])
+  assert.deepEqual(results.map(result => result.status), [200, 200])
+  const [first, second] = await Promise.all(results.map(result => result.json()))
+  assert.equal(first.meta.id, second.meta.id)
+  assert.deepEqual(first.meta.links, [{ kind: 'derived', id: draft.meta.id, version: 2 }])
+  const result = await registered.get(routes.inspirations).fetch(request(routes.inspirations, {
+    action: 'search', query: '帮我找一下关于智能体 UX 设计的笔记',
+  }))
+  assert.deepEqual(new Set((await result.json()).notes.map(note => note.id)), new Set([first.meta.id, draft.meta.id]))
+})
+
+test('research conversation keeps follow-up history and origin when using local evidence only', async t => {
+  const root = await fixture(t)
+  const store = new Vault(root)
+  const idea = await store.create({ type: 'inspiration', body: '研究如何让用户人工接管。' })
+  const { ctx, registered } = host()
+  const plans = []
+  registerRoutes(ctx, {
+    current: () => ({ path: root }), modelConfig: { enabled: true },
+    model: () => ({
+      async plan(input) { plans.push(input); return { topic: '人工接管', questions: ['如何接管？'] } },
+      async review() { return { claims: [{ text: '需要承接上下文', explanation: '等待证据', status: 'insufficient', sources: [] }], followups: [] } },
+      async write() { return { summary: '当前材料不足以验证交互方案。', nextSteps: [] } },
+    }),
+  })
+  const call = input => registered.get(routes.deepResearch).fetch(request(routes.deepResearch, input))
+  const first = await (await call({ action: 'start', conversation: true, idea: { id: idea.meta.id, version: 1 }, direction: '怎么做？' })).json()
+  await waitFor(async () => (await (await call({ action: 'list', topic: first.topic })).json()).runs[0]?.status === 'complete')
+  const next = await (await call({ action: 'start', conversation: true, topic: first.topic, direction: '三秒内呢？' })).json()
+  await waitFor(async () => (await (await call({ action: 'list', topic: first.topic })).json()).runs[0]?.id === next.id &&
+    (await (await call({ action: 'list', topic: first.topic })).json()).runs[0]?.status === 'complete')
+  assert.equal(next.topic, first.topic)
+  assert.equal((await store.get(first.topic)).meta.links[0].id, idea.meta.id)
+  assert.deepEqual(plans[1].history, [{ question: '怎么做？', summary: '当前材料不足以验证交互方案。' }])
+})

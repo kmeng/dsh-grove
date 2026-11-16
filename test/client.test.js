@@ -143,7 +143,7 @@ test('the folder button uses the host picker and cancellation leaves manual entr
   }
 })
 
-test('the connected home offers recent ideas before searching', () => {
+test('the ideas view offers saved ideas in the shared workspace', () => {
   const { ctx, registrations } = mount()
   const original = React.useState
   let slot = 0
@@ -153,7 +153,7 @@ test('the connected home offers recent ideas before searching', () => {
     const page = registrations.find(item => item.name === 'main').component
     const home = activeView(page()).children.find(item => item?.props?.onSearch)
     const fixture = { id: 'test', title: '先前的灵感', version: 1 }
-    const tree = home.type({ ...home.props, recent: [fixture] })
+    const tree = home.type({ ...home.props, history: true, recent: [fixture] })
     function contains(node, text) {
       return node === text || (Array.isArray(node) ? node : node?.children ?? []).some(child => contains(child, text))
     }
@@ -210,27 +210,29 @@ test('resuming a topic opens a scoped detail view without repeating the deep res
 
   let nextTopic
   function render(selected) {
-    const state = { 1: [topic], 3: selected, 7: false }
+    const run = { id: 'run-1', status: 'complete', direction: '追问', report: { id: 'report-1', version: 1 } }
+    const state = { 0: [topic], 1: selected, 4: selected ? [run] : [], 5: false }
     slot = 0
     useState = value => {
       const index = slot++
-      return [state[index] ?? value, next => { if (index === 3) nextTopic = next }]
+      return [state[index] ?? value, next => { if (index === 1) nextTopic = next }]
     }
     return research.type(research.props)
   }
   const overview = render(null)
-  const resume = overview.children[0].children.find(node => node?.children?.includes('接着上次深挖'))
+  const resume = overview.children[2].children[1][0]
   assert.ok(resume.children.includes(topic.meta.title))
   resume.props.onClick()
   assert.equal(nextTopic, topic)
   const detail = render(nextTopic)
-  const [, title, , deepPanel, history, reports] = detail.children
+  const title = detail.children[1]
+  const deepPanel = detail.children.at(-1)
+  const [turn] = detail.children.find(Array.isArray)
   assert.equal(title.type, 'h1')
   assert.deepEqual(title.children, [topic.meta.title])
   assert.equal(deepPanel.props.topic, topic.meta.id)
-  assert.equal(history.children[0].children[0], '研究历史')
-  assert.equal(reports.props.id, topic.meta.id)
-  assert.ok(!detail.children.some(child => child?.children?.[0]?.children?.includes('研究话题')))
+  assert.equal(turn.children.at(-1).props.id, topic.meta.id)
+  assert.equal(turn.children.at(-1).props.initialReport.id, 'report-1')
   const keys = detail.children.map(child => child?.props?.key).filter(key => key != null)
-  assert.equal(new Set(keys).size, keys.length, 'duplicate sibling keys can leave stale panels after rerendering')
+  assert.equal(new Set(keys).size, keys.length)
 })
