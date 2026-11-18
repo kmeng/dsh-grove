@@ -95,18 +95,24 @@ async function collect(store, run, queries, providers, scope) {
   })
   const local = scope === 'web' ? [] : await localSources(store, run.topic, queries, run.attachment)
   const found = new Map(local.map(source => [source.id, source]))
+  const unavailable = new Map()
   for (const candidate of web.flat()) {
-    if (found.size >= 16) break
     const url = typeof candidate.url === 'string' && URL.parse(candidate.url)
-    if (!url || !['http:', 'https:'].includes(url.protocol) || url.username || url.password ||
-      typeof candidate.text !== 'string' || !candidate.text.trim()) continue
+    if (!url || !['http:', 'https:'].includes(url.protocol) || url.username || url.password) continue
     url.hash = ''
-    if (found.has(url.href)) continue
+    if (candidate.unavailable) {
+      if (!found.has(url.href) && unavailable.size < 16) unavailable.set(url.href, {
+        id: url.href, title: String(candidate.title || url.hostname).slice(0, 200), unavailable: candidate.unavailable,
+      })
+      continue
+    }
+    if (found.size >= 16 || found.has(url.href) || typeof candidate.text !== 'string' || !candidate.text.trim()) continue
+    unavailable.delete(url.href)
     found.set(url.href, { id: url.href, url: url.href, origin: url.hostname.replace(/^www\./, ''),
       title: String(candidate.title || url.hostname).slice(0, 200), text: candidate.text.slice(0, 5000),
       ...(candidate.publishedAt ? { publishedAt: String(candidate.publishedAt).slice(0, 80) } : {}) })
   }
-  return [...found.values()]
+  return [...found.values(), ...unavailable.values()]
 }
 
 export function hasCitableEvidence(verified) {
@@ -124,8 +130,10 @@ function progress(run, running = false) {
   return { id, scope, topic, direction, created, report, error, attachment: run.attachment,
     status: status === 'running' && !running ? 'interrupted' : status,
     plan,
-    collected: collected?.map(({ title }) => title),
-    sourceLinks: collected?.map(source => source.url ?? null),
+    collected: collected?.filter(source => !source.unavailable).map(({ title }) => title),
+    sourceLinks: collected?.filter(source => !source.unavailable).map(source => source.url ?? null),
+    unavailableSources: verified?.unavailable ?? collected?.filter(source => source.unavailable).map(({ title }) => title),
+    retrying: !!run.retrying,
     review: review && { followups: review.followups },
     verified: verified?.claims.map(({ text, status }) => ({ text, status })),
     written: !!written,

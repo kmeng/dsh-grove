@@ -46,13 +46,17 @@ export function createDshModels(ctx) {
     },
     model(selection) {
       if (!available(selection)) throw failure('model-dsh-route', 'This model route is unavailable in dsh')
-      return modelTasks(selection.model, async (system, input) => {
+      return modelTasks(selection.model, async (system, input, requestOptions) => {
         const signal = AbortSignal.timeout(60000)
         const key = identity(selection)
         try {
           const runtime = llm()
+          const effort = selection.reasoningEffort
+          const reduced = requestOptions?.lowerEffort && (['medium', 'high', 'xhigh', 'max'].includes(effort) ||
+            (!effort && /^deepseek(?:-|$)/.test(selection.provider)))
+          const reasoningEffort = reduced ? 'low' : effort
           const route = { provider: selection.provider, model: selection.model,
-            ...(selection.reasoningEffort ? { reasoningEffort: selection.reasoningEffort } : {}) }
+            ...(reasoningEffort ? { reasoningEffort } : {}) }
           const call = typeof runtime.prepareCall === 'function' ? await runtime.prepareCall(route, signal) : null
           const options = { ...(call?.config ?? route), signal,
             system: system + '\nRespond with a JSON object only.',
