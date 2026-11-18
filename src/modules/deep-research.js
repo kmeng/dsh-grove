@@ -56,7 +56,9 @@ export const stagedResearch = {
     }
 
     await step('plan', async () => {
-      const plan = await model.plan(state.localOnly ? { ...state.input, history: state.history } : state.input)
+      const { language, direction, today } = state.input
+      const plan = await model.plan(state.hostSearch ? { language, direction, today } :
+        state.localOnly ? { ...state.input, history: state.history } : state.input)
       const items = questions(plan?.questions, 4)
       if (!items.length) throw invalid()
       return { topic: line(plan.topic, 160), questions: items }
@@ -102,7 +104,7 @@ export function renderResearchReport(state) {
   })
   const references = sources.map(source => {
     const location = source.reference ? `[[${source.reference.id}.v${source.reference.version}]]` : `<${source.url}>`
-    return `${numbers.get(source.id)}. ${markdownText(source.title)} · ${location}`
+    return `${numbers.get(source.id)}. ${markdownText(source.title)} · ${location}${source.publishedAt ? ' · ' + markdownText(source.publishedAt) : ''}`
   })
 
   const hasSupport = state.verified.claims.some(claim => claim.status === 'supported')

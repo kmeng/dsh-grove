@@ -4,12 +4,13 @@ import { propose, roles } from './proposals.js'
 import { documentParsers } from './adapters/parsers/documents.js'
 import { createDshModels } from './adapters/models/dsh.js'
 import { httpModel } from './adapters/models/http.js'
+import { createDshWeb } from './adapters/search/dsh-web.js'
 import { readPublicPage } from './adapters/search/public-pages.js'
 import { tavilySearch } from './adapters/search/tavily.js'
 import { registerRoutes } from './server.js'
 
 export const name = 'grove'
-export const inject = { tools: { required: true }, llm: { required: false }, agentDefaultModel: { required: false } }
+export const inject = { tools: { required: true }, llm: { required: false }, agentDefaultModel: { required: false }, web: { required: false } }
 
 const output = {
   schema: { type: 'string' },
@@ -35,6 +36,7 @@ export function apply(ctx, config = {}) {
     pdfEnabled: config.parsers?.pdf !== false,
     modelConfig: config.model,
     dshModels: createDshModels(ctx),
+    dshWeb: createDshWeb(ctx, readPublicPage),
     readResearchPage: readPublicPage,
     researchSearch: () => {
       if (config.model?.webSearch !== true) return null

@@ -77,6 +77,10 @@ window.__ModuleLoader__.load({
       'research.incomplete': '研究未完成',
       'err.research-no-evidence': '没有找到可引用的资料。补充资料或公开链接后，可以继续研究。',
       'err.research-attachment': '无法读取附件：{message}',
+      'research.hostSearch': '将使用 dsh 联网检索',
+      'research.localSearch': '联网检索不可用。可添加资料或在问题里粘贴公开链接。',
+      'research.searchSettings': '联网检索设置',
+      'report.sourceLinks': '来源链接',
       'settings.title': '设置',
       'settings.models': '模型设置',
       'settings.back': '返回刚才的页面',
@@ -106,7 +110,7 @@ window.__ModuleLoader__.load({
       'deep.collected': '找到的资料',
       'deep.noSources': '暂未找到可引用的资料。',
       'deep.webSetting': '启用 Tavily 搜索',
-      'deep.webHint': '提供公开链接时，知林可以直接读取网页。开启 Tavily 后，未提供链接的研究可以自动搜索，需要 GROVE_TAVILY_KEY。',
+      'deep.webHint': '优先使用 dsh 的联网检索。仅当宿主检索不可用时，才会使用已配置的 Tavily。公开链接也可以直接读取。',
       'deep.followups': '待补查的证据',
       'deep.verified': '核验结果',
       'deep.supported': '有证据支持',
@@ -327,6 +331,10 @@ window.__ModuleLoader__.load({
       'research.incomplete': 'Research incomplete',
       'err.research-no-evidence': 'No citable sources were found. Add material or a public link to continue.',
       'err.research-attachment': 'Cannot read the attachment: {message}',
+      'research.hostSearch': 'Uses dsh web search',
+      'research.localSearch': 'Web search is unavailable. Attach material or include a public link.',
+      'research.searchSettings': 'Web search settings',
+      'report.sourceLinks': 'Source links',
       'settings.title': 'Settings',
       'settings.models': 'Model settings',
       'settings.back': 'Back to the previous page',
@@ -356,7 +364,7 @@ window.__ModuleLoader__.load({
       'deep.collected': 'Sources found',
       'deep.noSources': 'No citable sources found yet.',
       'deep.webSetting': 'Enable Tavily search',
-      'deep.webHint': 'Grove can read supplied public links directly. To search automatically when no link is supplied, enable Tavily and set GROVE_TAVILY_KEY.',
+      'deep.webHint': 'Grove uses dsh web search first and falls back to configured Tavily when unavailable. Public links can also be read directly.',
       'deep.followups': 'Evidence to look for next',
       'deep.verified': 'Evidence review',
       'deep.supported': 'Supported',
@@ -1140,7 +1148,7 @@ window.__ModuleLoader__.load({
           var language = T('research.ask') === EN['research.ask'] ? 'en' : 'zh'
           var upload = attachment ? { name: attachment.name, original: await readSourceFile(attachment) } : undefined
           var started = await api(DEEP_RESEARCH, Object.assign({ action: 'start', attachment: upload,
-            direction: direction, language: language, conversation: true }, scope))
+            direction: direction, language: language, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone, conversation: true }, scope))
           requested.current = started.id
           setRun(started)
           props.onStarted?.(started)
@@ -1160,6 +1168,11 @@ window.__ModuleLoader__.load({
           attachment ? h('div', { className: 'gr-row' }, h('span', null, attachment.name),
             h('button', { type: 'button', className: 'gr-btn gr-btn-ghost gr-btn-sm', disabled: busy || running,
               onClick: function () { setAttachment(null) } }, T('research.removeAttachment'))) : null,
+          props.modelConfig?.hostSearch ? h('p', { className: 'gr-meta' }, T('research.hostSearch')) :
+            props.modelConfig?.hostSearch === false && !props.modelConfig?.webSearch ?
+              h('div', { className: 'gr-row' },
+                h('span', { className: 'gr-meta' }, T('research.localSearch')),
+                h('button', { type: 'button', className: 'gr-btn gr-btn-ghost gr-btn-sm', onClick: props.onSettings }, T('research.searchSettings'))) : null,
           h('input', { type: 'file', hidden: true, accept: '.md,.markdown,.pdf', ref: fileInput,
             onChange: function (event) {
               if (event.target.files[0]) setAttachment(event.target.files[0])
@@ -1189,7 +1202,10 @@ window.__ModuleLoader__.load({
           run.plan ? h('div', null, h('h4', null, T('deep.plan')),
             h('ul', null, run.plan.questions.map(function (item) { return h('li', { key: item }, item) }))) : null,
           run.collected ? h('div', null, h('h4', null, T('deep.collected')),
-            run.collected.length ? h('ul', null, run.collected.map(function (item, index) { return h('li', { key: index }, item) }))
+            run.collected.length ? h('ul', null, run.collected.map(function (item, index) {
+              var source = run.sourceLinks?.[index]
+              return h('li', { key: index }, /^https?:\/\//i.test(source || '') ? h('a', { href: source, target: '_blank', rel: 'noreferrer' }, item) : item)
+            }))
               : h('p', null, T('deep.noSources'))) : null,
           run.review?.followups.length ? h('div', null, h('h4', null, T('deep.followups')),
             h('ul', null, run.review.followups.map(function (item) { return h('li', { key: item }, item) }))) : null,
@@ -1601,6 +1617,11 @@ window.__ModuleLoader__.load({
           originals[item.meta.id] ? h('pre', { className: 'gr-code' }, originals[item.meta.id]) : null)
       }
 
+      var draftLinks = editing && report?.meta.review === 'draft' ?
+        Array.from(new Set(Array.from(body.matchAll(/<(https?:\/\/[^>\s]+)>/g), function (match) {
+          return match[1]
+        }))) : []
+
       function reportReturn() {
         return { page: 'research', label: 'report.title',
           seed: { resume: props.id, report: { id: report.meta.id, version: report.meta.version } } }
@@ -1615,6 +1636,11 @@ window.__ModuleLoader__.load({
       h('summary', null, props.inline && report ? report.meta.title + ' · ' +
         T(report.meta.review === 'draft' ? 'deep.draft' : 'report.confirmed') : T('report.title')),
       report && !editing ? h(ReportMarkdown, { body: report.body }) : null,
+      draftLinks.length ? h('details', null,
+        h('summary', null, T('report.sourceLinks')),
+        h('ul', null, draftLinks.map(function (url) {
+          return h('li', { key: url }, h('a', { href: url, target: '_blank', rel: 'noreferrer' }, url))
+        }))) : null,
       error ? h('p', { role: 'alert' }, messageOf(error)) : null,
       props.inline ? null : h('button', { className: 'gr-btn', disabled: busy, onClick: start }, T('report.new')),
       (!props.inline && catalog ? catalog.reports.filter(function (entry) { return !props.excluded?.includes(entry.meta.id) }) : []).map(function (entry) {
@@ -1972,6 +1998,7 @@ window.__ModuleLoader__.load({
 
     var CSS = [
       '.gr-root{--gr-paper:light-dark(#f7f8f2,#19211d);--gr-surface:light-dark(#fffefa,#222d26);--gr-ink:light-dark(#24342b,#e5eee5);--gr-muted:light-dark(#55675b,#adbdaf);--gr-line:light-dark(#dce3d8,#43554a);--gr-wash:light-dark(#e9efe3,#293a30);--gr-green:light-dark(#285342,#bce0c9);--gr-on-green:light-dark(#fff,#173629);--gr-error:light-dark(#a52d25,#ffb4aa);height:100%;min-height:0;display:flex;flex-direction:column;background:var(--gr-paper);color:var(--gr-ink);font-family:inherit;font-size:13px;line-height:1.6;box-sizing:border-box;padding-top:min(var(--dsh-frame-top-clearance,0px),28px)}',
+      '.gr-markdown a,.gr-card a{overflow-wrap:anywhere}',
       '.gr-research-composer{position:sticky;bottom:0;z-index:1}.gr-compose-actions{justify-content:space-between}.gr-research-composer textarea{min-height:64px}',
       '.gr-prompt{margin-left:12%;padding:10px 13px;background:var(--gr-wash);border-radius:12px;overflow-wrap:anywhere}',
       '.gr-nav{order:-1;display:flex;flex-direction:column;gap:5px;flex:none;width:130px;padding:20px 10px;border-right:1px solid var(--gr-line);background:var(--gr-wash)}',

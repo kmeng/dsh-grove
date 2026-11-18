@@ -756,3 +756,36 @@ test('an old generated draft without citable evidence cannot be confirmed', asyn
   assert.notEqual(result.status, 200)
   assert.deepEqual(await store.versions(report.meta.id), [1])
 })
+
+test('desktop research uses the host search without a Tavily configuration', async t => {
+  const root = await fixture(t)
+  const { ctx, registered } = host()
+  let query
+  let modelInput
+  registerRoutes(ctx, {
+    current: () => ({ path: root }), modelConfig: { enabled: true },
+    dshWeb: {
+      async searchAvailable() { return true },
+      async search(text) {
+        query = text
+        return [{ url: 'https://example.org/release', title: 'Daily update', text: 'The data was published today.', publishedAt: '2026-11-18' }]
+      },
+    },
+    model: () => ({
+      async plan(input) { modelInput = input; return { topic: 'Recent data', questions: ['Daily update 2026-11-17 to 2026-11-18'] } },
+      async review({ sources }) {
+        return { claims: [{ text: 'The data was published today.', explanation: 'One source.', status: 'insufficient', sources: sources.map(s => s.id) }], followups: [] }
+      },
+      async write() { return { summary: 'One source provides a dated update.', nextSteps: [] } },
+    }),
+  })
+  const call = input => registered.get(routes.deepResearch).fetch(request(routes.deepResearch, input))
+  const start = await (await call({ action: 'start', direction: 'Find data from the last two days', conversation: true, timeZone: 'Asia/Shanghai' })).json()
+  const read = async () => (await (await call({ action: 'list', topic: start.topic })).json()).runs[0]
+  await waitFor(async () => ['failed', 'complete'].includes((await read())?.status))
+  const turn = await read()
+  assert.equal(turn.status, 'complete')
+  assert.match(query, /2026-11-17/)
+  assert.match(modelInput.today, /^\d{4}-\d{2}-\d{2}$/)
+  assert.match((await new Vault(root).get(turn.report.id)).body, /<https:\/\/example\.org\/release>/)
+})

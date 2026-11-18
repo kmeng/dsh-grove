@@ -14,7 +14,7 @@ for (const [address, bits] of [
 const maxBytes = 2_000_000
 const namedEntities = new Map([['amp', '&'], ['lt', '<'], ['gt', '>'], ['quot', '"'], ['apos', "'"], ['nbsp', ' ']])
 
-function htmlText(html) {
+export function htmlText(html) {
   return html.replace(/<!doctype[^<>]*>|<!--[^]*?-->|<(script|style)\b[^<>]*>[^]*?<\/\1\s*>|<\/?[a-z][^<>]*>/gi, ' ')
     .replace(/&(#x[\da-f]{1,6}|#\d{1,7}|[a-z]{2,8});/gi, (match, entity) => {
       if (!entity.startsWith('#')) return namedEntities.get(entity.toLowerCase()) ?? match
