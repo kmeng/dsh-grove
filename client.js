@@ -70,6 +70,13 @@ window.__ModuleLoader__.load({
       'report.confirmed': '已确认',
       'report.edit': '编辑报告',
       'settings.vault': '笔记库',
+      'research.originText': '灵感原文',
+      'research.attach': '添加资料',
+      'research.removeAttachment': '移除',
+      'research.process': '研究过程',
+      'research.incomplete': '研究未完成',
+      'err.research-no-evidence': '没有找到可引用的资料。补充资料或公开链接后，可以继续研究。',
+      'err.research-attachment': '无法读取附件：{message}',
       'settings.title': '设置',
       'settings.models': '模型设置',
       'settings.back': '返回刚才的页面',
@@ -313,6 +320,13 @@ window.__ModuleLoader__.load({
       'report.confirmed': 'Confirmed',
       'report.edit': 'Edit report',
       'settings.vault': 'Vault',
+      'research.originText': 'Original idea',
+      'research.attach': 'Attach material',
+      'research.removeAttachment': 'Remove',
+      'research.process': 'Research process',
+      'research.incomplete': 'Research incomplete',
+      'err.research-no-evidence': 'No citable sources were found. Add material or a public link to continue.',
+      'err.research-attachment': 'Cannot read the attachment: {message}',
       'settings.title': 'Settings',
       'settings.models': 'Model settings',
       'settings.back': 'Back to the previous page',
@@ -1068,7 +1082,9 @@ window.__ModuleLoader__.load({
     }
 
     function DeepResearchPanel(props) {
-      var [direction, setDirection] = useState(props.direction || '')
+      var [direction, setDirection] = useState('')
+      var [attachment, setAttachment] = useState(null)
+      var fileInput = useRef(null)
       var [run, setRun] = useState(null)
       var [error, setError] = useState(null)
       var [busy, setBusy] = useState(false)
@@ -1092,10 +1108,10 @@ window.__ModuleLoader__.load({
         function poll() {
           api(DEEP_RESEARCH, Object.assign({ action: 'list' }, scope)).then(function (result) {
             if (!mounted) return
-            var latest = result.runs[0]
+            var latest = result.runs.find(function (item) { return item.status === 'running' }) || result.runs[0]
             if (!props.topic && latest?.status === 'running') requested.current = latest.id
             setRun(props.topic || latest?.id === requested.current ? latest || null : null)
-            props.onRuns?.(result.runs)
+            props.onRuns?.(props.topic ? result.runs : result.runs.filter(function (item) { return item.id === requested.current }))
             setLoaded(true)
             if (latest?.status === 'running') timeout = setTimeout(poll, 1000)
           }, function (problem) {
@@ -1104,69 +1120,87 @@ window.__ModuleLoader__.load({
         }
         poll()
         return function () { mounted = false; clearTimeout(timeout) }
-      }, [props.idea?.id, props.idea?.version, props.topic, props.knowledge?.id, props.knowledge?.version, refresh])
+      }, [props.idea?.id, props.idea?.version, props.topic, props.knowledge?.id, props.knowledge?.version, refresh, props.refresh])
 
       useEffect(function () {
-        var id = run?.report?.id
-        if (!id) return
+        var id = run?.id
+        if (!id || !['complete', 'failed', 'interrupted'].includes(run.status)) return
         if (finished.current !== id) {
           finished.current = id
           props.onFinished?.(run)
         }
-      }, [run?.report?.id, run?.report?.version, refresh])
+      }, [run?.id, run?.status, refresh])
 
-      async function begin(action) {
+      async function begin() {
         if (busy || running) return
         setBusy(true)
         setError(null)
         setFailedAction(null)
         try {
           var language = T('research.ask') === EN['research.ask'] ? 'en' : 'zh'
-          var started = await api(DEEP_RESEARCH, Object.assign({ action: action, id: action === 'retry' ? run.id : undefined,
+          var upload = attachment ? { name: attachment.name, original: await readSourceFile(attachment) } : undefined
+          var started = await api(DEEP_RESEARCH, Object.assign({ action: 'start', attachment: upload,
             direction: direction, language: language, conversation: true }, scope))
           requested.current = started.id
           setRun(started)
+          props.onStarted?.(started)
           setDirection('')
+          setAttachment(null)
           setRefresh(function (value) { return value + 1 })
-        } catch (problem) { setFailedAction(action); setError(problem) }
+        } catch (problem) { setFailedAction('start'); setError(problem) }
         finally { setBusy(false) }
       }
 
-      var showRunDetails = running
-      var status = run?.status === 'complete' ? 'research.run.complete'
-        : !running ? null : run.written ? 'deep.saving'
-          : run.verified ? 'deep.writing' : !run.plan ? 'deep.waiting' : null
-      return h('section', { className: 'gr-card' },
-        h('form', { onSubmit: function (event) { event.preventDefault(); begin('start') } },
-          h('label', null, T(props.topic ? 'research.followUp' : 'deep.question'),
-            h('textarea', { className: 'gr-textarea', value: direction, maxLength: 1200,
-              placeholder: props.topic ? T('research.followUp') : undefined, required: true, disabled: busy || running,
-              onChange: function (event) { setDirection(event.target.value) } })),
-          h('button', { className: 'gr-btn', disabled: !loaded || busy || running || !direction.trim() }, T('research.ask'))),
+      return h('section', { className: 'gr-card gr-research-composer' },
+        h('form', { className: 'gr-stack', onSubmit: function (event) { event.preventDefault(); begin() } },
+          h('textarea', { className: 'gr-textarea', value: direction, maxLength: 1200,
+            'aria-label': T(props.topic ? 'research.followUp' : 'deep.question'),
+            placeholder: T(props.topic ? 'research.followUp' : 'deep.question'), required: true, disabled: busy || running,
+            onChange: function (event) { setDirection(event.target.value) } }),
+          attachment ? h('div', { className: 'gr-row' }, h('span', null, attachment.name),
+            h('button', { type: 'button', className: 'gr-btn gr-btn-ghost gr-btn-sm', disabled: busy || running,
+              onClick: function () { setAttachment(null) } }, T('research.removeAttachment'))) : null,
+          h('input', { type: 'file', hidden: true, accept: '.md,.markdown,.pdf', ref: fileInput,
+            onChange: function (event) {
+              if (event.target.files[0]) setAttachment(event.target.files[0])
+              event.target.value = ''
+            } }),
+          h('div', { className: 'gr-row gr-compose-actions' },
+            h('button', { type: 'button', className: 'gr-btn gr-btn-ghost', disabled: busy || running,
+              onClick: function () { fileInput.current?.click() } }, T('research.attach')),
+            h('button', { className: 'gr-btn', disabled: !loaded || busy || running || !direction.trim() }, T('research.ask')))),
         error ? h('div', { className: 'gr-stack' },
           h('p', { role: 'alert' }, messageOf(error)),
           configurationNeeded ? h('button', { className: 'gr-btn gr-btn-ghost', onClick: props.onSettings }, T('settings.models')) : h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () {
-            if (failedAction) begin(failedAction)
+            if (failedAction) begin()
             else { setError(null); setRefresh(function (value) { return value + 1 }) }
-          } }, T('err.retry'))) : null,
-        run ? h('div', { className: 'gr-stack' },
-          run.plan && showRunDetails ? h('h3', { className: 'gr-h2' }, run.plan.topic) : null,
-          showRunDetails && run.direction && run.direction !== direction ? h('p', { className: 'gr-meta' }, T('deep.direction'), ' · ', run.direction) : null,
-          run.plan && showRunDetails ? h('div', null, h('h4', null, T('deep.plan')),
+          } }, T('err.retry'))) : null)
+    }
+
+    function ResearchProcess(props) {
+      var run = props.run
+      var running = run.status === 'running'
+      var status = run.error?.code === 'research-no-evidence' ? 'research.incomplete' : running ? !run.plan ? 'deep.waiting' : !run.collected ? 'deep.searching' :
+        !run.verified ? 'deep.checking' : 'deep.writing' : 'research.run.' + run.status
+      return h('div', { className: 'gr-stack' },
+        h('p', { className: 'gr-meta', role: running ? 'status' : undefined }, T(status)),
+        run.plan || run.collected || run.verified ? h('details', { open: running ? true : undefined },
+          h('summary', null, T('research.process')),
+          run.plan ? h('div', null, h('h4', null, T('deep.plan')),
             h('ul', null, run.plan.questions.map(function (item) { return h('li', { key: item }, item) }))) : null,
-          run.collected && showRunDetails ? h('div', null, h('h4', null, T('deep.collected')),
+          run.collected ? h('div', null, h('h4', null, T('deep.collected')),
             run.collected.length ? h('ul', null, run.collected.map(function (item, index) { return h('li', { key: index }, item) }))
-              : h('p', { className: 'gr-meta' }, T('deep.noSources'))) : run.plan && running ? h('p', { role: 'status' }, T('deep.searching')) : null,
-          showRunDetails && run.review?.followups.length ? h('div', null, h('h4', null, T('deep.followups')),
+              : h('p', null, T('deep.noSources'))) : null,
+          run.review?.followups.length ? h('div', null, h('h4', null, T('deep.followups')),
             h('ul', null, run.review.followups.map(function (item) { return h('li', { key: item }, item) }))) : null,
-          run.verified && showRunDetails ? h('div', null, h('h4', null, T('deep.verified')),
+          run.verified ? h('div', null, h('h4', null, T('deep.verified')),
             h('ul', null, run.verified.map(function (item, index) {
-              return h('li', { key: index }, h('strong', null, T('deep.' + item.status)), ' · ', item.text)
-            }))) : run.collected && running ? h('p', { role: 'status' }, T('deep.checking')) : null,
-          status ? h('p', { role: 'status' }, T(status)) : null,
-          run.status === 'failed' || run.status === 'interrupted' ? h('div', { className: 'gr-stack' },
-            h('p', { role: 'alert' }, run.error ? messageOf(run.error) : T('deep.interrupted')),
-            h('button', { className: 'gr-btn gr-btn-ghost', disabled: busy, onClick: function () { begin('retry') } }, T('deep.retry'))) : null ) : null)
+              return h('li', { key: index }, T('deep.' + item.status), ' · ', item.text)
+            }))) : null) : null,
+        run.status === 'failed' || run.status === 'interrupted' ? h('div', { className: 'gr-stack' },
+          h('p', null, run.error ? messageOf(run.error) : T('deep.interrupted')),
+          props.onRetry ? h('button', { className: 'gr-btn gr-btn-ghost', disabled: props.busy,
+            onClick: props.onRetry }, T('err.retry')) : null) : null)
     }
 
     function InspirationReport(props) {
@@ -1444,18 +1478,6 @@ window.__ModuleLoader__.load({
         finally { setBusy(false) }
       }
 
-      async function upload(event) {
-        var file = event.target.files[0]
-        event.target.value = ''
-        if (!file) return
-        await run(async function () {
-          var original = await readSourceFile(file)
-          var result = await api(SOURCES, { action: 'import', name: file.name, original: original, research: props.id })
-          setItems(function (existing) { return [result.meta].concat(existing.filter(function (item) { return item.id !== result.meta.id })) })
-          setDocument({ meta: result.meta, blocks: result.blocks, original: original })
-        })
-      }
-
       function download() {
         var bytes = Uint8Array.from(atob(document.original), function (character) { return character.charCodeAt(0) })
         var url = URL.createObjectURL(new Blob([bytes]))
@@ -1467,8 +1489,6 @@ window.__ModuleLoader__.load({
       }
 
       return h('div', { className: 'gr-stack' },
-        h('label', null, T('source.import'), ' ',
-          h('input', { type: 'file', accept: '.md,.markdown,.pdf', disabled: busy, onChange: upload })),
         error ? h('p', { role: 'alert' }, messageOf(error)) : null,
         h('p', { role: 'status' }, saved ? T('source.saved') : ''),
         items.map(function (item) {
@@ -1794,6 +1814,9 @@ window.__ModuleLoader__.load({
       var [busy, setBusy] = useState(true)
       var [error, setError] = useState(null)
       var [topicSearch, setTopicSearch] = useState('')
+      var [original, setOriginal] = useState(null)
+      var [retrying, setRetrying] = useState(false)
+      var [pollRevision, setPollRevision] = useState(0)
       var top = useRef(null)
       var visit = useRef(0)
 
@@ -1837,6 +1860,35 @@ window.__ModuleLoader__.load({
         }, function (problem) { if (visit.current === current) setError(problem) })
       }
 
+      var id = selected?.meta.id
+      var idea = !id && sourceSeed?.idea ? { id: sourceSeed.idea.id, version: sourceSeed.idea.version } : undefined
+      var origin = selected?.meta.links?.find(function (link) { return link.kind === 'derived' && link.excerpt })
+      var originalRef = origin || idea
+      useEffect(function () {
+        if (!originalRef) return
+        var active = true
+        api(INSPIRATIONS, { id: originalRef.id, version: originalRef.version }).then(function (note) {
+          if (active) setOriginal({ id: originalRef.id, version: originalRef.version, body: note.body })
+        }, function () { /* A saved excerpt can still be shown if the original version is missing. */ })
+        return function () { active = false }
+      }, [originalRef?.id, originalRef?.version])
+
+      function showRun(run) {
+        setRuns(function (items) {
+          return [run].concat(items.filter(function (item) { return item.id !== run.id }))
+            .sort(function (a, b) { return b.created.localeCompare(a.created) })
+        })
+      }
+
+      function retryTurn(run) {
+        setRetrying(true)
+        setError(null)
+        api(DEEP_RESEARCH, { action: 'retry', id: run.id }).then(function (result) {
+          showRun(result)
+          setPollRevision(function (value) { return value + 1 })
+        }, setError).finally(function () { setRetrying(false) })
+      }
+
       var notice = error ? h('p', { role: 'alert' }, messageOf(error)) : null
       if (!selected && !creating) return h(React.Fragment, null,
         h(PageHeading, { title: 'nav.research', action: 'research.newConversation', top: top,
@@ -1852,9 +1904,8 @@ window.__ModuleLoader__.load({
               } }, study.meta.title, ' · ', inspirationTime(study.activity || study.meta.modified || study.meta.created))
             })) : null)
 
-      var id = selected?.meta.id
-      var idea = !id && sourceSeed?.idea ? { id: sourceSeed.idea.id, version: sourceSeed.idea.version } : undefined
-      var origin = selected?.meta.links?.find(function (link) { return link.kind === 'derived' && link.excerpt })
+      var originalBody = originalRef && original?.id === originalRef.id && original.version === originalRef.version
+        ? original.body : origin?.excerpt
       return h(React.Fragment, null,
         h('div', { className: 'gr-row', ref: top },
           h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () {
@@ -1863,16 +1914,16 @@ window.__ModuleLoader__.load({
           } }, T(creating && sourceSeed?.idea ? 'idea.back' : 'research.overview'))),
         h('h1', null, selected?.meta.title || T('research.newConversation')),
         notice,
-        idea || origin ? h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () {
-          var ref = origin || idea
-          props.onNavigate('idea', { id: ref.id, version: ref.version })
-        } }, T('idea.openOriginal')) : null,
+        originalBody ? h('aside', { className: 'gr-card gr-stack' },
+          h('h2', { className: 'gr-h2' }, T('research.originText')), h('p', { className: 'gr-prose' }, originalBody)) : null,
         runs.slice().reverse().map(function (run) {
-          if (run.status !== 'complete') return null
           return h('article', { key: run.id, className: 'gr-stack' },
-            h('p', { className: 'gr-prompt' }, run.direction || run.plan?.topic || selected.meta.title),
-            run.summary ? h('p', { className: 'gr-prose' }, run.summary) : null,
-            run.report ? h(ResearchReports, { id: id, inline: true, initialReport: run.report,
+            h('p', { className: 'gr-prompt' }, run.direction || run.plan?.topic || selected?.meta.title),
+            run.attachment ? h('p', { className: 'gr-meta' }, T('source.title'), ' · ', run.attachment.name) : null,
+            h(ResearchProcess, { run: run, busy: retrying || runs.some(function (item) { return item.status === 'running' }),
+              onRetry: id && !run.report ? function () { retryTurn(run) } : null }),
+            run.status === 'complete' && run.summary ? h('p', { className: 'gr-prose' }, run.summary) : null,
+            id && run.status === 'complete' && run.report ? h(ResearchReports, { id: id, inline: true, initialReport: run.report,
               open: props.seed?.report?.id === run.report.id, onNavigate: props.onNavigate, onDiscard: function () {} }) : null)
         }),
         id ? h('details', null,
@@ -1882,9 +1933,9 @@ window.__ModuleLoader__.load({
           h(LegacyFindings, { key: 'findings:' + id, id: id }),
           h(ResearchReports, { id: id, excluded: runs.map(function (run) { return run.report?.id }), onNavigate: props.onNavigate, onDiscard: function () {} })) : null,
         h(DeepResearchPanel, { key: id || 'new', idea: idea, topic: id,
-          knowledge: !id ? sourceSeed?.origin : undefined, direction: !id ? sourceSeed?.title : undefined,
+          knowledge: !id ? sourceSeed?.origin : undefined, refresh: pollRevision,
           onSettings: props.onSettings, modelConfig: props.modelConfig,
-          onRuns: id ? setRuns : undefined, onFinished: finished }))
+          onRuns: setRuns, onStarted: showRun, onFinished: finished }))
     }
 
     function ErrorNote(props) {
@@ -1921,6 +1972,7 @@ window.__ModuleLoader__.load({
 
     var CSS = [
       '.gr-root{--gr-paper:light-dark(#f7f8f2,#19211d);--gr-surface:light-dark(#fffefa,#222d26);--gr-ink:light-dark(#24342b,#e5eee5);--gr-muted:light-dark(#55675b,#adbdaf);--gr-line:light-dark(#dce3d8,#43554a);--gr-wash:light-dark(#e9efe3,#293a30);--gr-green:light-dark(#285342,#bce0c9);--gr-on-green:light-dark(#fff,#173629);--gr-error:light-dark(#a52d25,#ffb4aa);height:100%;min-height:0;display:flex;flex-direction:column;background:var(--gr-paper);color:var(--gr-ink);font-family:inherit;font-size:13px;line-height:1.6;box-sizing:border-box;padding-top:min(var(--dsh-frame-top-clearance,0px),28px)}',
+      '.gr-research-composer{position:sticky;bottom:0;z-index:1}.gr-compose-actions{justify-content:space-between}.gr-research-composer textarea{min-height:64px}',
       '.gr-prompt{margin-left:12%;padding:10px 13px;background:var(--gr-wash);border-radius:12px;overflow-wrap:anywhere}',
       '.gr-nav{order:-1;display:flex;flex-direction:column;gap:5px;flex:none;width:130px;padding:20px 10px;border-right:1px solid var(--gr-line);background:var(--gr-wash)}',
       '.gr-nav .gr-btn{text-align:left}.gr-nav [aria-current=page]{background:var(--gr-green);color:var(--gr-on-green)}',

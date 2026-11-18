@@ -1,19 +1,27 @@
 export async function importSource(store, parsers, input) {
   const research = await store.get(input.research)
   if (research.meta.type !== 'research') throw new Error('Choose a research project')
+  return saveSource(store, research, await parseSource(parsers, input))
+}
+
+export async function parseSource(parsers, input) {
   const extension = input.name.split('.').at(-1).toLowerCase()
   const parser = parsers.get(extension)
   if (!parser) throw new Error('No enabled parser for this format')
   const blocks = await parser.parse(input.bytes)
   if (!blocks.length) throw new Error('No text found. Scans require OCR.')
   const document = { original: input.original, blocks, parser: parser.id, parserVersion: parser.version }
-  const previous = (await store.list()).find(({ meta }) => meta.type === 'source' && meta.title === input.name &&
+  return { name: input.name, document }
+}
+
+export async function saveSource(store, research, { name, document }, { separate = false } = {}) {
+  const previous = !separate && (await store.list()).find(({ meta }) => meta.type === 'source' && meta.title === name &&
     meta.links?.some(link => link.kind === 'related' && link.id === research.meta.id))
   const { meta } = previous ? await store.update(previous.meta.id, previous.meta.version, { body: JSON.stringify(document) }) : await store.create({
-    type: 'source', title: input.name, body: JSON.stringify(document),
+    type: 'source', title: name, body: JSON.stringify(document),
     links: [{ kind: 'related', id: research.meta.id, version: research.meta.version }],
   })
-  return { meta, blocks }
+  return { meta, blocks: document.blocks }
 }
 
 export async function saveEvidence(store, reference, index, id) {
