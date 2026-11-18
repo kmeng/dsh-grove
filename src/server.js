@@ -248,7 +248,7 @@ export function registerRoutes(ctx, options) {
         throw coded('research-attachment', error.message)
       }
     },
-    context({ links } = {}) {
+    async context({ links } = {}) {
       const settings = selectModel(options.modelConfig, 'research', dsh)
       if (!settings) throw coded('model-disabled', 'Configure and enable a research model')
       const model = modelFor(settings, 'research', options.modelConfig)
@@ -256,7 +256,11 @@ export function registerRoutes(ctx, options) {
       if (!['plan', 'review', 'write'].every(step => typeof model[step] === 'function')) {
         throw coded('model-disabled', 'The configured model adapter does not support deep research')
       }
-      return { model, search: links?.length ? null : options.researchSearch?.(), readPage: options.readResearchPage }
+      const web = options.dshWeb
+      const hostSearch = !links?.length && await web?.searchAvailable()
+      return { model, hostSearch,
+        search: links?.length ? null : hostSearch ? web.search : options.researchSearch?.(),
+        readPage: web?.readPage ?? options.readResearchPage }
     },
   })
   ctx.inject(['connection'], (scoped) => {
@@ -331,6 +335,7 @@ export function registerRoutes(ctx, options) {
     }
     route(routes.model, ['GET'], async request => {
       const config = readModelSettings(options.modelConfig, modelFor, dsh)
+      config.hostSearch = await options.dshWeb?.searchAvailable() ?? false
       if (new URL(request.url).searchParams.has('catalog')) config.catalog = await dsh?.catalog() ?? []
       return json(config)
     })

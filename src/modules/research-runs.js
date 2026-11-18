@@ -56,6 +56,14 @@ async function localSources(store, topic, queries, attachment) {
   }))
 }
 
+function currentDay(timeZone) {
+  try {
+    return new Intl.DateTimeFormat('sv-SE', { dateStyle: 'short', timeZone: typeof timeZone === 'string' ? timeZone : 'UTC' }).format(new Date())
+  } catch {
+    return new Date().toISOString().slice(0, 10)
+  }
+}
+
 function publicLinks(...texts) {
   const links = new Set()
   for (const text of texts) {
@@ -95,7 +103,8 @@ async function collect(store, run, queries, providers, scope) {
     url.hash = ''
     if (found.has(url.href)) continue
     found.set(url.href, { id: url.href, url: url.href, origin: url.hostname.replace(/^www\./, ''),
-      title: String(candidate.title || url.hostname).slice(0, 200), text: candidate.text.slice(0, 5000) })
+      title: String(candidate.title || url.hostname).slice(0, 200), text: candidate.text.slice(0, 5000),
+      ...(candidate.publishedAt ? { publishedAt: String(candidate.publishedAt).slice(0, 80) } : {}) })
   }
   return [...found.values()]
 }
@@ -116,6 +125,7 @@ function progress(run, running = false) {
     status: status === 'running' && !running ? 'interrupted' : status,
     plan,
     collected: collected?.map(({ title }) => title),
+    sourceLinks: collected?.map(source => source.url ?? null),
     review: review && { followups: review.followups },
     verified: verified?.claims.map(({ text, status }) => ({ text, status })),
     written: !!written,
@@ -127,8 +137,8 @@ const active = new Map()
 const starting = new Set()
 
 export function researchRuns({ context, workflow, parseAttachment }) {
-  function providers(links, allowLocal = false) {
-    const available = context({ links })
+  async function providers(links, allowLocal = false) {
+    const available = await context({ links })
     if (links?.length) {
       if (typeof available.readPage !== 'function') throw problem('research-search-links-unavailable', 'Public page reading is unavailable')
     } else if (!allowLocal && typeof available.search !== 'function') {
@@ -230,7 +240,7 @@ export function researchRuns({ context, workflow, parseAttachment }) {
         if (running) return progress(running, true)
         const prepared = input.attachment === undefined ? null : await parseAttachment(input.attachment)
         const links = publicLinks(input.direction, origin?.body, existing?.meta.title)
-        const available = providers(links, input.conversation === true)
+        const available = await providers(links, input.conversation === true)
         const localOnly = !links.length && typeof available.search !== 'function'
         const history = existing ? (await jobs.list())
           .filter(item => item.topic === existing.meta.id && item.status === 'complete')
@@ -241,8 +251,8 @@ export function researchRuns({ context, workflow, parseAttachment }) {
         const ancestor = existing?.meta.links?.find(link => link.kind === 'derived' && link.excerpt)
         const run = {
           schema: 1, id: randomUUID(), topic: existing?.meta.id ?? randomUUID(), question: existing ? undefined : randomUUID(),
-          scope, requireEvidence: input.conversation === true || !!prepared, ...(links.length ? { links } : {}), ...(localOnly ? { localOnly } : {}), history, topicVersion: existing?.meta.version ?? 1, direction, origin: linked, status: 'running', created: new Date().toISOString(), web: true,
-          input: { language: input.language === 'en' ? 'en' : 'zh', direction,
+          scope, ...(available.hostSearch ? { hostSearch: true } : {}), requireEvidence: input.conversation === true || !!prepared, ...(links.length ? { links } : {}), ...(localOnly ? { localOnly } : {}), history, topicVersion: existing?.meta.version ?? 1, direction, origin: linked, status: 'running', created: new Date().toISOString(), web: true,
+          input: { language: input.language === 'en' ? 'en' : 'zh', direction, today: currentDay(input.timeZone),
             inspiration: linked?.excerpt ?? ancestor?.excerpt, question: existing?.meta.title ?? knowledge?.meta.title,
             background: knowledge?.body.slice(0, 1600) },
         }
@@ -285,8 +295,13 @@ export function researchRuns({ context, workflow, parseAttachment }) {
           await jobs.write(run)
           return progress(run)
         }
-        const available = providers(run.links, run.localOnly === true)
-        if (!run.web || run.error?.code === 'research-no-evidence') {
+        const available = await providers(run.links, run.localOnly === true)
+        const changedToHostSearch = available.hostSearch && !run.localOnly && !run.hostSearch
+        if (changedToHostSearch) {
+          run.hostSearch = true
+          delete run.plan
+        }
+        if (changedToHostSearch || !run.web || run.error?.code === 'research-no-evidence') {
           // Earlier runs could reach the writing stage using local materials alone.
           delete run.collected
           delete run.review
