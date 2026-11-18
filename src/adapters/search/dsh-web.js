@@ -26,12 +26,14 @@ export function createDshWeb(ctx, readPublicPage) {
     const url = webUrl(link)
     if (!url) return null
     const web = runtime()
+    let remoteStatus
     try {
       // The built-in HTTP provider can access the host's intranet. Research
       // URLs derived from search results must use the remote fetcher or the
       // dedicated public-only reader with address pinning.
       if (web?.selectFetchProvider?.().id === 'deepseek-fetch-api' && await web.fetchReady?.()) {
         const result = await web.fetch({ url: url.href }, AbortSignal.timeout(12_000))
+        remoteStatus = result?.statusCode
         const finalUrl = webUrl(result?.url)
         if (finalUrl && result.statusCode >= 200 && result.statusCode < 300 && typeof result.body?.content === 'string') {
           const content = result.body.content.slice(0, 60_000)
@@ -40,21 +42,45 @@ export function createDshWeb(ctx, readPublicPage) {
         }
       }
     } catch { /* Fall back to public-only retrieval. */ }
-    return readPublicPage(url.href)
+    try {
+      const page = await readPublicPage(url.href)
+      if (page) return page
+    } catch (error) {
+      if ([401, 403, 404, 410].includes(error.statusCode)) throw error
+      if (![401, 403, 404, 410].includes(remoteStatus)) throw error
+    }
+    if ([401, 403, 404, 410].includes(remoteStatus)) {
+      throw Object.assign(new Error('The public source could not be opened'), { statusCode: remoteStatus })
+    }
+    return null
   }
 
   async function search(query) {
-    const result = await runtime().search({ query, maxResults: 4 }, AbortSignal.timeout(25_000))
-    return (await Promise.all((result.sources ?? []).slice(0, 4).map(async (source, index) => {
-      const url = webUrl(source.url)
-      if (!url) return null
-      const snippet = typeof source.snippet === 'string' ? source.snippet.trim().slice(0, 1600) : ''
-      const page = index < 2 ? await readPage(url.href).catch(() => null) : null
-      const text = [snippet, page?.text].filter(Boolean).join('\n\n')
-      if (!text) return null
-      return { url: page?.url ?? url.href, title: source.title || page?.title || url.hostname, text,
-        publishedAt: typeof source.publishedAt === 'string' ? source.publishedAt.slice(0, 80) : undefined }
-    }))).filter(Boolean)
+    async function readResults(text) {
+      const result = await runtime().search({ query: text, maxResults: 4 }, AbortSignal.timeout(25_000))
+      return (await Promise.all((result.sources ?? []).slice(0, 4).map(async source => {
+        const url = webUrl(source.url)
+        if (!url) return null
+        const title = source.title || url.hostname
+        const snippet = typeof source.snippet === 'string' ? source.snippet.trim().slice(0, 1600) : ''
+        let page
+        try { page = await readPage(url.href) }
+        catch (error) {
+          if ([401, 403, 404, 410].includes(error.statusCode)) return { url: url.href, title, unavailable: error.statusCode }
+        }
+        // A readable page certifies the URL. If a transient error prevents
+        // opening it, a search excerpt can still guide discovery, not citation.
+        if (!page?.text) return { url: url.href, title, unavailable: true }
+        return { url: page.url ?? url.href, title, text: [snippet, page.text].filter(Boolean).join('\n\n'),
+          publishedAt: typeof source.publishedAt === 'string' ? source.publishedAt.slice(0, 80) : undefined }
+      }))).filter(Boolean)
+    }
+    const first = await readResults(query)
+    const blocked = first.filter(source => source.unavailable === 403)
+    if (!blocked.length || first.filter(source => !source.unavailable).length >= 2) return first
+    const domains = [...new Set(blocked.map(source => new URL(source.url).hostname))]
+    const alternatives = await readResults(query + domains.map(domain => ' -site:' + domain).join(' ')).catch(() => [])
+    return first.concat(alternatives)
   }
 
   return { searchAvailable, search, readPage }

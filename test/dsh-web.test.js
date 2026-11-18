@@ -38,3 +38,23 @@ test('missing host search provider does not advertise search availability', asyn
   }) }, async () => null)
   assert.equal(await adapter.searchAvailable(), false)
 })
+
+test('dsh search replaces a forbidden result with a readable result and keeps the failure for disclosure', async () => {
+  const queries = []
+  const first = 'https://blocked.example.org/report'
+  const second = 'https://public.example.org/report'
+  const adapter = createDshWeb({ get: () => ({
+    async search({ query }) {
+      queries.push(query)
+      return { sources: [{ url: queries.length === 1 ? first : second, title: 'Official figures', snippet: 'The total was 42.' }] }
+    },
+  }) }, async url => {
+    if (url === first) throw Object.assign(new Error('Forbidden'), { statusCode: 403 })
+    return { url, text: 'The original release confirms the total was 42.' }
+  })
+  const candidates = await adapter.search('official figures for 2026-11-18')
+  assert.deepEqual(candidates.map(({ url, unavailable }) => [url, unavailable]), [[first, 403], [second, undefined]])
+  assert.equal(candidates[0].text, undefined)
+  assert.match(candidates[1].text, /original release confirms/)
+  assert.deepEqual(queries, ['official figures for 2026-11-18', 'official figures for 2026-11-18 -site:blocked.example.org'])
+})

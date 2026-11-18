@@ -47,3 +47,24 @@ test('blocked evidence cannot support findings and the report marks the missing 
   assert.doesNotMatch(report, /https:\/\/example\.net\/blocked/)
   assert.match(report, /could not be independently verified/i)
 })
+
+test('dsh research retry lowers only the outgoing route for that call', async () => {
+  const { createDshModels } = await import('../src/adapters/models/dsh.js')
+  const selection = { provider: 'deepseek-account', model: 'deepseek-flash', reasoningEffort: 'high' }
+  const routes = []
+  const llm = {
+    listProviders: () => [{ id: selection.provider }],
+    async prepareCall(route) {
+      routes.push(route)
+      return { config: route, async *stream() {
+        yield { type: 'block-end', index: 0, block: { type: 'text', text: '{"claims":[],"followups":[]}' } }
+        yield { type: 'finish', reason: { kind: 'stop' } }
+      } }
+    },
+  }
+  const model = createDshModels({ get: name => name === 'llm' ? llm : undefined }).model(selection)
+  await model.review({}, { lowerEffort: true })
+  await model.review({})
+  assert.deepEqual(routes.map(route => route.reasoningEffort), ['low', 'high'])
+  assert.equal(selection.reasoningEffort, 'high')
+})

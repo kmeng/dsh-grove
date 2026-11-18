@@ -81,6 +81,8 @@ window.__ModuleLoader__.load({
       'research.localSearch': '联网检索不可用。可添加资料或在问题里粘贴公开链接。',
       'research.searchSettings': '联网检索设置',
       'report.sourceLinks': '来源链接',
+      'research.autoRetry': '正在重新核验资料…',
+      'research.sourceUnavailable': '部分来源无法打开，缺少可访问依据的结论未能核验。',
       'settings.title': '设置',
       'settings.models': '模型设置',
       'settings.back': '返回刚才的页面',
@@ -335,6 +337,8 @@ window.__ModuleLoader__.load({
       'research.localSearch': 'Web search is unavailable. Attach material or include a public link.',
       'research.searchSettings': 'Web search settings',
       'report.sourceLinks': 'Source links',
+      'research.autoRetry': 'Retrying evidence verification…',
+      'research.sourceUnavailable': 'Some sources could not be opened; claims without accessible evidence were not verified.',
       'settings.title': 'Settings',
       'settings.models': 'Model settings',
       'settings.back': 'Back to the previous page',
@@ -1193,7 +1197,7 @@ window.__ModuleLoader__.load({
     function ResearchProcess(props) {
       var run = props.run
       var running = run.status === 'running'
-      var status = run.error?.code === 'research-no-evidence' ? 'research.incomplete' : running ? !run.plan ? 'deep.waiting' : !run.collected ? 'deep.searching' :
+      var status = running && run.retrying ? 'research.autoRetry' : run.error?.code === 'research-no-evidence' ? 'research.incomplete' : running ? !run.plan ? 'deep.waiting' : !run.collected ? 'deep.searching' :
         !run.verified ? 'deep.checking' : 'deep.writing' : 'research.run.' + run.status
       return h('div', { className: 'gr-stack' },
         h('p', { className: 'gr-meta', role: running ? 'status' : undefined }, T(status)),
@@ -1207,6 +1211,7 @@ window.__ModuleLoader__.load({
               return h('li', { key: index }, /^https?:\/\//i.test(source || '') ? h('a', { href: source, target: '_blank', rel: 'noreferrer' }, item) : item)
             }))
               : h('p', null, T('deep.noSources'))) : null,
+          run.unavailableSources?.length ? h('p', { className: 'gr-meta' }, T('research.sourceUnavailable')) : null,
           run.review?.followups.length ? h('div', null, h('h4', null, T('deep.followups')),
             h('ul', null, run.review.followups.map(function (item) { return h('li', { key: item }, item) }))) : null,
           run.verified ? h('div', null, h('h4', null, T('deep.verified')),

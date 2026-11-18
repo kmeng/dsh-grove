@@ -83,6 +83,10 @@ export async function readPublicPage(link) {
       url = next
       continue
     }
+    if ([401, 403, 404, 410].includes(code)) {
+      response.destroy()
+      throw Object.assign(new Error('The public source could not be opened'), { statusCode: code })
+    }
     const type = String(response.headers['content-type'] ?? '').split(';', 1)[0].trim().toLowerCase()
     if (code < 200 || code >= 300 || !['text/html', 'text/plain', 'text/markdown', 'application/xhtml+xml'].includes(type) ||
       Number(response.headers['content-length']) > maxBytes ||
