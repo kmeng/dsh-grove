@@ -83,6 +83,10 @@ window.__ModuleLoader__.load({
       'report.sourceLinks': '来源链接',
       'research.autoRetry': '正在重新核验资料…',
       'research.sourceUnavailable': '部分来源无法打开，缺少可访问依据的结论未能核验。',
+      'report.preview': '报告预览',
+      'report.closePreview': '关闭预览',
+      'report.view': '查看报告',
+      'report.cancelEdit': '取消编辑',
       'settings.title': '设置',
       'settings.models': '模型设置',
       'settings.back': '返回刚才的页面',
@@ -339,6 +343,10 @@ window.__ModuleLoader__.load({
       'report.sourceLinks': 'Source links',
       'research.autoRetry': 'Retrying evidence verification…',
       'research.sourceUnavailable': 'Some sources could not be opened; claims without accessible evidence were not verified.',
+      'report.preview': 'Report preview',
+      'report.closePreview': 'Close preview',
+      'report.view': 'View report',
+      'report.cancelEdit': 'Cancel editing',
       'settings.title': 'Settings',
       'settings.models': 'Model settings',
       'settings.back': 'Back to the previous page',
@@ -621,6 +629,9 @@ window.__ModuleLoader__.load({
       var [seed, setSeed] = useState(null)
       var [settingsOpen, setSettingsOpen] = useState(false)
       var [modelConfig, setModelConfig] = useState(null)
+      var [preview, setPreview] = useState(null)
+      var [reportRevision, setReportRevision] = useState(0)
+      var previewSource = useRef(null)
       var scroll = useRef(null)
       var previousView = useRef(null)
 
@@ -654,12 +665,31 @@ window.__ModuleLoader__.load({
 
       function openSettings() {
         if (settingsOpen) return
+        setPreview(null)
         previousView.current = { top: scroll.current?.scrollTop || 0, element: document.activeElement }
         setSettingsOpen(true)
       }
 
-      function navigate(destination, draft) {
+      function closePreview() {
+        setPreview(null)
+      }
+
+      useEffect(function () {
+        if (preview) return
+        var source = previewSource.current
+        previewSource.current = null
+        source?.focus({ preventScroll: true })
+      }, [preview])
+
+      function navigate(destination, draft, source) {
         setSettingsOpen(false)
+        if (destination === 'report') {
+          previewSource.current = source || document.activeElement
+          setPreview(draft)
+          return
+        }
+        previewSource.current = null
+        setPreview(null)
         setSeed(draft || null)
         setPage(destination)
       }
@@ -808,7 +838,7 @@ window.__ModuleLoader__.load({
         onCancel: changing || connected ? function () { setChanging(false); setManual(false) } : null,
       })
 
-      return h('div', { className: 'gr-root' },
+      return h('div', { className: 'gr-root' + (preview ? ' gr-has-preview' : '') },
         h('style', null, CSS),
         h('div', { className: 'gr-scroll', ref: scroll },
           h('div', { className: 'gr-inner' },
@@ -822,14 +852,12 @@ window.__ModuleLoader__.load({
               : changing || !connected
                 ? connectView
                 : page === 'research'
-                  ? h(ResearchPage, { key: seed?.resume || seed?.idea?.id || seed?.origin?.id || 'overview', seed: seed, onNavigate: navigate, modelConfig: modelConfig, onSettings: openSettings, onBack: function () {
+                  ? h(ResearchPage, { key: seed?.resume || seed?.idea?.id || seed?.origin?.id || 'overview', seed: seed, onNavigate: navigate, reportRevision: reportRevision, modelConfig: modelConfig, onSettings: openSettings, onBack: function () {
                     if (seed?.idea) navigate('idea', seed.idea)
                     else navigate('home')
                   } })
                   : page === 'idea'
                     ? h(InspirationPage, { key: vault + ':' + seed.id + ':' + seed.version, reference: seed, onNavigate: navigate, modelConfig: modelConfig, onSettings: openSettings })
-                  : page === 'report'
-                    ? h(InspirationReport, { key: seed.id + ':' + seed.version, reference: seed, onNavigate: navigate })
                   : page === 'knowledge' || page === 'works'
                     ? h(AssetPage, { key: page, kind: page, seed: seed, onNavigate: navigate })
                     : h(InspirationHome, {
@@ -858,6 +886,9 @@ window.__ModuleLoader__.load({
             h(Footer, null),
           ),
         ),
+        preview ? h(ReportPreview, { key: preview.id ? preview.id + ':' + preview.version : 'new:' + preview.studyId,
+          reference: preview, onClose: closePreview, onNavigate: navigate,
+          onSaved: function () { setReportRevision(function (value) { return value + 1 }) } }) : null,
         h('nav', { className: 'gr-nav', 'aria-label': T('panel') }, navigation.map(function ([destination, label]) {
           return h('button', { key: destination, type: 'button', className: 'gr-btn gr-btn-ghost',
             'aria-current': currentNav === destination ? 'page' : undefined,
@@ -1068,8 +1099,11 @@ window.__ModuleLoader__.load({
 
     function ReportMarkdown(props) {
       function inline(text) {
-        return text.split(/(\*\*[^*]+\*\*|<https?:\/\/[^>\s]+>)/g).map(function (part, index) {
+        return text.split(/(\*\*[^*]+\*\*|`[^`\n]+`|<https?:\/\/[^>\s]+>|\[[^\]\n]+\]\(https?:\/\/[^)\s]+\))/g).map(function (part, index) {
           if (part.startsWith('**') && part.endsWith('**')) return h('strong', { key: index }, part.slice(2, -2))
+          if (/^`[^`\n]+`$/.test(part)) return h('code', { key: index }, part.slice(1, -1))
+          var link = /^\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\)$/.exec(part)
+          if (link) return h('a', { key: index, href: link[2], target: '_blank', rel: 'noreferrer' }, link[1])
           if (/^<https?:\/\/[^>\s]+>$/.test(part)) {
             var address = part.slice(1, -1)
             return h('a', { key: index, href: address, target: '_blank', rel: 'noreferrer' }, address)
@@ -1222,30 +1256,6 @@ window.__ModuleLoader__.load({
           h('p', null, run.error ? messageOf(run.error) : T('deep.interrupted')),
           props.onRetry ? h('button', { className: 'gr-btn gr-btn-ghost', disabled: props.busy,
             onClick: props.onRetry }, T('err.retry')) : null) : null)
-    }
-
-    function InspirationReport(props) {
-      var ref = props.reference
-      var [report, setReport] = useState(null)
-      var [error, setError] = useState(null)
-      useEffect(function () {
-        var active = true
-        api(REPORTS, { action: 'read', id: ref.id, version: ref.version }).then(function (value) {
-          if (active) setReport(value)
-        }, function (problem) { if (active) setError(problem) })
-        return function () { active = false }
-      }, [ref.id, ref.version])
-      return h(React.Fragment, null,
-        h('div', { className: 'gr-row' },
-          ref.idea ? h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () { props.onNavigate('idea', ref.idea) } }, T('idea.back')) : null,
-          ref.studyId ? h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () {
-            props.onNavigate('research', { resume: ref.studyId, idea: ref.idea, report: ref })
-          } }, T('idea.openStudy')) : null),
-        error ? h('p', { role: 'alert' }, messageOf(error)) : null,
-        report ? h('article', { className: 'gr-card' }, h('h2', { className: 'gr-h2' }, report.meta.title),
-          h('p', { className: 'gr-meta' }, T('idea.reportVersion', { version: report.meta.version })),
-          report.meta.review === 'draft' ? h('p', { className: 'gr-meta' }, T('deep.draft')) : null,
-          h(ReportMarkdown, { body: report.body })) : !error ? h('p', { role: 'status' }, T('loading')) : null)
     }
 
     function ModelConnection(props) {
@@ -1532,7 +1542,59 @@ window.__ModuleLoader__.load({
           })) : null)
     }
 
+    function ReportEntry(props) {
+      var [meta, setMeta] = useState(null)
+      var ref = props.initialReport
+      useEffect(function () {
+        var active = true
+        api(REPORTS, { action: 'read', id: ref.id, version: ref.version }).then(function (result) {
+          var latest = result.versions[0]
+          return latest === result.meta.version ? result : api(REPORTS, { action: 'read', id: ref.id, version: latest })
+        }).then(function (report) {
+          if (active) setMeta(report.meta)
+        }).catch(function () { /* Opening the report will show any read error. */ })
+        return function () { active = false }
+      }, [ref.id, ref.version, props.revision])
+
+      return h('div', { className: 'gr-card gr-report-entry' },
+        h('div', { className: 'gr-stack' },
+          h('strong', null, meta?.title || props.title || T('report.title')),
+          meta ? h('span', { className: 'gr-meta' },
+            T(meta.review === 'draft' ? 'deep.draft' : 'report.confirmed')) : null),
+        h('button', { className: 'gr-btn gr-btn-ghost', onClick: function (event) {
+          props.onNavigate('report', { id: ref.id, version: meta?.version || ref.version, studyId: props.id }, event.currentTarget)
+        } }, T('report.view')))
+    }
+
     function ResearchReports(props) {
+      var [catalog, setCatalog] = useState(null)
+      var [error, setError] = useState(null)
+      var [expanded, setExpanded] = useState(false)
+      useEffect(function () {
+        if (!expanded) return
+        var active = true
+        api(REPORTS, { action: 'list', research: props.id }).then(function (data) {
+          if (active) setCatalog(data)
+        }, function (problem) { if (active) setError(problem) })
+        return function () { active = false }
+      }, [expanded, props.id, props.revision])
+      return h('details', { className: 'gr-card', onToggle: function (event) { setExpanded(event.currentTarget.open) } },
+        h('summary', null, T('report.title')),
+        error ? h('p', { role: 'alert' }, messageOf(error)) : null,
+        h('button', { className: 'gr-btn', onClick: function (event) {
+          props.onNavigate('report', { studyId: props.id, create: true }, event.currentTarget)
+        } }, T('report.new')),
+        (catalog?.reports || []).filter(function (entry) {
+          return !props.excluded?.includes(entry.meta.id)
+        }).map(function (entry) {
+          return h('button', { key: entry.meta.id, className: 'gr-btn gr-btn-ghost', onClick: function (event) {
+            props.onNavigate('report', { id: entry.meta.id, version: entry.meta.version, studyId: props.id }, event.currentTarget)
+          } }, entry.meta.title, entry.meta.review === 'draft' ? ' · ' + T('deep.draft') : '')
+        }))
+    }
+
+    function ReportPreview(props) {
+      var ref = props.reference
       var [catalog, setCatalog] = useState(null)
       var [report, setReport] = useState(null)
       var [body, setBody] = useState('')
@@ -1540,29 +1602,25 @@ window.__ModuleLoader__.load({
       var [originals, setOriginals] = useState({})
       var [busy, setBusy] = useState(false)
       var [error, setError] = useState(null)
-      var [editing, setEditing] = useState(false)
+      var [editing, setEditing] = useState(!!ref.create)
       var [kept, setKept] = useState(null)
+      var close = useRef(null)
+      var content = useRef(null)
+      var studyId = ref.studyId || report?.meta.links?.find(function (link) { return link.kind === 'related' })?.id
 
       useEffect(function () {
-        if (!props.draft) return
-        setBody(props.draft.body)
-        setReferences(props.draft.evidence)
-        setReport(null)
-        setEditing(true)
-        list().catch(setError)
-      }, [props.draft])
+        close.current?.focus()
+        if (ref.id) run(function () { return read(ref.id, ref.version) })
+      }, [ref.id, ref.version])
 
       useEffect(function () {
-        if (props.initialReport && props.inline) run(function () { return read(props.initialReport.id, props.initialReport.version) })
-      }, [props.initialReport])
-
-      useEffect(function () {
-        if (props.latestReportId) list().catch(setError)
-      }, [props.latestReportId])
-
-      function list() {
-        return api(REPORTS, { action: 'list', research: props.id }).then(setCatalog)
-      }
+        if (!editing || !studyId) return
+        var active = true
+        api(REPORTS, { action: 'list', research: studyId }).then(function (data) {
+          if (active) setCatalog(data)
+        }, function (problem) { if (active) setError(problem) })
+        return function () { active = false }
+      }, [editing, studyId])
 
       async function run(operation) {
         setBusy(true)
@@ -1572,33 +1630,31 @@ window.__ModuleLoader__.load({
         finally { setBusy(false) }
       }
 
+      function resetEditor(result) {
+        setBody(result?.body || '')
+        setReferences((result?.evidence || []).filter(function (item) { return !item.missing }).map(function (item) {
+          return { id: item.meta.id, version: item.meta.version }
+        }))
+      }
+
       async function read(id, version) {
         var result = await api(REPORTS, { action: 'read', id: id, version: version })
         setReport(result)
-        setBody(result.body)
-        setReferences(result.evidence.filter(function (item) { return !item.missing }).map(function (item) {
-          return { id: item.meta.id, version: item.meta.version }
-        }))
+        resetEditor(result)
         setOriginals({})
         setKept(null)
-        setEditing(result.meta.review === 'draft')
-      }
-
-      function start() {
-        setReport(null)
-        setBody('')
-        setReferences([])
-        setEditing(true)
+        setEditing(false)
+        content.current?.scrollTo(0, 0)
       }
 
       function save(event) {
         event.preventDefault()
         run(async function () {
-          var input = { action: 'confirm', research: props.id, body: body, evidence: references }
+          var input = { action: 'confirm', research: studyId, body: body, evidence: references }
           if (report) { input.id = report.meta.id; input.version = report.meta.version }
           var result = await api(REPORTS, input)
           await read(result.meta.id, result.meta.version)
-          await list()
+          props.onSaved()
         })
       }
 
@@ -1622,73 +1678,72 @@ window.__ModuleLoader__.load({
           originals[item.meta.id] ? h('pre', { className: 'gr-code' }, originals[item.meta.id]) : null)
       }
 
-      var draftLinks = editing && report?.meta.review === 'draft' ?
-        Array.from(new Set(Array.from(body.matchAll(/<(https?:\/\/[^>\s]+)>/g), function (match) {
-          return match[1]
-        }))) : []
-
+      var latest = report && report.meta.version === report.versions[0]
       function reportReturn() {
         return { page: 'research', label: 'report.title',
-          seed: { resume: props.id, report: { id: report.meta.id, version: report.meta.version } } }
+          seed: { resume: studyId, report: { id: report.meta.id, version: report.meta.version } } }
       }
-
-      return h('details', { className: 'gr-card', open: props.open || props.draft ? true : undefined, onToggle: function (event) {
-        if (event.currentTarget.open) run(async function () {
-          await list()
-          if (props.initialReport && !report) await read(props.initialReport.id, props.initialReport.version)
-        })
-      } },
-      h('summary', null, props.inline && report ? report.meta.title + ' · ' +
-        T(report.meta.review === 'draft' ? 'deep.draft' : 'report.confirmed') : T('report.title')),
-      report && !editing ? h(ReportMarkdown, { body: report.body }) : null,
-      draftLinks.length ? h('details', null,
-        h('summary', null, T('report.sourceLinks')),
-        h('ul', null, draftLinks.map(function (url) {
-          return h('li', { key: url }, h('a', { href: url, target: '_blank', rel: 'noreferrer' }, url))
-        }))) : null,
-      error ? h('p', { role: 'alert' }, messageOf(error)) : null,
-      props.inline ? null : h('button', { className: 'gr-btn', disabled: busy, onClick: start }, T('report.new')),
-      (!props.inline && catalog ? catalog.reports.filter(function (entry) { return !props.excluded?.includes(entry.meta.id) }) : []).map(function (entry) {
-        return h('button', { key: entry.meta.id, className: 'gr-btn gr-btn-ghost', disabled: busy,
-          onClick: function () { run(function () { return read(entry.meta.id, entry.meta.version) }) } }, entry.meta.title, entry.meta.review === 'draft' ? ' · ' + T('deep.draft') : '')
-      }),
-      report ? h('label', null, T('report.history'), ' ', h('select', {
-        value: report.meta.version, disabled: busy,
-        onChange: function (event) {
-          var version = Number(event.target.value)
-          run(function () { return read(report.meta.id, version) })
-        },
-      }, report.versions.map(function (version) { return h('option', { key: version, value: version }, 'v' + version) }))) : null,
-      report ? report.evidence.map(cite) : null,
-      report && report.meta.review !== 'draft' ? h('div', { className: 'gr-row' },
-        h('button', { className: 'gr-btn', disabled: busy || !!kept, onClick: function () {
-          run(async function () {
-            var entry = await api(KNOWLEDGE, { action: 'keep-report', report: { id: report.meta.id, version: report.meta.version } })
-            setKept({ id: entry.meta.id, version: entry.meta.version })
-          })
-        } }, T(kept ? 'asset.kept' : 'asset.keep')),
-        kept ? h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () {
-          props.onNavigate('knowledge', { read: kept, returnTo: reportReturn() })
-        } }, T('asset.openKnowledge')) : null,
-        props.inline && !editing ? h('button', { className: 'gr-btn gr-btn-ghost', disabled: report.meta.version !== report.versions[0],
-          onClick: function () { setEditing(true) } }, T('report.edit')) : null,
-        h('button', { className: 'gr-btn', onClick: function () {
-          props.onNavigate('works', { title: report.meta.title, body: report.body, basis: { id: report.meta.id, version: report.meta.version }, returnTo: reportReturn() })
-        } }, T('asset.compose'))) : null,
-      editing ? h('form', { onSubmit: save },
-        h('label', null, T('report.body'), h('textarea', { className: 'gr-textarea', required: true,
-          value: body, onChange: function (event) { setBody(event.target.value) } })),
-        (catalog ? catalog.evidence : []).map(function (item) {
-          var checked = references.some(function (ref) { return ref.id === item.id && ref.version === item.version })
-          return h('label', { key: item.id }, h('input', { type: 'checkbox', checked: checked,
-            onChange: function () {
-              setReferences(checked ? references.filter(function (ref) { return ref.id !== item.id })
-                : references.filter(function (ref) { return ref.id !== item.id }).concat({ id: item.id, version: item.version }))
-            } }), item.title, ' · v', item.version)
-        }),
-        h('button', { className: 'gr-btn', disabled: busy || (report && report.meta.version !== report.versions[0]) }, T('report.save')),
-        h('button', { type: 'button', className: 'gr-btn gr-btn-ghost', disabled: busy,
-          onClick: function () { setEditing(false); props.onDiscard() } }, T('report.discard'))) : null)
+      return h('aside', { className: 'gr-report-preview', 'aria-label': T('report.preview'),
+        onKeyDown: function (event) { if (event.key === 'Escape') props.onClose() } },
+        h('div', { className: 'gr-preview-head gr-stack' },
+          h('div', { className: 'gr-row gr-preview-toolbar' },
+            h('span', { className: 'gr-meta' }, T('report.preview')),
+            h('button', { ref: close, type: 'button', className: 'gr-btn gr-btn-ghost gr-btn-sm', onClick: props.onClose },
+              T('report.closePreview'))),
+          h('h2', { className: 'gr-preview-title' }, report?.meta.title || T(ref.create ? 'report.new' : 'report.title')),
+          report ? h('div', { className: 'gr-row' },
+            h('span', { className: 'gr-meta' }, T(report.meta.review === 'draft' ? 'deep.draft' : 'report.confirmed')),
+            h('label', null, T('report.history'), ' ', h('select', { value: report.meta.version, disabled: busy || editing,
+              onChange: function (event) {
+                var version = Number(event.target.value)
+                run(function () { return read(report.meta.id, version) })
+              } }, report.versions.map(function (version) { return h('option', { value: version, key: version }, 'v' + version) })))) : null),
+        h('div', { className: 'gr-preview-content gr-stack', ref: content },
+          error ? h('p', { role: 'alert' }, messageOf(error)) : null,
+          !report && !editing && !error ? h('p', { role: 'status' }, T('loading')) : null,
+          report && !editing ? h(ReportMarkdown, { body: report.body }) : null,
+          report && !editing && report.evidence.length ? h('details', null,
+            h('summary', null, T('report.sourceLinks')), report.evidence.map(cite)) : null,
+          editing ? h('form', { id: 'gr-preview-edit', className: 'gr-stack', onSubmit: save },
+            h('label', null, T('report.body'), h('textarea', { className: 'gr-textarea gr-preview-markdown', required: true,
+              value: body, onChange: function (event) { setBody(event.target.value) } })),
+            (catalog?.evidence || []).map(function (item) {
+              var checked = references.some(function (ref) { return ref.id === item.id && ref.version === item.version })
+              return h('label', { key: item.id }, h('input', { type: 'checkbox', checked: checked,
+                onChange: function () {
+                  setReferences(checked ? references.filter(function (ref) { return ref.id !== item.id }) :
+                    references.filter(function (ref) { return ref.id !== item.id }).concat({ id: item.id, version: item.version }))
+                } }), item.title, ' · v', item.version)
+            })) : null),
+        h('div', { className: 'gr-preview-actions gr-row' },
+          editing ? h(React.Fragment, null,
+            h('button', { className: 'gr-btn', type: 'submit', form: 'gr-preview-edit', disabled: busy }, T('report.save')),
+            h('button', { className: 'gr-btn gr-btn-ghost', disabled: busy, onClick: function () {
+              if (!report) { props.onClose(); return }
+              resetEditor(report)
+              setEditing(false)
+            } }, T('report.cancelEdit'))) : null,
+          report && !editing && latest ? h('button', { className: 'gr-btn gr-btn-ghost', disabled: busy,
+            onClick: function () { setEditing(true) } }, T('report.edit')) : null,
+          report && !editing && latest && studyId && report.meta.review === 'draft' ?
+            h('button', { className: 'gr-btn', disabled: busy, onClick: save }, T('report.save')) : null,
+          report && !editing && report.meta.review !== 'draft' ? h(React.Fragment, null,
+            h('button', { className: 'gr-btn', disabled: busy || !!kept, onClick: function () {
+              run(async function () {
+                var entry = await api(KNOWLEDGE, { action: 'keep-report', report: { id: report.meta.id, version: report.meta.version } })
+                setKept({ id: entry.meta.id, version: entry.meta.version })
+              })
+            } }, T(kept ? 'asset.kept' : 'asset.keep')),
+            kept ? h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () {
+              props.onNavigate('knowledge', { read: kept, returnTo: reportReturn() })
+            } }, T('asset.openKnowledge')) : null,
+            h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () {
+              props.onNavigate('works', { title: report.meta.title, body: report.body,
+                basis: { id: report.meta.id, version: report.meta.version }, returnTo: reportReturn() })
+            } }, T('asset.compose'))) : null,
+          report && !editing && studyId ? h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () {
+            props.onNavigate('research', { resume: studyId, idea: ref.idea })
+          } }, T('idea.openStudy')) : null))
     }
 
     function PageHeading(props) {
@@ -1858,7 +1913,10 @@ window.__ModuleLoader__.load({
           setStudies(data.studies)
           if (props.seed?.resume) {
             var study = data.studies.find(function (item) { return item.meta.id === props.seed.resume })
-            if (study) select(study)
+            if (study) {
+              select(study)
+              if (props.seed.report) props.onNavigate('report', Object.assign({ studyId: study.meta.id }, props.seed.report))
+            }
             else setError(new Error(T('research.topicMissing')))
           }
         }, function (problem) { if (active) setError(problem) })
@@ -1954,15 +2012,14 @@ window.__ModuleLoader__.load({
             h(ResearchProcess, { run: run, busy: retrying || runs.some(function (item) { return item.status === 'running' }),
               onRetry: id && !run.report ? function () { retryTurn(run) } : null }),
             run.status === 'complete' && run.summary ? h('p', { className: 'gr-prose' }, run.summary) : null,
-            id && run.status === 'complete' && run.report ? h(ResearchReports, { id: id, inline: true, initialReport: run.report,
-              open: props.seed?.report?.id === run.report.id, onNavigate: props.onNavigate, onDiscard: function () {} }) : null)
+            id && run.status === 'complete' && run.report ? h(ReportEntry, { id: id, initialReport: run.report, title: run.plan?.topic, revision: props.reportRevision, onNavigate: props.onNavigate }) : null)
         }),
         id ? h('details', null,
           h('summary', null, T('source.title')),
           selected.body ? h('p', { className: 'gr-prose' }, selected.body) : null,
           h(ResearchSources, { key: id, id: id }),
           h(LegacyFindings, { key: 'findings:' + id, id: id }),
-          h(ResearchReports, { id: id, excluded: runs.map(function (run) { return run.report?.id }), onNavigate: props.onNavigate, onDiscard: function () {} })) : null,
+          h(ResearchReports, { id: id, excluded: runs.map(function (run) { return run.report?.id }), revision: props.reportRevision, onNavigate: props.onNavigate })) : null,
         h(DeepResearchPanel, { key: id || 'new', idea: idea, topic: id,
           knowledge: !id ? sourceSeed?.origin : undefined, refresh: pollRevision,
           onSettings: props.onSettings, modelConfig: props.modelConfig,
@@ -2005,6 +2062,15 @@ window.__ModuleLoader__.load({
       '.gr-root{--gr-paper:light-dark(#f7f8f2,#19211d);--gr-surface:light-dark(#fffefa,#222d26);--gr-ink:light-dark(#24342b,#e5eee5);--gr-muted:light-dark(#55675b,#adbdaf);--gr-line:light-dark(#dce3d8,#43554a);--gr-wash:light-dark(#e9efe3,#293a30);--gr-green:light-dark(#285342,#bce0c9);--gr-on-green:light-dark(#fff,#173629);--gr-error:light-dark(#a52d25,#ffb4aa);height:100%;min-height:0;display:flex;flex-direction:column;background:var(--gr-paper);color:var(--gr-ink);font-family:inherit;font-size:13px;line-height:1.6;box-sizing:border-box;padding-top:min(var(--dsh-frame-top-clearance,0px),28px)}',
       '.gr-markdown a,.gr-card a{overflow-wrap:anywhere}',
       '.gr-research-composer{position:sticky;bottom:0;z-index:1}.gr-compose-actions{justify-content:space-between}.gr-research-composer textarea{min-height:64px}',
+      '.gr-root{container-type:inline-size}',
+      '.gr-report-entry{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;overflow-wrap:anywhere}',
+      '.gr-report-preview{order:2;flex:0 0 clamp(380px,46cqw,680px);min-width:0;min-height:0;display:flex;flex-direction:column;background:var(--gr-surface);border-left:1px solid var(--gr-line);overflow-wrap:anywhere}',
+      '.gr-preview-head{padding:16px 22px;border-bottom:1px solid var(--gr-line);flex:none;gap:8px}',
+      '.gr-preview-toolbar{justify-content:space-between}.gr-preview-title{margin:0;font-size:19px;line-height:1.35}',
+      '.gr-preview-content{flex:1 1 auto;min-height:0;overflow:auto;padding:20px 22px;display:block}',
+      '.gr-preview-content .gr-markdown{font-size:14px;line-height:1.7}.gr-preview-markdown{min-height:280px}',
+      '.gr-preview-actions{flex:none;padding:12px 22px;border-top:1px solid var(--gr-line)}',
+      '@container (max-width:850px){.gr-has-preview>.gr-scroll,.gr-has-preview>.gr-nav{display:none}.gr-has-preview>.gr-report-preview{flex:1 1 auto;border-left:0;width:100%}}',
       '.gr-prompt{margin-left:12%;padding:10px 13px;background:var(--gr-wash);border-radius:12px;overflow-wrap:anywhere}',
       '.gr-nav{order:-1;display:flex;flex-direction:column;gap:5px;flex:none;width:130px;padding:20px 10px;border-right:1px solid var(--gr-line);background:var(--gr-wash)}',
       '.gr-nav .gr-btn{text-align:left}.gr-nav [aria-current=page]{background:var(--gr-green);color:var(--gr-on-green)}',
