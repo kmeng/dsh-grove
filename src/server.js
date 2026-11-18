@@ -6,14 +6,14 @@ import { isAbsolute, join, resolve } from 'node:path'
 import { captureInspiration, findInspirations, readInspiration } from './modules/inspirations.js'
 import { inspirationHistory, discoverInspirations } from './modules/inspiration-discovery.js'
 import { startResearch, listResearch, saveResearch } from './modules/research.js'
-import { importSource, saveEvidence, openSource } from './modules/evidence.js'
+import { importSource, parseSource, saveEvidence, openSource } from './modules/evidence.js'
 import { listReports, confirmReport, readReport, draftFromFinding } from './modules/reports.js'
 import { parseModelSettings, readModelSettings, selectModel, testModel, verifyModelSettings } from './modules/model-settings.js'
 import { runResearchModel } from './modules/model-research.js'
 import { listKnowledge, readKnowledge, saveKnowledge, keepReportAsKnowledge } from './modules/knowledge.js'
 import { listWorks, readWork, saveWork } from './modules/works.js'
 import { stagedResearch } from './modules/deep-research.js'
-import { researchRuns } from './modules/research-runs.js'
+import { researchRuns, isUnsupportedDraft } from './modules/research-runs.js'
 import { researchRunStore } from './adapters/storage/obsidian/research-runs.js'
 import { Vault } from './vault.js'
 
@@ -73,6 +73,8 @@ function statusOf(error) {
     case 'model-auth':
     case 'model-not-found':
     case 'model-rate-limit':
+    case 'research-no-evidence':
+    case 'research-attachment':
     case 'research-search-links-unreadable':
     case 'research-search':
     case 'model-network':
@@ -234,6 +236,18 @@ export function registerRoutes(ctx, options) {
   const modelFor = (settings, role, config) => settings.source === 'dsh' ? dsh?.model(settings) : options.model?.(settings, role, config)
   const runs = researchRuns({
     workflow: options.researchWorkflow ?? stagedResearch,
+    parseAttachment: async attachment => {
+      const { name, original } = attachment ?? {}
+      if (typeof name !== 'string' || !name.trim() || name.length > 256 || typeof original !== 'string' ||
+          original.length > 670000 || !/^[A-Za-z0-9+/]+={0,2}$/.test(original)) {
+        throw coded('invalid-body', 'Choose a Markdown or PDF file')
+      }
+      try {
+        return await parseSource(options.parsers ?? new Map(), { name, original, bytes: Buffer.from(original, 'base64') })
+      } catch (error) {
+        throw coded('research-attachment', error.message)
+      }
+    },
     context({ links } = {}) {
       const settings = selectModel(options.modelConfig, 'research', dsh)
       if (!settings) throw coded('model-disabled', 'Configure and enable a research model')
@@ -421,6 +435,13 @@ export function registerRoutes(ctx, options) {
         if (input?.action === 'read') return json(await readReport(store, input.id, input.version))
         if (input?.action === 'confirm' && typeof input.body === 'string' && input.body.trim() &&
           (input.evidence === undefined || Array.isArray(input.evidence))) {
+          if (input.id) {
+            const job = await researchRunStore(store).read(input.id)
+              .catch(error => { if (error.code !== 'ENOENT') throw error })
+            if (job?.verified && isUnsupportedDraft(job, await store.get(input.id, input.version))) {
+              throw coded('research-no-evidence', 'No citable evidence was found')
+            }
+          }
           return json(await confirmReport(store, input))
         }
         throw coded('invalid-body', 'Choose a report action and nonempty report body')

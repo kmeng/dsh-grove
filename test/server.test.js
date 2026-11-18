@@ -687,19 +687,24 @@ test('research conversation keeps follow-up history and origin when using local 
   const plans = []
   registerRoutes(ctx, {
     current: () => ({ path: root }), modelConfig: { enabled: true },
+    parsers: new Map([['md', { id: 'markdown', version: 1, async parse() {
+      return [{ text: '人工接管需要界面提供暂停入口。', locator: '第 1 段' }]
+    } }]]),
     model: () => ({
       async plan(input) { plans.push(input); return { topic: '人工接管', questions: ['如何接管？'] } },
-      async review() { return { claims: [{ text: '需要承接上下文', explanation: '等待证据', status: 'insufficient', sources: [] }], followups: [] } },
+      async review({ sources }) { return { claims: [{ text: '需要承接上下文', explanation: '已回查资料', status: 'insufficient', sources: sources.map(source => source.id) }], followups: [] } },
       async write() { return { summary: '当前材料不足以验证交互方案。', nextSteps: [] } },
     }),
   })
   const call = input => registered.get(routes.deepResearch).fetch(request(routes.deepResearch, input))
-  const first = await (await call({ action: 'start', conversation: true, idea: { id: idea.meta.id, version: 1 }, direction: '怎么做？' })).json()
+  const first = await (await call({ action: 'start', conversation: true, idea: { id: idea.meta.id, version: 1 }, direction: '怎么做？', attachment: { name: '接管.md', original: Buffer.from('人工接管').toString('base64') } })).json()
   await waitFor(async () => (await (await call({ action: 'list', topic: first.topic })).json()).runs[0]?.status === 'complete')
   const next = await (await call({ action: 'start', conversation: true, topic: first.topic, direction: '三秒内呢？' })).json()
   await waitFor(async () => (await (await call({ action: 'list', topic: first.topic })).json()).runs[0]?.id === next.id &&
     (await (await call({ action: 'list', topic: first.topic })).json()).runs[0]?.status === 'complete')
   assert.equal(next.topic, first.topic)
+  assert.equal(first.attachment.name, '接管.md')
+  assert.equal((await store.get(first.attachment.id)).meta.links[0].id, first.topic)
   assert.equal((await store.get(first.topic)).meta.links[0].id, idea.meta.id)
   assert.deepEqual(plans[1].history, [{ question: '怎么做？', summary: '当前材料不足以验证交互方案。' }])
 })
@@ -726,4 +731,28 @@ test('research without citable evidence retains its failed turn and creates no r
   assert.equal(turn.report, undefined)
   assert.equal((await store.get(started.topic)).meta.type, 'research')
   assert.ok(!(await store.list()).some(note => note.meta.type === 'report'))
+})
+
+test('an old generated draft without citable evidence cannot be confirmed', async t => {
+  const root = await fixture(t)
+  const { ctx, registered } = host()
+  const store = new Vault(root)
+  registerRoutes(ctx, { current: () => ({ path: root }) })
+  const question = await store.create({ type: 'question', body: '缺资料的问题' })
+  const topic = await store.create({ type: 'research', question: question.meta.id, title: '缺资料', body: '' })
+  const report = await store.create({ type: 'report', review: 'draft', body: '没有可引用的资料。', links: [
+    { kind: 'related', id: topic.meta.id, version: 1 },
+  ] })
+  await researchRunStore(store).write({ schema: 1, id: report.meta.id, topic: topic.meta.id, status: 'complete',
+    created: report.meta.created, report: { id: report.meta.id, version: 1 }, verified: { sources: [], claims: [] } })
+  const turns = await (await registered.get(routes.deepResearch).fetch(request(routes.deepResearch, {
+    action: 'list', topic: topic.meta.id,
+  }))).json()
+  assert.equal(turns.runs[0].status, 'failed')
+  assert.equal(turns.runs[0].error.code, 'research-no-evidence')
+  const result = await registered.get(routes.reports).fetch(request(routes.reports, {
+    action: 'confirm', id: report.meta.id, version: 1, research: topic.meta.id, body: report.body,
+  }))
+  assert.notEqual(result.status, 200)
+  assert.deepEqual(await store.versions(report.meta.id), [1])
 })
