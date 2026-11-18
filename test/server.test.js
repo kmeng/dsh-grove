@@ -703,3 +703,27 @@ test('research conversation keeps follow-up history and origin when using local 
   assert.equal((await store.get(first.topic)).meta.links[0].id, idea.meta.id)
   assert.deepEqual(plans[1].history, [{ question: '怎么做？', summary: '当前材料不足以验证交互方案。' }])
 })
+
+test('research without citable evidence retains its failed turn and creates no report', async t => {
+  const root = await fixture(t)
+  const store = new Vault(root)
+  const { ctx, registered } = host()
+  registerRoutes(ctx, {
+    current: () => ({ path: root }), modelConfig: { enabled: true },
+    model: () => ({
+      async plan() { return { topic: '人工接管', questions: ['如何接管？'] } },
+      async review() { return { claims: [{ text: '缺乏证据', explanation: '没有资料', status: 'insufficient', sources: [] }], followups: [] } },
+      async write() { return { summary: '没有资料', nextSteps: [] } },
+    }),
+  })
+  const call = input => registered.get(routes.deepResearch).fetch(request(routes.deepResearch, input))
+  const started = await (await call({ action: 'start', conversation: true, direction: '如何接管？' })).json()
+  const read = async () => (await (await call({ action: 'list', topic: started.topic })).json()).runs[0]
+  await waitFor(async () => ['failed', 'complete'].includes((await read())?.status))
+  const turn = await read()
+  assert.equal(turn.status, 'failed')
+  assert.equal(turn.error.code, 'research-no-evidence')
+  assert.equal(turn.report, undefined)
+  assert.equal((await store.get(started.topic)).meta.type, 'research')
+  assert.ok(!(await store.list()).some(note => note.meta.type === 'report'))
+})
