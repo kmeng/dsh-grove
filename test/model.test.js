@@ -110,3 +110,19 @@ test('report writing adapts depth in the requested language', async () => {
   assert.match(prompts[1], /^Write/)
   assert.doesNotMatch(prompts[1], /400–550/)
 })
+
+test('Ollama research calls get a longer deadline than hosted calls', async t => {
+  const { createDshModels } = await import('../src/adapters/models/dsh.js')
+  const timeout = t.mock.method(AbortSignal, 'timeout', () => new AbortController().signal)
+  const runtime = {
+    listProviders: () => [{ id: 'ollama' }, { id: 'hosted' }],
+    async *stream() {
+      yield { type: 'block-end', index: 0, block: { type: 'text', text: '{}' } }
+      yield { type: 'finish', reason: { kind: 'stop' } }
+    },
+  }
+  const models = createDshModels({ get: key => key === 'llm' ? runtime : undefined })
+  await models.model({ provider: 'ollama', model: 'qwen3.8-27b-mlx-32k:latest' }).plan({})
+  await models.model({ provider: 'hosted', model: 'cloud' }).plan({})
+  assert.deepEqual(timeout.mock.calls.map(call => call.arguments[0]), [600_000, 60_000])
+})
