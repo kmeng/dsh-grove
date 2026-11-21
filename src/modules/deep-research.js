@@ -117,12 +117,14 @@ export const stagedResearch = {
       const cited = new Set(claims.flatMap(claim => claim.sources))
       const references = sources.filter(source => cited.has(source.id))
       const numbers = new Map(references.map((source, index) => [source.id, index + 1]))
+      const writingClaims = claims.map((claim, index) => ({
+        id: index + 1, text: claim.text, sources: claim.sources.map(id => numbers.get(id)),
+        ...(claim.status === 'disputed' && { context: claim.explanation.slice(0, 180) }),
+      })).filter(claim => !references.length || claim.sources.length)
+      const allowedClaims = new Set(writingClaims.map(claim => claim.id))
       const result = await modelCall('write', {
-        plan: state.plan, language: state.input.language, today: state.input.today,
-        claims: claims.map((claim, index) => ({
-          id: index + 1, text: claim.text, status: claim.status, sources: claim.sources.map(id => numbers.get(id)),
-          ...(claim.status === 'disputed' && { context: claim.explanation.slice(0, 180) }),
-        })),
+        topic: state.plan.topic, language: state.input.language, today: state.input.today,
+        claims: writingClaims,
         sources: references.map(source => {
           const excerpts = [...new Set(claims.flatMap(claim => (claim.quotes ?? [])
             .filter(quote => quote.id === source.id).map(quote => quote.text)))].slice(0, 2)
@@ -135,7 +137,7 @@ export const stagedResearch = {
         if (!Array.isArray(section?.paragraphs) || !section.paragraphs.length || section.paragraphs.length > 6) throw invalid()
         const paragraphs = section.paragraphs.map(paragraph => {
           if (!Array.isArray(paragraph?.claims) || !paragraph.claims.length ||
-            paragraph.claims.some(id => !Number.isInteger(id) || id < 1 || id > claims.length)) throw invalid()
+            paragraph.claims.some(id => !allowedClaims.has(id))) throw invalid()
           return { text: line(paragraph.text, 3200), claims: [...new Set(paragraph.claims)] }
         })
         return { heading: line(section.heading, 120), paragraphs }

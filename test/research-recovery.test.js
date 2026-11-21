@@ -39,7 +39,12 @@ test('blocked sources stay out of references and evidence ratings stay out of th
           { text: 'Another change', explanation: 'Missing evidence', status: 'insufficient', sources: [] },
         ], followups: [] }
       },
-      async write() { return { summary: 'One change verified by an available source', sections: [{ heading: 'Analysis', paragraphs: [{ text: 'One change verified by an available source', claims: [1] }] }], limitations: 'Limited evidence', conclusion: 'One change verified by an available source', nextSteps: [] } },
+      async write({ claims }) {
+        assert.deepEqual(claims, [{ id: 1, text: 'A change', sources: [1] }])
+        return { summary: 'One change recorded by an available source', sections: [
+          { heading: 'Analysis', paragraphs: [{ text: 'A change was recorded.', claims: [1] }] },
+        ], conclusion: 'The official data records a change.' }
+      },
     },
   })
   const report = renderResearchReport(state)
