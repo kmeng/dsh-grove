@@ -87,12 +87,20 @@ async function readPages(links, readPage) {
   return usable
 }
 
+async function searchQueries(search, queries) {
+  const settled = await Promise.allSettled(queries.map(async query => search(query)))
+  const success = settled.filter(result => result.status === 'fulfilled')
+  if (settled.length && !success.length) {
+    const first = settled[0].reason
+    if (first?.code === 'research-search') throw first
+    throw problem('research-search', 'Could not retrieve web sources')
+  }
+  return success.flatMap(result => result.value)
+}
+
 async function collect(store, run, queries, providers, scope) {
   const web = scope === 'local' || run.localOnly ? [] : run.links?.length
-    ? await readPages(run.links, providers.readPage) : await Promise.all(queries.map(async query => providers.search(query))).catch(error => {
-    if (error?.code === 'research-search') throw error
-    throw problem('research-search', 'Could not retrieve web sources')
-  })
+    ? await readPages(run.links, providers.readPage) : await searchQueries(providers.search, queries)
   const local = scope === 'web' ? [] : await localSources(store, run.topic, queries, run.attachment)
   const found = new Map(local.map(source => [source.id, source]))
   const unavailable = new Map()
@@ -106,7 +114,7 @@ async function collect(store, run, queries, providers, scope) {
       })
       continue
     }
-    if (found.size >= 16 || found.has(url.href) || typeof candidate.text !== 'string' || !candidate.text.trim()) continue
+    if (found.size >= 24 || found.has(url.href) || typeof candidate.text !== 'string' || !candidate.text.trim()) continue
     unavailable.delete(url.href)
     found.set(url.href, { id: url.href, url: url.href, origin: url.hostname.replace(/^www\./, ''),
       title: String(candidate.title || url.hostname).slice(0, 200), text: candidate.text.slice(0, 5000),
@@ -127,17 +135,21 @@ export function isUnsupportedDraft(run, report) {
 
 function progress(run, running = false) {
   const { id, scope, topic, direction, status, created, report, error, plan, collected, review, verified, written } = run
+  const available = verified?.sources ?? (collected && [...new Map(
+    collected.concat(run.rounds?.flatMap(round => round.additions) ?? []).map(source => [source.id, source])
+  ).values()].filter(source => !source.unavailable))
   return { id, scope, topic, direction, created, report, error, attachment: run.attachment,
     status: status === 'running' && !running ? 'interrupted' : status,
     plan,
-    collected: collected?.filter(source => !source.unavailable).map(({ title }) => title),
-    sourceLinks: collected?.filter(source => !source.unavailable).map(source => source.url ?? null),
+    collected: available?.map(({ title }) => title),
+    sourceLinks: available?.map(source => source.url ?? null),
+    round: collected ? Math.max(run.searchRound ?? 1, 1 + (run.rounds?.length ?? 0)) : undefined,
     unavailableSources: verified?.unavailable ?? collected?.filter(source => source.unavailable).map(({ title }) => title),
     retrying: !!run.retrying,
     review: review && { followups: review.followups },
     verified: verified?.claims.map(({ text, status }) => ({ text, status })),
     written: !!written,
-    suggestions: status === 'complete' ? review?.followups : undefined,
+    suggestions: status === 'complete' ? (verified?.followups ?? review?.followups) : undefined,
     summary: typeof written?.summary === 'string' ? written.summary : undefined,
   }
 }
@@ -313,6 +325,8 @@ export function researchRuns({ context, workflow, parseAttachment }) {
           // Earlier runs could reach the writing stage using local materials alone.
           delete run.collected
           delete run.review
+          delete run.rounds
+          delete run.searchRound
           delete run.verified
           delete run.written
           run.web = true

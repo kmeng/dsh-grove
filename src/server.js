@@ -433,6 +433,9 @@ export function registerRoutes(ctx, options) {
         if (!path) throw coded('not-configured', 'Grove has no vault yet')
         const store = new Vault(path)
         const input = await readJson(request)
+        if (input?.action === 'catalog') {
+          return json({ reports: (await listReports(store, input.research)).map(({ meta }) => meta) })
+        }
         if (input?.action === 'list') {
           const notes = await store.list()
           const sources = new Set(notes.filter(({ meta }) => meta.type === 'source' &&

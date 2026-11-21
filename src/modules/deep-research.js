@@ -62,7 +62,7 @@ export const stagedResearch = {
 
     async function modelCall(method, input) {
       const withBudget = size => method !== 'write' && input.sources ? { ...input, sources: input.sources.map(source => ({
-        ...source, text: source.text.slice(0, size),
+        ...source, text: source.text.slice(0, Math.min(size, Math.floor(42_000 / input.sources.length))),
       })) } : input
       const call = method === 'write' ? write : model[method].bind(model)
       try {
@@ -95,22 +95,54 @@ export const stagedResearch = {
     })
     await step('verified', async () => {
       const all = new Map(state.collected.map(source => [source.id, source]))
-      const original = readable(state.collected)
-      if (state.review.followups.length) {
-        const extra = await collectFollowups(state, { review: input => modelCall('review', input) }, retrieve)
-        for (const source of extra) {
-          if (!all.has(source.id) || all.get(source.id).unavailable) all.set(source.id, source)
+      const queried = new Map(state.plan.questions.map(query => [query.trim().toLowerCase(), new Set(['all'])]))
+      const rounds = [...(state.rounds ?? [])]
+      let review = state.review
+      for (let index = 0; index < 2 && review.followups.length; index++) {
+        let round = rounds[index]
+        if (!round) {
+          await checkpoint('searchRound', index + 2)
+          const requests = []
+          const extra = await collectFollowups({ ...state, collected: [...all.values()], review },
+            { review: input => modelCall('review', input) }, (queries, scope = 'all') => {
+              const fresh = queries.filter(query => {
+                const scopes = queried.get(query.trim().toLowerCase())
+                return !scopes?.has('all') && !scopes?.has(scope)
+              })
+              requests.push({ queries: fresh, scope })
+              return fresh.length ? retrieve(fresh, scope === 'all' ? undefined : scope) : []
+            })
+          const additions = new Map()
+          for (const source of extra) {
+            const previous = additions.get(source.id) ?? all.get(source.id)
+            if (!previous || (previous.unavailable && !source.unavailable)) additions.set(source.id, source)
+          }
+          round = { requests, additions: [...additions.values()] }
+          rounds[index] = round
+          await checkpoint('rounds', rounds.slice())
         }
+        for (const { queries, scope } of round.requests) {
+          for (const query of queries) {
+            const key = query.trim().toLowerCase()
+            if (!queried.has(key)) queried.set(key, new Set())
+            queried.get(key).add(scope)
+          }
+        }
+        for (const source of round.additions) all.set(source.id, source)
+        if (!round.additions.some(source => !source.unavailable)) break
+        if (!round.review) {
+          const sources = readable([...all.values()]).slice(0, 48)
+          const prior = review.claims.map(({ text, explanation, status, sources }) => ({ text, explanation, status, sources }))
+          const reviewed = await modelCall('review', { plan: state.plan, today: state.input.today, sources, prior })
+          round = { ...round, review: { claims: assessment(reviewed, sources), followups: questions(reviewed.followups, 2) } }
+          rounds[index] = round
+          await checkpoint('rounds', rounds.slice())
+        }
+        review = round.review
       }
       const candidates = [...all.values()]
-      const sources = readable(candidates).slice(0, 24)
-      const unavailable = candidates.filter(source => source.unavailable).slice(0, 16).map(({ title }) => title)
-      if (sources.length === original.length && sources.every((source, i) => source.id === original[i].id)) {
-        return { claims: state.review.claims, sources, unavailable }
-      }
-      const prior = state.review.claims.map(({ text, explanation, status, sources }) => ({ text, explanation, status, sources }))
-      const reviewed = await modelCall('review', { plan: state.plan, today: state.input.today, sources, prior })
-      return { claims: assessment(reviewed, sources), sources, unavailable }
+      return { claims: review.claims, sources: readable(candidates).slice(0, 48), followups: review.followups,
+        unavailable: candidates.filter(source => source.unavailable).slice(0, 16).map(({ title }) => title) }
     })
     await step('written', async () => {
       const { claims, sources } = state.verified

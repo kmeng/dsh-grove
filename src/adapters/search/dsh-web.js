@@ -56,9 +56,11 @@ export function createDshWeb(ctx, readPublicPage) {
   }
 
   async function search(query) {
+    const limit = 128
+    const shorten = (text, length) => Array.from(text).slice(0, length).join('').trim()
     async function readResults(text) {
-      const result = await runtime().search({ query: text, maxResults: 4 }, AbortSignal.timeout(25_000))
-      return (await Promise.all((result.sources ?? []).slice(0, 4).map(async source => {
+      const result = await runtime().search({ query: text, maxResults: 6 }, AbortSignal.timeout(25_000))
+      return (await Promise.all((result.sources ?? []).slice(0, 6).map(async source => {
         const url = webUrl(source.url)
         if (!url) return null
         const title = source.title || url.hostname
@@ -75,11 +77,13 @@ export function createDshWeb(ctx, readPublicPage) {
           publishedAt: typeof source.publishedAt === 'string' ? source.publishedAt.slice(0, 80) : undefined }
       }))).filter(Boolean)
     }
-    const first = await readResults(query)
+    const first = await readResults(shorten(query, limit))
     const blocked = first.filter(source => source.unavailable === 403)
     if (!blocked.length || first.filter(source => !source.unavailable).length >= 2) return first
     const domains = [...new Set(blocked.map(source => new URL(source.url).hostname))]
-    const alternatives = await readResults(query + domains.map(domain => ' -site:' + domain).join(' ')).catch(() => [])
+    const exclusions = domains.map(domain => ' -site:' + domain).join('')
+    if (exclusions.length >= limit - 16) return first
+    const alternatives = await readResults(shorten(query, limit - exclusions.length) + exclusions).catch(() => [])
     return first.concat(alternatives)
   }
 

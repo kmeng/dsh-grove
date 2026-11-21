@@ -81,3 +81,34 @@ test('dsh research retry lowers only the outgoing route for that call', async ()
   assert.deepEqual(routes.map(route => route.reasoningEffort), ['low', 'high', 'high', undefined, 'low'])
   assert.equal(selection.reasoningEffort, 'high')
 })
+
+test('successive retrieval rounds add distinct material and resume without re-searching', async () => {
+  const initial = { input: { language: 'en' }, plan: { topic: 'Planning', questions: ['initial search'] } }
+  const searches = []
+  const retrieve = async ([query]) => {
+    searches.push(query)
+    return [{ ...valid, id: query, title: query, url: 'https://example.org/' + query.replaceAll(' ', '-') }]
+  }
+  const model = {
+    async review({ sources }) {
+      const followups = [['second search'], ['third search'], ['future question']][sources.length - 1]
+      return { followups, claims: sources.map(source => ({
+        text: source.title, explanation: source.title, status: 'insufficient', sources: [source.id],
+      })) }
+    },
+    async write() {
+      return { summary: 'Three sources', sections: [{ heading: 'Results',
+        paragraphs: [{ text: 'New material', claims: [3] }] }], conclusion: 'Use all three rounds' }
+    },
+  }
+  await assert.rejects(stagedResearch.run({
+    initial, retrieve, model, checkpoint: async (key, value) => {
+      initial[key] = value
+      if (key === 'rounds' && value.length === 2 && !value[1].review) throw Error('interrupted')
+    },
+  }), /interrupted/)
+  const state = await stagedResearch.run({ initial, model, retrieve, checkpoint: async () => {} })
+  assert.deepEqual(searches, ['initial search', 'second search', 'third search'])
+  assert.equal(state.verified.sources.length, 3)
+  assert.match(renderResearchReport(state), /https:\/\/example\.org\/third-search/)
+})
