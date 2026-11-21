@@ -61,6 +61,7 @@ window.__ModuleLoader__.load({
       'home.send': '查找',
       'research.newConversation': '新研究',
       'research.followUp': '沿着这场研究继续问…',
+      'research.suggestions': '建议追问',
       'research.ask': '发送',
       'asset.keep': '提炼为知识',
       'asset.kept': '已保存到知识库',
@@ -326,6 +327,7 @@ window.__ModuleLoader__.load({
       'home.send': 'Find',
       'research.newConversation': 'New research',
       'research.followUp': 'Ask a follow-up…',
+      'research.suggestions': 'Suggested follow-ups',
       'research.ask': 'Send',
       'asset.keep': 'Save to knowledge',
       'asset.kept': 'Saved to knowledge',
@@ -1138,7 +1140,8 @@ window.__ModuleLoader__.load({
     }
 
     function DeepResearchPanel(props) {
-      var [direction, setDirection] = useState('')
+      var direction = props.direction
+      var setDirection = props.onDirection
       var [attachment, setAttachment] = useState(null)
       var fileInput = useRef(null)
       var [run, setRun] = useState(null)
@@ -1209,7 +1212,7 @@ window.__ModuleLoader__.load({
 
       return h('section', { className: 'gr-card gr-research-composer' },
         h('form', { className: 'gr-stack', onSubmit: function (event) { event.preventDefault(); begin() } },
-          h('textarea', { className: 'gr-textarea', value: direction, maxLength: 1200,
+          h('textarea', { className: 'gr-textarea', ref: props.inputRef, value: direction, maxLength: 1200,
             'aria-label': T(props.topic ? 'research.followUp' : 'deep.question'),
             placeholder: T(props.topic ? 'research.followUp' : 'deep.question'), required: true, disabled: busy || running,
             onChange: function (event) { setDirection(event.target.value) } }),
@@ -1936,6 +1939,8 @@ window.__ModuleLoader__.load({
       var visit = useRef(0)
       var flow = useRef(null)
       var follow = useRef(true)
+      var composerInput = useRef(null)
+      var [direction, setDirection] = useState('')
 
       useEffect(function () {
         var active = true
@@ -1969,6 +1974,7 @@ window.__ModuleLoader__.load({
         follow.current = true
         visit.current++
         setSourceSeed(null)
+        setDirection('')
         setRuns([])
         setSelected(study)
         setCreating(false)
@@ -2006,6 +2012,15 @@ window.__ModuleLoader__.load({
           return [run].concat(items.filter(function (item) { return item.id !== run.id }))
             .sort(function (a, b) { return b.created.localeCompare(a.created) })
         })
+      }
+
+      function useSuggestion(question) {
+        if (composerInput.current?.disabled) return
+        setDirection(function (draft) {
+          var revised = draft.trim() ? draft.trimEnd() + '\n' + question : question
+          return revised.length <= 1200 ? revised : draft
+        })
+        composerInput.current?.focus?.()
       }
 
       function retryTurn(run) {
@@ -2059,7 +2074,15 @@ window.__ModuleLoader__.load({
                 h(ResearchProcess, { run: run, busy: retrying || runs.some(function (item) { return item.status === 'running' }),
                   onRetry: id && !run.report ? function () { retryTurn(run) } : null }),
                 run.status === 'complete' && run.summary ? h('p', { className: 'gr-prose gr-conversation-response' }, run.summary) : null,
-                id && run.status === 'complete' && run.report ? h(ReportEntry, { id: id, initialReport: run.report, title: run.plan?.topic, revision: props.reportRevision, onNavigate: props.onNavigate }) : null))
+                id && run.status === 'complete' && run.report ? h(ReportEntry, { id: id, initialReport: run.report, title: run.plan?.topic, revision: props.reportRevision, onNavigate: props.onNavigate }) : null,
+                run.status === 'complete' && run.suggestions?.length ? h('div', { className: 'gr-stack gr-suggestions' },
+                  h('span', { className: 'gr-meta' }, T('research.suggestions')),
+                  run.suggestions.map(function (question) {
+                    return h('button', { key: question, className: 'gr-btn gr-btn-ghost',
+                      disabled: runs.some(function (item) { return item.status === 'running' }) ||
+                        direction.trimEnd().length + (direction.trim() ? 1 : 0) + question.length > 1200,
+                      onClick: function () { useSuggestion(question) } }, question)
+                  })) : null))
           }),
           id ? h('div', { className: 'gr-conversation-resources' },
             h('details', null,
@@ -2069,6 +2092,7 @@ window.__ModuleLoader__.load({
               h(LegacyFindings, { key: 'findings:' + id, id: id })),
             h(ResearchReports, { id: id, excluded: runs.map(function (run) { return run.report?.id }), revision: props.reportRevision, onNavigate: props.onNavigate })) : null),
         h(DeepResearchPanel, { key: id || 'new', idea: idea, topic: id,
+          inputRef: composerInput, direction: direction, onDirection: setDirection,
           knowledge: !id ? sourceSeed?.origin : undefined, refresh: pollRevision,
           onSettings: props.onSettings, modelConfig: props.modelConfig,
           onRuns: setRuns, onStarted: showRun, onFinished: finished }))
@@ -2129,6 +2153,7 @@ window.__ModuleLoader__.load({
       '.gr-conversation-turn{display:grid;gap:14px}.gr-conversation-user{display:grid;justify-items:end;gap:4px}',
       '.gr-prompt{margin:0;max-width:85%;padding:10px 14px;background:var(--dsw-specific-bubble,var(--gr-wash));border-radius:16px;white-space:pre-wrap;overflow-wrap:anywhere}',
       '.gr-conversation-response{font-size:var(--dsh-content-font-size,14px)}',
+      '.gr-suggestions{gap:6px}.gr-suggestions .gr-btn{text-align:start;overflow-wrap:anywhere}',
       '.gr-conversation-context,.gr-conversation-resources{color:var(--gr-muted)}.gr-conversation-resources{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start}',
       '.gr-conversation-resources>.gr-card{padding:0;border:0;background:transparent}',
       '.gr-conversation .gr-research-composer{margin-bottom:12px;border-radius:16px;background:var(--dsw-specific-input-major,var(--gr-surface))}',

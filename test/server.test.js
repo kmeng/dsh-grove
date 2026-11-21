@@ -306,7 +306,10 @@ test('deep research checkpoints progress, verifies citations, and reopens its Ma
     },
   }
   const writer = {
-    async write({ claims }) {
+    async write({ claims, sources, history }) {
+      assert.equal(history, undefined)
+      assert.deepEqual(claims[0].sources, [1, 2])
+      assert.ok(sources.every(source => source.excerpts.length && source.excerpts.every(excerpt => excerpt.length <= 350)))
       if (failWrite) throw Object.assign(new Error('test timeout'), { code: 'model-timeout' })
       return { summary: '不同资料有共同发现。', sections: [{ heading: '日晒与路线选择', paragraphs: [{ text: '两份资料均描述了避开日晒的路线选择，尚无法区分季节的影响。', claims: [claims[0].id] }] }], limitations: '缺少跨季节比较。', conclusion: '现有材料显示路线选择与日晒有关。', nextSteps: ['检查季节影响'] }
     },
@@ -353,16 +356,17 @@ test('deep research checkpoints progress, verifies citations, and reopens its Ma
   assert.equal(reports.length, 1)
   assert.equal(reports[0].meta.id, id)
   assert.equal(reports[0].meta.review, 'draft')
-  assert.match(reports[0].body, /## 研究范围与方法/)
+  assert.match(reports[0].body, /## 摘要/)
   assert.match(reports[0].body, /## 研究分析[\s\S]+尚无法区分季节的影响。 \[1\] \[2\]/)
-  assert.match(reports[0].body, /## 证据局限[\s\S]+## 结论/)
-  assert.match(reports[0].body, /## 发现与证据/)
+  assert.match(reports[0].body, /## 结论[\s\S]+## 参考资料/)
+  assert.doesNotMatch(reports[0].body, /证据不足|证据局限|开放问题与下一步|发现与证据/)
   assert.match(reports[0].body, /https:\/\/study\.example\/study/)
   assert.equal((await vault.get(topic)).meta.links[0].version, 1)
   const updated = await call(routes.reports, { action: 'confirm', research: topic, id, version: 1, body: reports[0].body })
   assert.equal((await updated.json()).meta.review, 'confirmed')
   const reopened = await (await call(routes.deepResearch, { action: 'list', topic })).json()
   assert.equal(reopened.runs[0].report.version, 2)
+  assert.deepEqual(reopened.runs[0].suggestions, ['冲突研究'])
   const detail = await (await call(routes.inspirations, { ...ideaRef, action: 'detail' })).json()
   assert.equal(detail.studies[0].activity, reopened.runs[0].created)
   assert.equal(detail.studies[0].reports[0].review, 'confirmed')
@@ -400,7 +404,8 @@ test('deep research reuses exact imported versions when web search yields no sou
     return runs[0]?.status === 'complete'
   })
   const report = await (await call(routes.reports, { action: 'read', id, version: 1 })).json()
-  assert.match(report.body, /\*\*Insufficient evidence\*\*/)
+  assert.match(report.body, /## References[\s\S]+observations\.md/)
+  assert.doesNotMatch(report.body, /Insufficient evidence/)
   assert.equal(report.evidence[0].original.id, document.meta.id)
   assert.equal(report.evidence[0].original.version, 1)
 })

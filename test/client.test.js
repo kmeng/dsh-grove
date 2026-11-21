@@ -209,13 +209,17 @@ test('resuming a topic opens a scoped detail view without repeating the deep res
   const research = activeView(page()).children[0]
 
   let nextTopic
+  let drafted
   function render(selected) {
-    const run = { id: 'run-1', status: 'complete', direction: '追问', report: { id: 'report-1', version: 1 } }
+    const run = { id: 'run-1', status: 'complete', direction: '追问', suggestions: ['补查原文'], report: { id: 'report-1', version: 1 } }
     const state = { 0: [topic], 1: selected, 4: selected ? [run] : [], 5: false }
     slot = 0
     useState = value => {
       const index = slot++
-      return [state[index] ?? value, next => { if (index === 1) nextTopic = next }]
+      return [state[index] ?? value, next => {
+        if (index === 1) nextTopic = next
+        if (index === 11 && typeof next === 'function') drafted = next('我已输入的问题')
+      }]
     }
     return research.type(research.props)
   }
@@ -228,12 +232,15 @@ test('resuming a topic opens a scoped detail view without repeating the deep res
   const title = detail.children[0].children[1]
   const deepPanel = detail.children.at(-1)
   const [turn] = detail.children[1].children.find(Array.isArray)
-  const report = turn.children[1].children.at(-1)
+  const [, , report, suggestions] = turn.children[1].children
   assert.equal(title.type, 'h1')
   assert.deepEqual(title.children, [topic.meta.title])
   assert.equal(deepPanel.props.topic, topic.meta.id)
   assert.equal(report.props.id, topic.meta.id)
   assert.equal(report.props.initialReport.id, 'report-1')
+  const [suggestion] = suggestions.children.at(-1)
+  suggestion.props.onClick()
+  assert.equal(drafted, '我已输入的问题\n补查原文')
   const keys = detail.children.map(child => child?.props?.key).filter(key => key != null)
   assert.equal(new Set(keys).size, keys.length)
 })

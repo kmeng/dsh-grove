@@ -26,7 +26,7 @@ test('a timeout retries the same research review once with less input and lower 
   assert.deepEqual(state.verified.claims[0].sources, ['open'])
 })
 
-test('blocked evidence cannot support findings and the report marks the missing verification', async () => {
+test('blocked sources stay out of references and evidence ratings stay out of the report', async () => {
   const state = await stagedResearch.run({
     initial: { input: { language: 'en' }, plan: { topic: 'Data', questions: ['What changed?'] } },
     retrieve: async () => [blocked, valid],
@@ -39,13 +39,19 @@ test('blocked evidence cannot support findings and the report marks the missing 
           { text: 'Another change', explanation: 'Missing evidence', status: 'insufficient', sources: [] },
         ], followups: [] }
       },
-      async write() { return { summary: 'One change verified by an available source', sections: [{ heading: 'Analysis', paragraphs: [{ text: 'One change verified by an available source', claims: [1] }] }], limitations: 'Limited evidence', conclusion: 'One change verified by an available source', nextSteps: [] } },
+      async write({ claims }) {
+        assert.deepEqual(claims, [{ id: 1, text: 'A change', sources: [1] }])
+        return { summary: 'One change recorded by an available source', sections: [
+          { heading: 'Analysis', paragraphs: [{ text: 'A change was recorded.', claims: [1] }] },
+        ], conclusion: 'The official data records a change.' }
+      },
     },
   })
   const report = renderResearchReport(state)
   assert.match(report, /<https:\/\/example\.org\/open>/)
   assert.doesNotMatch(report, /https:\/\/example\.net\/blocked/)
-  assert.match(report, /could not be independently verified/i)
+  assert.match(report, /## References/)
+  assert.doesNotMatch(report, /could not be independently verified|insufficient evidence|next steps/i)
 })
 
 test('dsh research retry lowers only the outgoing route for that call', async () => {
@@ -62,9 +68,14 @@ test('dsh research retry lowers only the outgoing route for that call', async ()
       } }
     },
   }
-  const model = createDshModels({ get: name => name === 'llm' ? llm : undefined }).model(selection)
+  const adapter = createDshModels({ get: name => name === 'llm' ? llm : undefined })
+  const model = adapter.model(selection)
   await model.review({}, { lowerEffort: true })
   await model.review({})
-  assert.deepEqual(routes.map(route => route.reasoningEffort), ['low', 'high'])
+  await model.write({})
+  const defaultModel = adapter.model({ provider: selection.provider, model: selection.model })
+  await defaultModel.review({})
+  await defaultModel.write({})
+  assert.deepEqual(routes.map(route => route.reasoningEffort), ['low', 'high', 'high', undefined, 'low'])
   assert.equal(selection.reasoningEffort, 'high')
 })

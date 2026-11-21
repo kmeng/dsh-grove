@@ -19,15 +19,20 @@ function assessment(value, sources) {
     const text = line(claim.text, 1200)
     const explanation = line(claim.explanation, 1400)
     if (!['supported', 'disputed', 'insufficient'].includes(claim.status)) throw invalid()
-    const quotes = Array.isArray(claim.quotes) ? claim.quotes : []
-    const matched = sources.filter(source => supporting.includes(source.id) && quotes.some(item => {
-      const quote = typeof item?.text === 'string' ? item.text.trim().replace(/\s+/g, ' ') : ''
-      return item?.id === source.id && quote.length >= 8 && quote.length <= 350 &&
-        source.text.replace(/\s+/g, ' ').includes(quote)
-    }))
-    const distinct = new Set(matched.map(source => source.origin))
+    const quotes = []
+    for (const source of sources) {
+      if (!supporting.includes(source.id)) continue
+      const availableText = source.text.replace(/\s+/g, ' ')
+      const quote = (Array.isArray(claim.quotes) ? claim.quotes : [])
+        .filter(item => item?.id === source.id && typeof item.text === 'string')
+        .map(item => item.text.trim().replace(/\s+/g, ' '))
+        .find(text => text.length >= 8 && text.length <= 350 && availableText.includes(text))
+      if (quote) quotes.push({ id: source.id, text: quote })
+    }
+    const matched = new Set(quotes.map(quote => quote.id))
+    const distinct = new Set(sources.filter(source => matched.has(source.id)).map(source => source.origin))
     const status = distinct.size < 2 ? 'insufficient' : claim.status
-    return { text, explanation, status, sources: supporting }
+    return { text, explanation, status, sources: supporting, quotes }
   })
 }
 
@@ -56,7 +61,7 @@ export const stagedResearch = {
     }
 
     async function modelCall(method, input) {
-      const withBudget = size => input.sources ? { ...input, sources: input.sources.map(source => ({
+      const withBudget = size => method !== 'write' && input.sources ? { ...input, sources: input.sources.map(source => ({
         ...source, text: source.text.slice(0, size),
       })) } : input
       const call = method === 'write' ? write : model[method].bind(model)
@@ -103,29 +108,42 @@ export const stagedResearch = {
       if (sources.length === original.length && sources.every((source, i) => source.id === original[i].id)) {
         return { claims: state.review.claims, sources, unavailable }
       }
-      const reviewed = await modelCall('review', { plan: state.plan, today: state.input.today, sources, prior: state.review.claims })
+      const prior = state.review.claims.map(({ text, explanation, status, sources }) => ({ text, explanation, status, sources }))
+      const reviewed = await modelCall('review', { plan: state.plan, today: state.input.today, sources, prior })
       return { claims: assessment(reviewed, sources), sources, unavailable }
     })
     await step('written', async () => {
-      const claims = state.verified.claims.map((claim, index) => ({ ...claim, id: index + 1 }))
+      const { claims, sources } = state.verified
       const cited = new Set(claims.flatMap(claim => claim.sources))
+      const references = sources.filter(source => cited.has(source.id))
+      const numbers = new Map(references.map((source, index) => [source.id, index + 1]))
+      const writingClaims = claims.map((claim, index) => ({
+        id: index + 1, text: claim.text, sources: claim.sources.map(id => numbers.get(id)),
+        ...(claim.status === 'disputed' && { context: claim.explanation.slice(0, 180) }),
+      })).filter(claim => !references.length || claim.sources.length)
+      const allowedClaims = new Set(writingClaims.map(claim => claim.id))
       const result = await modelCall('write', {
-        plan: state.plan, claims, language: state.input.language, today: state.input.today, history: state.history,
-        sources: state.verified.sources.filter(source => cited.has(source.id))
-          .map(({ id, title, text, publishedAt }) => ({ id, title, text: text.slice(0, 1200), publishedAt })),
+        topic: state.plan.topic, language: state.input.language, today: state.input.today,
+        claims: writingClaims,
+        sources: references.map(source => {
+          const excerpts = [...new Set(claims.flatMap(claim => (claim.quotes ?? [])
+            .filter(quote => quote.id === source.id).map(quote => quote.text)))].slice(0, 2)
+          return { id: numbers.get(source.id), title: source.title, publishedAt: source.publishedAt,
+            excerpts: excerpts.length ? excerpts : [source.text.trim().slice(0, 320)] }
+        }),
       })
       if (!Array.isArray(result?.sections) || !result.sections.length || result.sections.length > 6) throw invalid()
       const sections = result.sections.map(section => {
         if (!Array.isArray(section?.paragraphs) || !section.paragraphs.length || section.paragraphs.length > 6) throw invalid()
         const paragraphs = section.paragraphs.map(paragraph => {
           if (!Array.isArray(paragraph?.claims) || !paragraph.claims.length ||
-            paragraph.claims.some(id => !Number.isInteger(id) || id < 1 || id > claims.length)) throw invalid()
+            paragraph.claims.some(id => !allowedClaims.has(id))) throw invalid()
           return { text: line(paragraph.text, 3200), claims: [...new Set(paragraph.claims)] }
         })
         return { heading: line(section.heading, 120), paragraphs }
       })
-      return { summary: line(result.summary, 3000), sections, limitations: line(result.limitations, 3000),
-        conclusion: line(result.conclusion, 3000), nextSteps: questions(result.nextSteps, 6) }
+      return { title: result.title === undefined ? undefined : line(result.title, 100),
+        summary: line(result.summary, 3000), sections, conclusion: line(result.conclusion, 3000) }
     })
     return state
   },
@@ -135,26 +153,22 @@ function markdownText(value) {
   return value.replace(/[\\`*_\[\]<>]/g, '\\$&')
 }
 
+export function reportSources(state) {
+  const { claims, sources } = state.verified
+  const indexes = state.written.sections?.flatMap(section => section.paragraphs.flatMap(paragraph => paragraph.claims))
+  const referenced = indexes ? [...new Set(indexes)].map(index => claims[index - 1]) : claims
+  const cited = new Set(referenced.flatMap(claim => claim.sources))
+  return sources.filter(source => cited.has(source.id))
+}
+
 export function renderResearchReport(state) {
   const english = state.input.language === 'en'
-  const title = english
-    ? { summary: 'Overview', questions: 'Research questions', claims: 'Findings and evidence', next: 'Open questions and next steps', sources: 'Sources', supported: 'Supported', disputed: 'Disputed', insufficient: 'Insufficient evidence', noSources: 'No citable sources were retrieved.' }
-    : { summary: '摘要', questions: '研究问题', claims: '发现与证据', next: '开放问题与下一步', sources: '来源', supported: '有证据支持', disputed: '证据有分歧', insufficient: '证据不足', noSources: '本次未检索到可引用的资料。' }
-  const unavailable = state.verified.unavailable ?? []
-  const unverified = english ? 'Some sources could not be opened; claims without accessible evidence could not be independently verified.'
-    : '部分来源无法打开；缺少可访问依据的结论未能独立核验。'
-  const cited = new Set(state.verified.claims.flatMap(claim => claim.sources))
-  const sources = state.verified.sources.filter(source => cited.has(source.id))
+  const sources = reportSources(state)
   const numbers = new Map(sources.map((source, index) => [source.id, index + 1]))
-  const claims = state.verified.claims.map(claim => {
-    const refs = claim.sources.map(id => `[${numbers.get(id)}]`).join(' ')
-    return `- **${title[claim.status]}** · ${markdownText(claim.text)}${refs ? ' ' + refs : ''}\n  ${markdownText(claim.explanation)}${unavailable.length && !refs ? (english ? ' · Could not be independently verified.' : ' · 未能独立核验。') : ''}`
-  })
   const references = sources.map(source => {
     const location = source.reference ? `[[${source.reference.id}.v${source.reference.version}]]` : `<${source.url}>`
     return `${numbers.get(source.id)}. ${markdownText(source.title)} · ${location}${source.publishedAt ? ' · ' + markdownText(source.publishedAt) : ''}`
   })
-
   const analysis = state.written.sections?.map(section => {
     const paragraphs = section.paragraphs.map(paragraph => {
       const ids = new Set(paragraph.claims.flatMap(index => state.verified.claims[index - 1].sources))
@@ -163,22 +177,13 @@ export function renderResearchReport(state) {
     })
     return `### ${markdownText(section.heading)}\n\n${paragraphs.join('\n\n')}`
   })
-  const method = english
-    ? `The research reviewed ${state.verified.sources.length} available passages against the research questions. Claims were assessed using source excerpts and checked for independent corroboration.`
-    : `本轮围绕上述研究问题审查了 ${state.verified.sources.length} 条可访问资料摘录，依据原文片段评估各项论断，并检查是否有独立来源相互印证。`
-  const hasSupport = state.verified.claims.some(claim => claim.status === 'supported')
   return [
-    `# ${markdownText(state.plan.topic)}`,
-    `## ${title.summary}\n\n${hasSupport ? '' : title.insufficient + (english ? '. ' : '。 ')}${markdownText(state.written.summary)}`,
-    `## ${title.questions}\n\n${state.plan.questions.map(question => '- ' + markdownText(question)).join('\n')}`,
-    ...(analysis ? [
-      `## ${english ? 'Scope and method' : '研究范围与方法'}\n\n${method}`,
-      `## ${english ? 'Analysis' : '研究分析'}\n\n${analysis.join('\n\n')}`,
-      `## ${english ? 'Limitations' : '证据局限'}\n\n${markdownText(state.written.limitations)}`,
+    `# ${markdownText(state.written.title ?? state.plan.topic)}`,
+    `## ${english ? 'Overview' : '摘要'}\n\n${markdownText(state.written.summary)}`,
+    ...(analysis ? [`## ${english ? 'Analysis' : '研究分析'}\n\n${analysis.join('\n\n')}`] : []),
+    ...(state.written.conclusion ? [
       `## ${english ? 'Conclusion' : '结论'}\n\n${markdownText(state.written.conclusion)}`,
     ] : []),
-    `## ${title.claims}${analysis ? (english ? ' (Appendix)' : '（附录）') : ''}\n\n${claims.join('\n')}`,
-    ...(state.written.nextSteps.length ? [`## ${title.next}\n\n${state.written.nextSteps.map(item => '- ' + markdownText(item)).join('\n')}`] : []),
-    `## ${title.sources}\n\n${references.length ? references.join('\n') : title.noSources}${unavailable.length ? '\n\n' + unverified : ''}`,
+    ...(references.length ? [`## ${english ? 'References' : '参考资料'}\n\n${references.join('\n')}`] : []),
   ].join('\n\n')
 }
