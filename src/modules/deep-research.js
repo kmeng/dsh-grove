@@ -108,9 +108,11 @@ export const stagedResearch = {
     })
     await step('written', async () => {
       const claims = state.verified.claims.map((claim, index) => ({ ...claim, id: index + 1 }))
+      const cited = new Set(claims.flatMap(claim => claim.sources))
       const result = await modelCall('write', {
         plan: state.plan, claims, language: state.input.language, history: state.history,
-        sources: state.verified.sources.map(({ id, title, text, publishedAt }) => ({ id, title, text, publishedAt })),
+        sources: state.verified.sources.filter(source => cited.has(source.id))
+          .map(({ id, title, text, publishedAt }) => ({ id, title, text: text.slice(0, 1200), publishedAt })),
       })
       if (!Array.isArray(result?.sections) || !result.sections.length || result.sections.length > 6) throw invalid()
       const sections = result.sections.map(section => {

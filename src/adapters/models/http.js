@@ -8,8 +8,8 @@ export function httpModel({ endpoint, name, credential }, request = fetch) {
   if (!endpoint || !name || !credential) return null
   const url = URL.parse(endpoint)
   if (!url || url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) throw modelError('model-endpoint', 'Model endpoint must use HTTPS')
-  async function complete(system, input) {
-    const signal = AbortSignal.timeout(60000)
+  async function complete(system, input, requestOptions) {
+    const signal = AbortSignal.timeout(requestOptions?.timeoutMs ?? 60_000)
     let response
     let payload
     try {

@@ -47,7 +47,7 @@ export function createDshModels(ctx) {
     model(selection) {
       if (!available(selection)) throw failure('model-dsh-route', 'This model route is unavailable in dsh')
       return modelTasks(selection.model, async (system, input, requestOptions) => {
-        const signal = AbortSignal.timeout(60000)
+        const signal = AbortSignal.timeout(requestOptions?.timeoutMs ?? 60_000)
         const key = identity(selection)
         try {
           const runtime = llm()
