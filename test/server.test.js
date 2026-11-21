@@ -404,7 +404,8 @@ test('deep research reuses exact imported versions when web search yields no sou
     return runs[0]?.status === 'complete'
   })
   const report = await (await call(routes.reports, { action: 'read', id, version: 1 })).json()
-  assert.match(report.body, /\*\*Insufficient evidence\*\*/)
+  assert.match(report.body, /## References[\s\S]+observations\.md/)
+  assert.doesNotMatch(report.body, /Insufficient evidence/)
   assert.equal(report.evidence[0].original.id, document.meta.id)
   assert.equal(report.evidence[0].original.version, 1)
 })

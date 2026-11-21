@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { renderResearchReport } from './deep-research.js'
+import { renderResearchReport, reportSources } from './deep-research.js'
 import { saveEvidence, saveSource } from './evidence.js'
 import { readKnowledge } from './knowledge.js'
 
@@ -137,6 +137,7 @@ function progress(run, running = false) {
     review: review && { followups: review.followups },
     verified: verified?.claims.map(({ text, status }) => ({ text, status })),
     written: !!written,
+    suggestions: status === 'complete' ? review?.followups : undefined,
     summary: typeof written?.summary === 'string' ? written.summary : undefined,
   }
 }
@@ -181,8 +182,7 @@ export function researchRuns({ context, workflow, parseAttachment }) {
         throw problem('research-no-evidence', 'No citable evidence was found')
       }
       const topic = await store.get(run.topic, run.topicVersion)
-      const used = new Set(state.verified.claims.flatMap(claim => claim.sources))
-      const links = state.verified.sources.filter(source => used.has(source.id) && source.reference)
+      const links = reportSources(state).filter(source => source.reference)
         .map(source => ({ kind: 'derived', ...source.reference }))
       const report = await createOnce(store, run.id, {
         type: 'report', title: state.plan.topic, body: renderResearchReport(state), review: 'draft',
