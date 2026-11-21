@@ -63,9 +63,14 @@ test('dsh research retry lowers only the outgoing route for that call', async ()
       } }
     },
   }
-  const model = createDshModels({ get: name => name === 'llm' ? llm : undefined }).model(selection)
+  const adapter = createDshModels({ get: name => name === 'llm' ? llm : undefined })
+  const model = adapter.model(selection)
   await model.review({}, { lowerEffort: true })
   await model.review({})
-  assert.deepEqual(routes.map(route => route.reasoningEffort), ['low', 'high'])
+  await model.write({})
+  const defaultModel = adapter.model({ provider: selection.provider, model: selection.model })
+  await defaultModel.review({})
+  await defaultModel.write({})
+  assert.deepEqual(routes.map(route => route.reasoningEffort), ['low', 'high', 'high', undefined, 'low'])
   assert.equal(selection.reasoningEffort, 'high')
 })

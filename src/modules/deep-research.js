@@ -140,7 +140,8 @@ export const stagedResearch = {
         })
         return { heading: line(section.heading, 120), paragraphs }
       })
-      return { summary: line(result.summary, 3000), sections, conclusion: line(result.conclusion, 3000) }
+      return { title: result.title === undefined ? undefined : line(result.title, 100),
+        summary: line(result.summary, 3000), sections, conclusion: line(result.conclusion, 3000) }
     })
     return state
   },
@@ -175,7 +176,7 @@ export function renderResearchReport(state) {
     return `### ${markdownText(section.heading)}\n\n${paragraphs.join('\n\n')}`
   })
   return [
-    `# ${markdownText(state.plan.topic)}`,
+    `# ${markdownText(state.written.title ?? state.plan.topic)}`,
     `## ${english ? 'Overview' : '摘要'}\n\n${markdownText(state.written.summary)}`,
     ...(analysis ? [`## ${english ? 'Analysis' : '研究分析'}\n\n${analysis.join('\n\n')}`] : []),
     ...(state.written.conclusion ? [

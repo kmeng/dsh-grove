@@ -185,7 +185,7 @@ export function researchRuns({ context, workflow, parseAttachment }) {
       const links = reportSources(state).filter(source => source.reference)
         .map(source => ({ kind: 'derived', ...source.reference }))
       const report = await createOnce(store, run.id, {
-        type: 'report', title: state.plan.topic, body: renderResearchReport(state), review: 'draft',
+        type: 'report', title: state.written.title ?? state.plan.topic, body: renderResearchReport(state), review: 'draft',
         links: [{ kind: 'related', id: topic.meta.id, version: topic.meta.version }, ...links],
       })
       run.report = { id: report.meta.id, version: report.meta.version }

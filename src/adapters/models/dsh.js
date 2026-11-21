@@ -52,8 +52,9 @@ export function createDshModels(ctx) {
         try {
           const runtime = llm()
           const effort = selection.reasoningEffort
-          const reduced = requestOptions?.lowerEffort && (['medium', 'high', 'xhigh', 'max'].includes(effort) ||
-            (!effort && /^deepseek(?:-|$)/.test(selection.provider)))
+          const defaultDeepSeek = !effort && /^deepseek(?:-|$)/.test(selection.provider)
+          const reduced = (requestOptions?.preferLowEffort && defaultDeepSeek) ||
+            (requestOptions?.lowerEffort && (defaultDeepSeek || ['medium', 'high', 'xhigh', 'max'].includes(effort)))
           const reasoningEffort = reduced ? 'low' : effort
           const route = { provider: selection.provider, model: selection.model,
             ...(reasoningEffort ? { reasoningEffort } : {}) }
