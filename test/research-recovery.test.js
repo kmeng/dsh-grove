@@ -42,7 +42,7 @@ test('blocked sources stay out of references and evidence ratings stay out of th
       async write({ claims }) {
         assert.deepEqual(claims, [{ id: 1, text: 'A change', sources: [1] }])
         return { summary: 'One change recorded by an available source', sections: [
-          { heading: 'Analysis', paragraphs: [{ text: 'A change was recorded.', claims: [1] }] },
+          { heading: 'Analysis', paragraphs: [{ text: 'A change was recorded. (claim 1)', claims: [1] }] },
         ], conclusion: 'The official data records a change.' }
       },
     },
@@ -50,6 +50,8 @@ test('blocked sources stay out of references and evidence ratings stay out of th
   const report = renderResearchReport(state)
   assert.match(report, /<https:\/\/example\.org\/open>/)
   assert.doesNotMatch(report, /https:\/\/example\.net\/blocked/)
+  assert.match(report, /A change was recorded\. \[1\]/)
+  assert.doesNotMatch(report, /claim 1/)
   assert.match(report, /## References/)
   assert.doesNotMatch(report, /could not be independently verified|insufficient evidence|next steps/i)
 })
