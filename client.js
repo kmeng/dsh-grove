@@ -87,7 +87,7 @@ window.__ModuleLoader__.load({
       'research.localSearch': '联网检索不可用。可添加资料或在问题里粘贴公开链接。',
       'research.searchSettings': '联网检索设置',
       'report.sourceLinks': '来源链接',
-      'research.autoRetry': '正在重新核验资料…',
+      'research.autoRetry': '正在重试当前步骤…',
       'research.sourceUnavailable': '部分来源无法打开，缺少可访问依据的结论未能核验。',
       'report.preview': '报告预览',
       'report.closePreview': '关闭预览',
@@ -181,7 +181,10 @@ window.__ModuleLoader__.load({
       'err.model-rejected': '模型服务拒绝了请求（{message}）。请检查模型名称及接口是否支持 JSON 输出。',
       'err.model-unavailable': '模型服务暂时不可用（{message}）。请稍后重试。',
       'err.model-network': '无法连接模型服务。请检查 HTTPS 地址、网络和证书。',
-      'err.model-timeout': '模型服务在 60 秒内未响应。请重试，或减少选中的材料。',
+      'err.model-timeout': '等待模型响应超时。可以从已保存的进度重试。',
+      'research.round': '第 {round} 轮检索与核查',
+      'report.empty': '还未生成报告',
+      'report.fileLabel': '研究报告：',
       'err.model-response': '模型返回的正文或引用格式不正确。请重试，或更换支持 JSON 输出的模型。',
       'research.notesOptional': '研究记录（可选）',
       'research.start': '开始研究',
@@ -353,7 +356,7 @@ window.__ModuleLoader__.load({
       'research.localSearch': 'Web search is unavailable. Attach material or include a public link.',
       'research.searchSettings': 'Web search settings',
       'report.sourceLinks': 'Source links',
-      'research.autoRetry': 'Retrying evidence verification…',
+      'research.autoRetry': 'Retrying the current step…',
       'research.sourceUnavailable': 'Some sources could not be opened; claims without accessible evidence were not verified.',
       'report.preview': 'Report preview',
       'report.closePreview': 'Close preview',
@@ -446,7 +449,10 @@ window.__ModuleLoader__.load({
       'err.model-rejected': 'The model service rejected the request ({message}). Check the model name and JSON output support.',
       'err.model-unavailable': 'The model service is temporarily unavailable ({message}). Try again later.',
       'err.model-network': 'Could not connect to the model service. Check the HTTPS URL, network, and certificate.',
-      'err.model-timeout': 'The model service did not respond within 60 seconds. Try again or select fewer materials.',
+      'err.model-timeout': 'The model did not respond before its deadline. Retry from the saved progress.',
+      'research.round': 'Searching and checking · round {round}',
+      'report.empty': 'No report yet',
+      'report.fileLabel': 'Research report: ',
       'err.model-response': 'The model returned invalid text or citations. Retry or choose a model that supports JSON output.',
       'research.notesOptional': 'Research notes (optional)',
       'research.start': 'Start research',
@@ -902,7 +908,7 @@ window.__ModuleLoader__.load({
           reference: preview, onClose: closePreview, onNavigate: navigate,
           onSaved: function () { setReportRevision(function (value) { return value + 1 }) } }) : null,
         h('nav', { className: 'gr-nav', 'aria-label': T('panel') }, navigation.map(function ([destination, label]) {
-          return h('button', { key: destination, type: 'button', className: 'gr-btn gr-btn-ghost',
+          return h('button', { key: destination, type: 'button', className: 'gr-nav-item',
             'aria-current': currentNav === destination ? 'page' : undefined,
             onClick: destination === 'settings' ? openSettings : function () { navigate(destination) },
           }, T('nav.' + label))
@@ -1061,7 +1067,7 @@ window.__ModuleLoader__.load({
               h('select', { value: detail.meta.version, onChange: function (event) {
                 props.onNavigate('idea', Object.assign({}, ref, { version: Number(event.target.value) }))
               } }, detail.versions.map(function (version) { return h('option', { key: version, value: version }, 'v' + version) }))) : null),
-          h('button', { className: 'gr-btn', onClick: function () {
+          h('button', { className: 'gr-btn gr-start-research', onClick: function () {
             props.onNavigate('research', { idea: ref, title: detail.meta.title })
           } }, T('idea.startResearch')),
           detail.studies.length ? h('section', { className: 'gr-origin-section gr-stack' },
@@ -1247,7 +1253,10 @@ window.__ModuleLoader__.load({
       var status = running && run.retrying ? 'research.autoRetry' : run.error?.code === 'research-no-evidence' ? 'research.incomplete' : running ? !run.plan ? 'deep.waiting' : !run.collected ? 'deep.searching' :
         !run.verified ? 'deep.checking' : 'deep.writing' : 'research.run.' + run.status
       return h('div', { className: 'gr-stack' },
-        h('p', { className: 'gr-meta', role: running ? 'status' : undefined }, T(status)),
+        h('p', { className: 'gr-meta gr-run-status', role: running ? 'status' : undefined },
+          running ? h('span', { className: 'gr-run-spinner', 'aria-hidden': true }) : null,
+          running && !run.retrying && status === 'deep.checking' && run.round
+            ? T('research.round', { round: run.round }) : T(status)),
         run.plan || run.collected || run.verified ? h('details', { open: running ? true : undefined },
           h('summary', null, T('research.process')),
           run.plan ? h('div', null, h('h4', null, T('deep.plan')),
@@ -1516,64 +1525,6 @@ window.__ModuleLoader__.load({
       return btoa(binary)
     }
 
-    function ResearchSources(props) {
-      var [items, setItems] = useState([])
-      var [document, setDocument] = useState(null)
-      var [busy, setBusy] = useState(false)
-      var [error, setError] = useState(null)
-      var [saved, setSaved] = useState(false)
-      useEffect(function () {
-        var active = true
-        api(SOURCES, { action: 'list', research: props.id }).then(function (value) {
-          if (active) setItems(value.sources)
-        }, function (problem) {
-          if (active) setError(problem)
-        })
-        return function () { active = false }
-      }, [props.id])
-
-      async function run(operation) {
-        setBusy(true)
-        setError(null)
-        setSaved(false)
-        try { await operation() }
-        catch (problem) { setError(problem) }
-        finally { setBusy(false) }
-      }
-
-      function download() {
-        var bytes = Uint8Array.from(atob(document.original), function (character) { return character.charCodeAt(0) })
-        var url = URL.createObjectURL(new Blob([bytes]))
-        var link = window.document.createElement('a')
-        link.href = url
-        link.download = document.meta.title
-        link.click()
-        setTimeout(function () { URL.revokeObjectURL(url) }, 1000)
-      }
-
-      return h('div', { className: 'gr-stack' },
-        error ? h('p', { role: 'alert' }, messageOf(error)) : null,
-        h('p', { role: 'status' }, saved ? T('source.saved') : ''),
-        items.map(function (item) {
-          return h('button', { key: item.id, className: 'gr-btn gr-btn-ghost', disabled: busy, onClick: function () {
-            run(async function () { setDocument(await api(SOURCES, { action: 'open', id: item.id, version: item.version })) })
-          } }, item.title)
-        }),
-        document ? h('div', null,
-          h('button', { className: 'gr-btn', onClick: download }, T('source.open')),
-          document.blocks.map(function (block, index) {
-            return h('details', { key: document.meta.id + ':' + index },
-              h('summary', null, T('source.read'), ' · ', block.locator),
-              h('pre', { className: 'gr-code' }, block.text),
-              h('button', { className: 'gr-btn', disabled: busy, onClick: function () {
-                run(async function () {
-                  await api(SOURCES, { action: 'excerpt', id: document.meta.id, version: document.meta.version, index: index })
-                  setSaved(true)
-                })
-              } }, T('source.save')))
-          })) : null)
-    }
-
     function ReportEntry(props) {
       var [meta, setMeta] = useState(null)
       var ref = props.initialReport
@@ -1588,41 +1539,36 @@ window.__ModuleLoader__.load({
         return function () { active = false }
       }, [ref.id, ref.version, props.revision])
 
-      return h('div', { className: 'gr-card gr-report-entry' },
-        h('div', { className: 'gr-stack' },
-          h('strong', null, meta?.title || props.title || T('report.title')),
-          meta ? h('span', { className: 'gr-meta' },
-            T(meta.review === 'draft' ? 'deep.draft' : 'report.confirmed')) : null),
-        h('button', { className: 'gr-btn gr-btn-ghost', onClick: function (event) {
-          props.onNavigate('report', { id: ref.id, version: meta?.version || ref.version, studyId: props.id }, event.currentTarget)
-        } }, T('report.view')))
+      return h(ReportLink, { id: props.id, reference: meta || ref, title: meta?.title || props.title, onNavigate: props.onNavigate })
+    }
+
+    function ReportLink(props) {
+      var ref = props.reference
+      return h('p', { className: 'gr-report-entry' }, T('report.fileLabel'),
+        h('a', { href: '#grove-report-preview', onClick: function (event) {
+          event.preventDefault()
+          props.onNavigate('report', { id: ref.id, version: ref.version, studyId: props.id }, event.currentTarget)
+        } }, (props.title || T('report.title')) + '.md'),
+        ref.review ? h('span', { className: 'gr-meta' }, T(ref.review === 'draft' ? 'deep.draft' : 'report.confirmed')) : null)
     }
 
     function ResearchReports(props) {
       var [catalog, setCatalog] = useState(null)
       var [error, setError] = useState(null)
-      var [expanded, setExpanded] = useState(false)
       useEffect(function () {
-        if (!expanded) return
         var active = true
-        api(REPORTS, { action: 'list', research: props.id }).then(function (data) {
-          if (active) setCatalog(data)
+        api(REPORTS, { action: 'catalog', research: props.id }).then(function (data) {
+          if (active) setCatalog(data.reports)
         }, function (problem) { if (active) setError(problem) })
         return function () { active = false }
-      }, [expanded, props.id, props.revision])
-      return h('details', { className: 'gr-card', onToggle: function (event) { setExpanded(event.currentTarget.open) } },
-        h('summary', null, T('report.title')),
-        error ? h('p', { role: 'alert' }, messageOf(error)) : null,
-        h('button', { className: 'gr-btn', onClick: function (event) {
-          props.onNavigate('report', { studyId: props.id, create: true }, event.currentTarget)
-        } }, T('report.new')),
-        (catalog?.reports || []).filter(function (entry) {
-          return !props.excluded?.includes(entry.meta.id)
-        }).map(function (entry) {
-          return h('button', { key: entry.meta.id, className: 'gr-btn gr-btn-ghost', onClick: function (event) {
-            props.onNavigate('report', { id: entry.meta.id, version: entry.meta.version, studyId: props.id }, event.currentTarget)
-          } }, entry.meta.title, entry.meta.review === 'draft' ? ' · ' + T('deep.draft') : '')
-        }))
+      }, [props.id, props.revision, props.excluded.join(',')])
+      if (error) return h('p', { role: 'alert' }, messageOf(error))
+      if (!catalog) return null
+      var extra = catalog.filter(function (meta) { return !props.excluded.includes(meta.id) })
+      if (!extra.length && !props.excluded.length) return h('p', { className: 'gr-meta' }, T('report.empty'))
+      return extra.map(function (meta) {
+        return h(ReportLink, { key: meta.id, id: props.id, reference: meta, title: meta.title, onNavigate: props.onNavigate })
+      })
     }
 
     function ReportPreview(props) {
@@ -1715,7 +1661,7 @@ window.__ModuleLoader__.load({
         return { page: 'research', label: 'report.title',
           seed: { resume: studyId, report: { id: report.meta.id, version: report.meta.version } } }
       }
-      return h('aside', { className: 'gr-report-preview', 'aria-label': T('report.preview'),
+      return h('aside', { id: 'grove-report-preview', className: 'gr-report-preview', 'aria-label': T('report.preview'),
         onKeyDown: function (event) { if (event.key === 'Escape') props.onClose() } },
         h('div', { className: 'gr-preview-head gr-stack' },
           h('div', { className: 'gr-row gr-preview-toolbar' },
@@ -1996,7 +1942,7 @@ window.__ModuleLoader__.load({
       var id = selected?.meta.id
       var idea = !id && sourceSeed?.idea ? { id: sourceSeed.idea.id, version: sourceSeed.idea.version } : undefined
       var origin = selected?.meta.links?.find(function (link) { return link.kind === 'derived' && link.excerpt })
-      var originalRef = origin || idea
+      var originalRef = origin || idea || props.seed?.idea
       useEffect(function () {
         if (!originalRef) return
         var active = true
@@ -2057,13 +2003,13 @@ window.__ModuleLoader__.load({
             else select(null)
           } }, '← ', T(fromIdea ? 'idea.back' : 'research.overview')),
           h('h1', null, selected?.meta.title || T('research.newConversation'))),
+        originalBody ? h('aside', { className: 'gr-conversation-context' },
+          h('h2', { className: 'gr-h2' }, T('research.originText')), h('p', { className: 'gr-prose' }, originalBody)) : null,
         h('div', { className: 'gr-conversation-flow', ref: flow, onScroll: function (event) {
           var element = event.currentTarget
           follow.current = element.scrollHeight - element.clientHeight - element.scrollTop < 72
         } },
           notice,
-          originalBody ? h('details', { className: 'gr-conversation-context', open: creating || undefined },
-            h('summary', null, T('research.originText')), h('p', { className: 'gr-prose' }, originalBody)) : null,
           runs.slice().reverse().map(function (run) {
             return h('article', { key: run.id, className: 'gr-conversation-turn' },
               h('div', { className: 'gr-conversation-user', 'aria-label': T('research.userTurn') },
@@ -2084,13 +2030,9 @@ window.__ModuleLoader__.load({
                       onClick: function () { useSuggestion(question) } }, question)
                   })) : null))
           }),
-          id ? h('div', { className: 'gr-conversation-resources' },
-            h('details', null,
-              h('summary', null, T('source.title')),
-              selected.body ? h('p', { className: 'gr-prose' }, selected.body) : null,
-              h(ResearchSources, { key: id, id: id }),
-              h(LegacyFindings, { key: 'findings:' + id, id: id })),
-            h(ResearchReports, { id: id, excluded: runs.map(function (run) { return run.report?.id }), revision: props.reportRevision, onNavigate: props.onNavigate })) : null),
+          id ? h(LegacyFindings, { key: 'findings:' + id, id: id }) : null,
+          id ? h(ResearchReports, { key: id, id: id, excluded: runs.flatMap(function (run) { return run.report ? [run.report.id] : [] }),
+            revision: props.reportRevision, onNavigate: props.onNavigate }) : h('p', { className: 'gr-meta' }, T('report.empty'))),
         h(DeepResearchPanel, { key: id || 'new', idea: idea, topic: id,
           inputRef: composerInput, direction: direction, onDirection: setDirection,
           knowledge: !id ? sourceSeed?.origin : undefined, refresh: pollRevision,
@@ -2135,7 +2077,7 @@ window.__ModuleLoader__.load({
       '.gr-markdown a,.gr-card a{overflow-wrap:anywhere}',
       '.gr-research-composer{flex:none}.gr-compose-actions{justify-content:space-between}.gr-research-composer textarea{min-height:64px}',
       '.gr-root{container-type:inline-size}',
-      '.gr-report-entry{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;overflow-wrap:anywhere}',
+      '.gr-report-entry{display:flex;align-items:center;gap:6px;flex-wrap:wrap;overflow-wrap:anywhere}',
       '.gr-report-preview{order:2;flex:0 0 clamp(380px,46cqw,680px);min-width:0;min-height:0;display:flex;flex-direction:column;background:var(--gr-surface);border-left:1px solid var(--gr-line);overflow-wrap:anywhere}',
       '.gr-preview-head{padding:16px 22px;border-bottom:1px solid var(--gr-line);flex:none;gap:8px}',
       '.gr-preview-toolbar{justify-content:space-between}.gr-preview-title{margin:0;font-size:19px;line-height:1.35}',
@@ -2149,19 +2091,21 @@ window.__ModuleLoader__.load({
       '.gr-conversation-header{flex:none;display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--gr-line)}',
       '.gr-conversation-header h1{margin:0;font-size:16px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
       '.gr-conversation-header .gr-btn{flex:none}',
-      '.gr-conversation-flow{flex:1 1 auto;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:24px;padding:20px 4px}',
+      '.gr-conversation-flow{flex:1 1 auto;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:24px;padding:16px;margin-block:10px;border:1px solid var(--gr-line);border-radius:12px}',
       '.gr-conversation-turn{display:grid;gap:14px}.gr-conversation-user{display:grid;justify-items:end;gap:4px}',
       '.gr-prompt{margin:0;max-width:85%;padding:10px 14px;background:var(--dsw-specific-bubble,var(--gr-wash));border-radius:16px;white-space:pre-wrap;overflow-wrap:anywhere}',
       '.gr-conversation-response{font-size:var(--dsh-content-font-size,14px)}',
       '.gr-suggestions{gap:6px}.gr-suggestions .gr-btn{text-align:start;overflow-wrap:anywhere}',
-      '.gr-conversation-context,.gr-conversation-resources{color:var(--gr-muted)}.gr-conversation-resources{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start}',
-      '.gr-conversation-resources>.gr-card{padding:0;border:0;background:transparent}',
+      '.gr-conversation-context{flex:none;max-height:min(150px,24vh);overflow:auto;padding:8px 12px;border-bottom:1px solid var(--gr-line)}.gr-conversation-context :is(h2,p){margin:0}',
+      '.gr-run-status{display:flex;align-items:center;gap:8px}.gr-run-spinner{width:12px;height:12px;border:2px solid var(--gr-line);border-top-color:var(--gr-link);border-radius:50%;animation:gr-run-spin .85s linear infinite}',
+      '@keyframes gr-run-spin{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.gr-run-spinner{animation:none}}',
+      '.gr-report-entry{margin:0}.gr-report-entry a{color:var(--gr-link);text-decoration:underline}.gr-start-research{justify-content:center;text-align:center}',
       '.gr-conversation .gr-research-composer{margin-bottom:12px;border-radius:16px;background:var(--dsw-specific-input-major,var(--gr-surface))}',
       '.gr-study-heading{justify-content:space-between}',
       '.gr-nav{order:-1;display:flex;flex-direction:column;gap:5px;flex:none;width:130px;padding:20px 10px;border-right:1px solid var(--gr-line);background:var(--gr-wash)}',
-      '.gr-nav .gr-btn{text-align:left}.gr-nav [aria-current=page]{background:var(--gr-primary);color:var(--gr-on-primary)}',
+      '.gr-nav-item{width:100%;min-height:32px;padding:4px var(--dsh-sidebar-row-padding,10px);border:0;border-radius:8px;background:transparent;color:var(--gr-ink);font:inherit;text-align:start;cursor:pointer}.gr-nav-item:hover{background:var(--dsw-alias-interactive-bg-hover-accent,var(--gr-line))}.gr-nav-item[aria-current=page]{background:var(--dsw-specific-sidebar-nav-item-active,var(--gr-line));color:var(--gr-ink);font-weight:600}',
       '.gr-root:has(>.gr-nav){flex-direction:row}.gr-scroll{min-width:0}',
-      '@media(max-width:580px){.gr-root:has(>.gr-nav){flex-direction:column}.gr-nav{width:auto;flex-direction:row;flex-wrap:wrap;padding:6px;border-right:0;border-bottom:1px solid var(--gr-line)}.gr-nav .gr-btn{text-align:center;flex:1;white-space:nowrap}}',
+      '@media(max-width:580px){.gr-root:has(>.gr-nav){flex-direction:column}.gr-nav{width:auto;flex-direction:row;flex-wrap:wrap;padding:6px;border-right:0;border-bottom:1px solid var(--gr-line)}.gr-nav-item{width:auto;text-align:center;flex:1;white-space:nowrap}}',
       '.gr-scroll{flex:1 1 auto;min-height:0;overflow:auto;container-type:inline-size}',
       '.gr-page-heading{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px 16px}',
       '.gr-page-heading h1{margin:0;font-size:24px;font-weight:650;line-height:1.25;overflow-wrap:anywhere}',
@@ -2217,10 +2161,10 @@ window.__ModuleLoader__.load({
       '.gr-h2{font-size:15px;font-weight:600;line-height:1.4}',
       '.gr-body{color:var(--gr-muted);font-size:13px}',
       '.gr-meta{font-size:12px;color:var(--gr-muted)}',
-      '.gr-btn{appearance:none;border:0;border-radius:8px;background:var(--gr-primary);color:var(--gr-on-primary);font:inherit;font-size:13px;font-weight:600;padding:8px 14px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;align-self:flex-start}',
-      '.gr-btn:hover{opacity:.92}',
+      '.gr-btn{appearance:none;border:0;border-radius:8px;background:var(--gr-primary);color:var(--gr-on-primary);font:inherit;font-size:13px;font-weight:600;min-height:32px;padding:5px 12px;cursor:pointer;display:inline-flex;justify-content:center;align-items:center;gap:8px;align-self:flex-start}',
+      '.gr-btn:not(:disabled):hover{background:var(--dsw-alias-button-primary-hover,var(--gr-primary))}',
       '.gr-btn:disabled{opacity:.5;cursor:default}',
-      '.gr-btn-ghost{background:transparent;color:var(--gr-ink);border:1px solid var(--gr-line)}',
+      '.gr-btn-ghost{background:var(--dsw-alias-button-ghost-active-fill,transparent);color:var(--gr-ink);border:1px solid var(--dsw-alias-button-ghost-active-border,var(--gr-line))}.gr-btn-ghost:not(:disabled):hover{background:var(--dsw-alias-button-ghost-active-hover,var(--gr-wash))}',
       '.gr-btn-sm{padding:5px 10px;font-size:12px;font-weight:500}',
       '.gr-input,.gr-textarea{width:100%;box-sizing:border-box;background:var(--gr-wash);border:1px solid var(--gr-line);border-radius:8px;color:var(--gr-ink);font:inherit;font-size:13px;padding:9px 11px;outline:none}',
       '.gr-textarea{min-height:96px;resize:vertical;line-height:1.6}',

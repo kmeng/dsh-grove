@@ -58,3 +58,20 @@ test('dsh search replaces a forbidden result with a readable result and keeps th
   assert.match(candidates[1].text, /original release confirms/)
   assert.deepEqual(queries, ['official figures for 2026-11-18', 'official figures for 2026-11-18 -site:blocked.example.org'])
 })
+
+test('long generated queries and blocked-domain retries fit the host search limit', async () => {
+  const queries = []
+  const web = { async search({ query }) {
+    queries.push(query)
+    return { sources: [{ url: queries.length === 1 ? 'https://blocked.example/a' : 'https://public.example/a' }] }
+  } }
+  const adapter = createDshWeb({ get: () => web }, async url => {
+    if (url.includes('blocked')) throw Object.assign(Error('Forbidden'), { statusCode: 403 })
+    return { url, text: 'Readable text' }
+  })
+  const results = await adapter.search('数字公共服务 '.repeat(30))
+  assert.equal(queries.length, 2)
+  assert.ok(queries.every(query => Array.from(query).length <= 128))
+  assert.match(queries[1], /-site:blocked\.example$/)
+  assert.equal(results[1].text, 'Readable text')
+})

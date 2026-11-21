@@ -231,7 +231,7 @@ test('resuming a topic opens a scoped detail view without repeating the deep res
   const detail = render(nextTopic)
   const title = detail.children[0].children[1]
   const deepPanel = detail.children.at(-1)
-  const [turn] = detail.children[1].children.find(Array.isArray)
+  const [turn] = detail.children.find(child => child?.props?.className === 'gr-conversation-flow').children.find(Array.isArray)
   const [, , report, suggestions] = turn.children[1].children
   assert.equal(title.type, 'h1')
   assert.deepEqual(title.children, [topic.meta.title])
