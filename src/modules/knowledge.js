@@ -35,7 +35,7 @@ export async function keepReportAsKnowledge(store, ref) {
   // Generated reports have a stable structure. Keep the conclusion and its
   // evidence qualifications together, with the exact full report as the source.
   const sections = report.body.split(/\n(?=## )/)
-  const retained = sections.filter(section => /^## (摘要|发现与证据|Overview|Findings and evidence)\s*$/m.test(section))
+  const retained = sections.filter(section => /^## (摘要|研究分析|证据局限|结论|发现与证据|Overview|Analysis|Limitations|Conclusion|Findings and evidence)\s*$/m.test(section))
   const body = retained.length ? retained.join('\n\n').trim() : report.body
   const key = createHash('sha256').update('grove:report-knowledge:' + report.meta.id).digest('hex').slice(0, 32)
   const id = key.replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5')

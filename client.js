@@ -68,6 +68,9 @@ window.__ModuleLoader__.load({
       'asset.edit': '编辑',
       'idea.startResearch': '由此发起研究',
       'report.confirmed': '已确认',
+      'model.report': '报告撰写模型',
+      'model.followResearch': '跟随研究模型',
+      'err.model-report-key': '请在宿主设置 GROVE_REPORT_MODEL_KEY。',
       'report.edit': '编辑报告',
       'settings.vault': '笔记库',
       'research.originText': '灵感原文',
@@ -328,6 +331,9 @@ window.__ModuleLoader__.load({
       'asset.edit': 'Edit',
       'idea.startResearch': 'Start research from this idea',
       'report.confirmed': 'Confirmed',
+      'model.report': 'Report writing model',
+      'model.followResearch': 'Follow the research model',
+      'err.model-report-key': 'Set GROVE_REPORT_MODEL_KEY in the host.',
       'report.edit': 'Edit report',
       'settings.vault': 'Vault',
       'research.originText': 'Original idea',
@@ -1292,6 +1298,9 @@ window.__ModuleLoader__.load({
           if (key === 'deepResearch' || key === 'enabled') {
             next.researchConnection = value ? { status: 'unverified' } : next.connection
           }
+          if (key === 'reportWriting' || key === 'enabled') {
+            next.reportConnection = { status: next.enabled ? 'unverified' : 'unconfigured' }
+          }
           if (key === 'deepResearch' && current.deepResearch?.endpoint && current.deepResearch.source !== 'dsh') {
             next.customResearch = current.deepResearch
           }
@@ -1308,7 +1317,7 @@ window.__ModuleLoader__.load({
         try {
           var receipt = await api(MODEL_UPDATE, {
             enabled: config.enabled, source: config.source, name: config.name, endpoint: config.endpoint, deepResearch: config.deepResearch,
-            inspirationLinks: config.inspirationLinks, webSearch: config.webSearch, verify: config.enabled,
+            reportWriting: config.reportWriting, inspirationLinks: config.inspirationLinks, webSearch: config.webSearch, verify: config.enabled,
           })
           for (var attempt = 0; attempt < 12; attempt++) {
             var current = await api(MODEL).catch(function () { return null })
@@ -1342,20 +1351,22 @@ window.__ModuleLoader__.load({
 
       var research = config?.deepResearch
       var researchSource = !research ? 'inherit' : research.source === 'dsh' ? 'dsh' : 'custom'
+      var writer = config?.reportWriting
+      var writerSource = !writer ? 'inherit' : writer.source === 'dsh' ? 'dsh' : 'custom'
       var catalog = config?.catalog || []
       var defaultModel = config?.dshDefault
       var defaultEntry = catalog.find(function (entry) { return modelKey(entry) === modelKey(defaultModel) })
 
-      function researchPicker() {
-        var selected = modelKey(research)
+      function modelPicker(key, model) {
+        var selected = modelKey(model)
         return h('label', null, T('model.dshPicker'),
           h('select', { 'aria-label': T('model.dshPicker'), value: selected, required: true, disabled: busy, onChange: function (event) {
             var entry = catalog.find(function (item) { return modelKey(item) === event.target.value })
-            if (entry) change('deepResearch', { source: 'dsh', provider: entry.provider, model: entry.model })
+            if (entry) change(key, { source: 'dsh', provider: entry.provider, model: entry.model })
           } },
           h('option', { value: '', disabled: true }, T(catalog.length ? 'model.pickOne' : 'model.catalogEmpty')),
           selected && !catalog.some(function (entry) { return modelKey(entry) === selected })
-            ? h('option', { value: selected, disabled: true }, research.model + ' · ' + T('model.catalogMissing')) : null,
+            ? h('option', { value: selected, disabled: true }, model.model + ' · ' + T('model.catalogMissing')) : null,
           catalog.map(function (entry) {
             return h('option', { key: modelKey(entry), value: modelKey(entry) }, entry.label + ' · ' + entry.providerName)
           })))
@@ -1387,7 +1398,7 @@ window.__ModuleLoader__.load({
             h('label', null, h('input', { type: 'checkbox', checked: config.inspirationLinks, disabled: busy || !config.enabled,
               onChange: function (event) { change('inspirationLinks', event.target.checked) } }), T('model.inspirationLinks')),
             config.enabled ? h('p', { className: 'gr-meta' }, T('model.inspirationHint')) : null,
-            config.enabled ? h('details', { className: 'gr-model-options', open: config.deepResearch ? true : undefined },
+            config.enabled ? h('details', { className: 'gr-model-options', open: config.deepResearch || writer ? true : undefined },
               h('summary', null, T('settings.byTask')),
               h('div', { className: 'gr-stack' },
                 h('h3', { className: 'gr-h2' }, T('model.research')),
@@ -1399,11 +1410,25 @@ window.__ModuleLoader__.load({
                   } }, h('option', { value: 'inherit' }, T('model.inherit')),
                     h('option', { value: 'dsh' }, T('model.dshPicker')),
                     h('option', { value: 'custom' }, T('model.custom')))),
-                researchSource === 'dsh' ? researchPicker() : null,
+                researchSource === 'dsh' ? modelPicker('deepResearch', research) : null,
                 researchSource === 'custom' ? h(React.Fragment, null,
                   fields(research, function (key, value) { change('deepResearch', Object.assign({}, research, { [key]: value })) }, 'research'),
                   h('p', { className: 'gr-meta' }, T('model.researchKeyHint'))) : null,
-                research ? h(ModelConnection, { value: config.researchConnection }) : null)) : null),
+                research ? h(ModelConnection, { value: config.researchConnection }) : null,
+                h('h3', { className: 'gr-h2' }, T('model.report')),
+                h('label', null, T('model.source'),
+                  h('select', { 'aria-label': T('model.report'), value: writerSource, disabled: busy, onChange: function (event) {
+                    var mode = event.target.value
+                    change('reportWriting', mode === 'inherit' ? null : mode === 'dsh' ? { source: 'dsh' }
+                      : { endpoint: research?.endpoint || config.endpoint || '', name: '' })
+                  } }, h('option', { value: 'inherit' }, T('model.followResearch')),
+                    h('option', { value: 'dsh' }, T('model.dshPicker')),
+                    h('option', { value: 'custom' }, T('model.custom')))),
+                writerSource === 'dsh' ? modelPicker('reportWriting', writer) : null,
+                writerSource === 'custom' ? h(React.Fragment, null,
+                  fields(writer, function (key, value) { change('reportWriting', Object.assign({}, writer, { [key]: value })) }, 'report'),
+                  h('p', { className: 'gr-meta' }, 'GROVE_REPORT_MODEL_KEY')) : null,
+                writer ? h(ModelConnection, { value: config.reportConnection }) : null)) : null),
           h('section', { className: 'gr-card' },
             h('h2', { className: 'gr-h2' }, T('settings.web')),
             h('label', null, h('input', { type: 'checkbox', checked: config.webSearch, disabled: busy,

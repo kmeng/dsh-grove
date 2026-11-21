@@ -162,7 +162,7 @@ export function researchRuns({ context, workflow, parseAttachment }) {
   async function perform(store, jobs, run, available) {
     try {
       const state = await workflow.run({
-        model: available.model, initial: run,
+        model: available.model, write: available.write, initial: run,
         retrieve: (queries, scope) => collect(store, run, queries, available, scope),
         async checkpoint(step, value) {
           if (step === 'plan' && run.question) {

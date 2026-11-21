@@ -301,16 +301,21 @@ test('deep research checkpoints progress, verifies citations, and reopens its Ma
       }
     },
     async write() {
+      assert.fail('The research model must not write when a report model is selected')
+    },
+  }
+  const writer = {
+    async write({ claims }) {
       if (failWrite) throw Object.assign(new Error('test timeout'), { code: 'model-timeout' })
-      return { summary: '不同资料有共同发现。', nextSteps: ['检查季节影响'] }
+      return { summary: '不同资料有共同发现。', sections: [{ heading: '日晒与路线选择', paragraphs: [{ text: '两份资料均描述了避开日晒的路线选择，尚无法区分季节的影响。', claims: [claims[0].id] }] }], limitations: '缺少跨季节比较。', conclusion: '现有材料显示路线选择与日晒有关。', nextSteps: ['检查季节影响'] }
     },
   }
   function mount() {
     const { ctx, registered } = host()
     registerRoutes(ctx, {
       current: () => ({ path: root }),
-      modelConfig: { enabled: true },
-      model: () => provider,
+      modelConfig: { enabled: true, reportWriting: { name: 'writer', endpoint: 'https://writer.example/api' } },
+      model: (_settings, role) => role === 'report' ? writer : provider,
       researchSearch: () => async query => {
         queries.push(query)
         const domain = query === '冲突研究' ? 'study.example' : 'city.example'
@@ -347,6 +352,9 @@ test('deep research checkpoints progress, verifies citations, and reopens its Ma
   assert.equal(reports.length, 1)
   assert.equal(reports[0].meta.id, id)
   assert.equal(reports[0].meta.review, 'draft')
+  assert.match(reports[0].body, /## 研究范围与方法/)
+  assert.match(reports[0].body, /## 研究分析[\s\S]+尚无法区分季节的影响。 \[1\] \[2\]/)
+  assert.match(reports[0].body, /## 证据局限[\s\S]+## 结论/)
   assert.match(reports[0].body, /## 发现与证据/)
   assert.match(reports[0].body, /https:\/\/study\.example\/study/)
   assert.equal((await vault.get(topic)).meta.links[0].version, 1)
@@ -376,7 +384,7 @@ test('deep research reuses exact imported versions when web search yields no sou
         claims: [{ text: 'Sunlight at noon', status: 'supported', explanation: 'One document records it.', sources: sources.map(source => source.id) }],
         followups: [],
       }),
-      write: async () => ({ summary: 'A single document records sunlight at noon.', nextSteps: [] }),
+      write: async () => ({ summary: 'A single document records sunlight at noon.', sections: [{ heading: 'Analysis', paragraphs: [{ text: 'A single document records sunlight at noon.', claims: [1] }] }], limitations: 'Limited evidence', conclusion: 'A single document records sunlight at noon.', nextSteps: [] }),
     }),
   })
   const call = (path, data) => registered.get(path).fetch(request(path, data))
@@ -413,7 +421,7 @@ test('deep research needs a model and web search, and cannot finish after retrie
     async review() {
       return { claims: [{ text: 'More observations are needed', status: 'insufficient', sources: [], explanation: 'Limited data.' }], followups: [] }
     },
-    async write() { writes++; return { summary: 'More observations are needed.', nextSteps: [] } },
+    async write() { writes++; return { summary: 'More observations are needed.', sections: [{ heading: 'Analysis', paragraphs: [{ text: 'More observations are needed.', claims: [1] }] }], limitations: 'Limited evidence', conclusion: 'More observations are needed.', nextSteps: [] } },
   }
   function mount(options) {
     const { ctx, registered } = host()
@@ -484,7 +492,7 @@ test('legacy settings become the default and a verified research override routes
         async review() {
           return { claims: [{ text: 'Unknown', explanation: 'Limited data.', status: 'insufficient', sources: [] }], followups: [] }
         },
-        async write() { return { summary: 'Limited data.', nextSteps: [] } },
+        async write() { return { summary: 'Limited data.', sections: [{ heading: 'Analysis', paragraphs: [{ text: 'Limited data.', claims: [1] }] }], limitations: 'Limited evidence', conclusion: 'Limited data.', nextSteps: [] } },
       }),
     })
     return (route, data) => registered.get(route).fetch(request(route, data))
@@ -550,7 +558,7 @@ test('deep research resolves the current dsh model unless the profile chooses an
       async review() {
         return { claims: [{ text: 'Limited data', explanation: 'No sources.', status: 'insufficient', sources: [] }], followups: [] }
       },
-      async write() { return { summary: 'Limited data.', nextSteps: [] } },
+      async write() { return { summary: 'Limited data.', sections: [{ heading: 'Analysis', paragraphs: [{ text: 'Limited data.', claims: [1] }] }], limitations: 'Limited evidence', conclusion: 'Limited data.', nextSteps: [] } },
     }),
   }
   registerRoutes(ctx, { current: () => ({ path: root }), modelConfig: config, dshModels, researchSearch: () => async () => [] })
@@ -616,7 +624,7 @@ test('follow-up web queries cannot carry phrases obtained from an imported priva
           ? 'private meadow code phrase' : 'outdoor walk in summer'
         return { claims: [{ text: 'Insufficient', explanation: 'No public sources.', status: 'insufficient', sources: [] }], followups: [phrase] }
       },
-      async write() { return { summary: 'No public sources.', nextSteps: [] } },
+      async write() { return { summary: 'No public sources.', sections: [{ heading: 'Analysis', paragraphs: [{ text: 'No public sources.', claims: [1] }] }], limitations: 'Limited evidence', conclusion: 'No public sources.', nextSteps: [] } },
     }),
   })
   const call = input => registered.get(routes.deepResearch).fetch(request(routes.deepResearch, input))
@@ -644,7 +652,7 @@ test('deep research can use a supplied public page without invoking paid search'
         return { claims: [{ text: 'A passage exists', explanation: 'Only one source.', status: 'insufficient', sources: sources.map(source => source.id) }],
           followups: ['Look for more'] }
       },
-      async write() { return { summary: 'One public source.', nextSteps: [] } },
+      async write() { return { summary: 'One public source.', sections: [{ heading: 'Analysis', paragraphs: [{ text: 'One public source.', claims: [1] }] }], limitations: 'Limited evidence', conclusion: 'One public source.', nextSteps: [] } },
     }),
   })
   const ideaRef = { id: idea.meta.id, version: 1 }
@@ -693,7 +701,7 @@ test('research conversation keeps follow-up history and origin when using local 
     model: () => ({
       async plan(input) { plans.push(input); return { topic: '人工接管', questions: ['如何接管？'] } },
       async review({ sources }) { return { claims: [{ text: '需要承接上下文', explanation: '已回查资料', status: 'insufficient', sources: sources.map(source => source.id) }], followups: [] } },
-      async write() { return { summary: '当前材料不足以验证交互方案。', nextSteps: [] } },
+      async write() { return { summary: '当前材料不足以验证交互方案。', sections: [{ heading: 'Analysis', paragraphs: [{ text: '当前材料不足以验证交互方案。', claims: [1] }] }], limitations: 'Limited evidence', conclusion: '当前材料不足以验证交互方案。', nextSteps: [] } },
     }),
   })
   const call = input => registered.get(routes.deepResearch).fetch(request(routes.deepResearch, input))
@@ -718,7 +726,7 @@ test('research without citable evidence retains its failed turn and creates no r
     model: () => ({
       async plan() { return { topic: '人工接管', questions: ['如何接管？'] } },
       async review() { return { claims: [{ text: '缺乏证据', explanation: '没有资料', status: 'insufficient', sources: [] }], followups: [] } },
-      async write() { return { summary: '没有资料', nextSteps: [] } },
+      async write() { return { summary: '没有资料', sections: [{ heading: 'Analysis', paragraphs: [{ text: '没有资料', claims: [1] }] }], limitations: 'Limited evidence', conclusion: '没有资料', nextSteps: [] } },
     }),
   })
   const call = input => registered.get(routes.deepResearch).fetch(request(routes.deepResearch, input))
@@ -776,7 +784,7 @@ test('desktop research uses the host search without a Tavily configuration', asy
       async review({ sources }) {
         return { claims: [{ text: 'The data was published today.', explanation: 'One source.', status: 'insufficient', sources: sources.map(s => s.id) }], followups: [] }
       },
-      async write() { return { summary: 'One source provides a dated update.', nextSteps: [] } },
+      async write() { return { summary: 'One source provides a dated update.', sections: [{ heading: 'Analysis', paragraphs: [{ text: 'One source provides a dated update.', claims: [1] }] }], limitations: 'Limited evidence', conclusion: 'One source provides a dated update.', nextSteps: [] } },
     }),
   })
   const call = input => registered.get(routes.deepResearch).fetch(request(routes.deepResearch, input))
