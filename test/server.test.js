@@ -301,16 +301,21 @@ test('deep research checkpoints progress, verifies citations, and reopens its Ma
       }
     },
     async write() {
+      assert.fail('The research model must not write when a report model is selected')
+    },
+  }
+  const writer = {
+    async write({ claims }) {
       if (failWrite) throw Object.assign(new Error('test timeout'), { code: 'model-timeout' })
-      return { summary: '不同资料有共同发现。', nextSteps: ['检查季节影响'] }
+      return { summary: '不同资料有共同发现。', sections: [{ heading: '日晒与路线选择', paragraphs: [{ text: '两份资料均描述了避开日晒的路线选择，尚无法区分季节的影响。', claims: [claims[0].id] }] }], limitations: '缺少跨季节比较。', conclusion: '现有材料显示路线选择与日晒有关。', nextSteps: ['检查季节影响'] }
     },
   }
   function mount() {
     const { ctx, registered } = host()
     registerRoutes(ctx, {
       current: () => ({ path: root }),
-      modelConfig: { enabled: true },
-      model: () => provider,
+      modelConfig: { enabled: true, reportWriting: { name: 'writer', endpoint: 'https://writer.example/api' } },
+      model: (_settings, role) => role === 'report' ? writer : provider,
       researchSearch: () => async query => {
         queries.push(query)
         const domain = query === '冲突研究' ? 'study.example' : 'city.example'
