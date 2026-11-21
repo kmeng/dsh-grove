@@ -97,3 +97,16 @@ test('the anonymous page reader rejects local IP variants, credentials, and nons
   await assert.rejects(readPublicPage('https://user:pass@example.com/'), /public HTTP or HTTPS/)
   await assert.rejects(readPublicPage('https://example.com:8443/'), /public HTTP or HTTPS/)
 })
+
+test('report writing adapts depth in the requested language', async () => {
+  const { modelTasks } = await import('../src/adapters/models/tasks.js')
+  const prompts = []
+  const model = modelTasks('writer', async system => { prompts.push(system) })
+  await model.write({ language: 'zh' })
+  await model.write({ language: 'en' })
+  assert.match(prompts[0], /^撰写/)
+  assert.match(prompts[0], /约五千字/)
+  assert.doesNotMatch(prompts[0], /650–1000/)
+  assert.match(prompts[1], /^Write/)
+  assert.doesNotMatch(prompts[1], /400–550/)
+})

@@ -68,7 +68,7 @@ export const stagedResearch = {
       try {
         return await call(withBudget(2200))
       } catch (error) {
-        if (error.code !== 'model-timeout') throw error
+        if (error.code !== 'model-timeout' && !(method === 'write' && error.code === 'model-response')) throw error
         const retries = (state.automaticRetries ?? 0) + 1
         state.automaticRetries = retries
         await checkpoint('automaticRetries', retries)
@@ -123,11 +123,11 @@ export const stagedResearch = {
       })).filter(claim => !references.length || claim.sources.length)
       const allowedClaims = new Set(writingClaims.map(claim => claim.id))
       const result = await modelCall('write', {
-        topic: state.plan.topic, language: state.input.language, today: state.input.today,
+        topic: state.plan.topic, questions: state.plan.questions, language: state.input.language, today: state.input.today,
         claims: writingClaims,
         sources: references.map(source => {
           const excerpts = [...new Set(claims.flatMap(claim => (claim.quotes ?? [])
-            .filter(quote => quote.id === source.id).map(quote => quote.text)))].slice(0, 2)
+            .filter(quote => quote.id === source.id).map(quote => quote.text)))].slice(0, 3)
           return { id: numbers.get(source.id), title: source.title, publishedAt: source.publishedAt,
             excerpts: excerpts.length ? excerpts : [source.text.trim().slice(0, 320)] }
         }),
@@ -153,6 +153,10 @@ function markdownText(value) {
   return value.replace(/[\\`*_\[\]<>]/g, '\\$&')
 }
 
+function reportProse(value) {
+  return markdownText(value.replace(/\s*[(（]\s*(?:claims?|论断)\s*#?\d+(?:\s*[,，、]\s*\d+)*\s*[)）]/gi, ''))
+}
+
 export function reportSources(state) {
   const { claims, sources } = state.verified
   const indexes = state.written.sections?.flatMap(section => section.paragraphs.flatMap(paragraph => paragraph.claims))
@@ -173,16 +177,16 @@ export function renderResearchReport(state) {
     const paragraphs = section.paragraphs.map(paragraph => {
       const ids = new Set(paragraph.claims.flatMap(index => state.verified.claims[index - 1].sources))
       const refs = [...ids].map(id => `[${numbers.get(id)}]`).join(' ')
-      return markdownText(paragraph.text) + (refs ? ' ' + refs : '')
+      return reportProse(paragraph.text) + (refs ? ' ' + refs : '')
     })
     return `### ${markdownText(section.heading)}\n\n${paragraphs.join('\n\n')}`
   })
   return [
     `# ${markdownText(state.written.title ?? state.plan.topic)}`,
-    `## ${english ? 'Overview' : '摘要'}\n\n${markdownText(state.written.summary)}`,
+    `## ${english ? 'Overview' : '摘要'}\n\n${reportProse(state.written.summary)}`,
     ...(analysis ? [`## ${english ? 'Analysis' : '研究分析'}\n\n${analysis.join('\n\n')}`] : []),
     ...(state.written.conclusion ? [
-      `## ${english ? 'Conclusion' : '结论'}\n\n${markdownText(state.written.conclusion)}`,
+      `## ${english ? 'Conclusion' : '结论'}\n\n${reportProse(state.written.conclusion)}`,
     ] : []),
     ...(references.length ? [`## ${english ? 'References' : '参考资料'}\n\n${references.join('\n')}`] : []),
   ].join('\n\n')
