@@ -186,13 +186,13 @@ test('a slow native picker can complete after a minute', async t => {
   assert.ok(changes.includes('connect'))
 })
 
-test('every panel inherits the same Grove surfaces and controls', () => {
+test('every panel inherits DSH theme colors with standalone fallbacks', () => {
   const root = source.match(/\.gr-root\{([^}]+)\}/)?.[1] ?? ''
-  assert.match(root, /--gr-paper:light-dark\(/)
+  assert.match(root, /--gr-paper:var\(--dsw-alias-bg-base,Canvas\)/)
   assert.match(root, /background:var\(--gr-paper\)/)
   assert.match(source, /\.gr-card\{background:var\(--gr-surface\)/)
-  assert.match(source, /\.gr-btn\{[^}]*background:var\(--gr-green\)/)
-  assert.doesNotMatch(source, /--dsw-alias-(bg|label|border|brand)-/)
+  assert.match(source, /\.gr-btn\{[^}]*background:var\(--gr-primary\)/)
+  assert.match(root, /--gr-ink:var\(--dsw-alias-label-primary,CanvasText\)/)
 })
 
 test('resuming a topic opens a scoped detail view without repeating the deep research form', t => {
@@ -225,14 +225,15 @@ test('resuming a topic opens a scoped detail view without repeating the deep res
   resume.props.onClick()
   assert.equal(nextTopic, topic)
   const detail = render(nextTopic)
-  const title = detail.children[1]
+  const title = detail.children[0].children[1]
   const deepPanel = detail.children.at(-1)
-  const [turn] = detail.children.find(Array.isArray)
+  const [turn] = detail.children[1].children.find(Array.isArray)
+  const report = turn.children[1].children.at(-1)
   assert.equal(title.type, 'h1')
   assert.deepEqual(title.children, [topic.meta.title])
   assert.equal(deepPanel.props.topic, topic.meta.id)
-  assert.equal(turn.children.at(-1).props.id, topic.meta.id)
-  assert.equal(turn.children.at(-1).props.initialReport.id, 'report-1')
+  assert.equal(report.props.id, topic.meta.id)
+  assert.equal(report.props.initialReport.id, 'report-1')
   const keys = detail.children.map(child => child?.props?.key).filter(key => key != null)
   assert.equal(new Set(keys).size, keys.length)
 })
