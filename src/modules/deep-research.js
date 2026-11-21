@@ -11,6 +11,13 @@ function reportError(detail) {
   return Object.assign(invalid(), { detail })
 }
 
+function escapeReportQuotes(text) {
+  // A report writer can insert a straight quote inside a prose field without JSON escaping.
+  return text.replace(/^([ \t]*"(?:title|summary|heading|text|conclusion)"[ \t]*:[ \t]*)"(.*)"([ \t]*,?[ \t]*)$/gm,
+    (_, prefix, value, suffix) => prefix + '"' + value.replace(/\\[\s\S]|"/g,
+      part => part === '"' ? '\\"' : part) + '"' + suffix)
+}
+
 function readReportOutput(output) {
   if (typeof output?.rawReport !== 'string') return { result: output }
   const raw = output.rawReport.trim()
@@ -22,7 +29,8 @@ function readReportOutput(output) {
     return { result: JSON.parse(text), reason: reason ?? (fenced && fenced[0] !== raw ? 'json' : undefined) }
   } catch {
     try {
-      return { result: JSON.parse(jsonrepair(text)), reason: reason ?? 'json' }
+      const escaped = escapeReportQuotes(text)
+      return { result: JSON.parse(jsonrepair(escaped)), reason: reason ?? 'json' }
     } catch {
       throw reportError(reason ?? 'json')
     }

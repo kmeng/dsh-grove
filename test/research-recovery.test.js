@@ -125,13 +125,23 @@ test('repairs a local report in place and exposes the writing diagnosis', async 
     initial, model: {}, writerName: 'qwen3.8-27b-mlx-32k:latest',
     write: async () => {
       writes++
-      return { rawReport: '{summary: "研究摘要", sections: [{heading:"分析",paragraphs:[{text:"已经写好的正文",claims:["1"],}],}], conclusion:"结论"}' }
+      return { rawReport: `{
+        "summary": "研究摘要",
+        "sections": [{
+          "heading": "分析",
+          "paragraphs": [{
+            "text": "已经写好的正文引用了 "seed draft" 和 "design justice"。",
+            "claims": ["1"],
+          }],
+        }],
+        "conclusion": "结论"
+      }` }
     },
     retrieve: () => assert.fail('verified material must be reused'),
     checkpoint: async (key, value) => { if (key === 'writing') diagnostic.push(value) },
   })
   assert.equal(writes, 1)
-  assert.match(renderResearchReport(state), /已经写好的正文 \[1\]/)
+  assert.match(renderResearchReport(state), /已经写好的正文引用了 "seed draft" 和 "design justice"。 \[1\]/)
   assert.equal(diagnostic[0].model, 'qwen3.8-27b-mlx-32k:latest')
   assert.equal(diagnostic.at(-1).phase, 'complete')
   assert.equal(diagnostic.at(-1).reason, 'json')
