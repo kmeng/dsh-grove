@@ -39,7 +39,7 @@ async function collectFollowups(state, model, retrieve) {
   // Private passages can inform local retrieval. Only the original plan and
   // public results are visible to the call that generates more web queries.
   const publicSources = state.collected.filter(source => !source.reference && !source.unavailable)
-  const publicReview = await model.review({ plan: state.plan, sources: publicSources })
+  const publicReview = await model.review({ plan: state.plan, today: state.input.today, sources: publicSources })
   const webQueries = questions(publicReview?.followups, 2)
   const online = webQueries.length ? await retrieve(webQueries, 'web') : []
   const local = await retrieve(followups, 'local')
@@ -85,7 +85,7 @@ export const stagedResearch = {
     await step('collected', () => retrieve(state.plan.questions))
     await step('review', async () => {
       const sources = readable(state.collected)
-      const reviewed = await modelCall('review', { plan: state.plan, sources })
+      const reviewed = await modelCall('review', { plan: state.plan, today: state.input.today, sources })
       return { claims: assessment(reviewed, sources), followups: questions(reviewed.followups, 2) }
     })
     await step('verified', async () => {
@@ -103,14 +103,14 @@ export const stagedResearch = {
       if (sources.length === original.length && sources.every((source, i) => source.id === original[i].id)) {
         return { claims: state.review.claims, sources, unavailable }
       }
-      const reviewed = await modelCall('review', { plan: state.plan, sources, prior: state.review.claims })
+      const reviewed = await modelCall('review', { plan: state.plan, today: state.input.today, sources, prior: state.review.claims })
       return { claims: assessment(reviewed, sources), sources, unavailable }
     })
     await step('written', async () => {
       const claims = state.verified.claims.map((claim, index) => ({ ...claim, id: index + 1 }))
       const cited = new Set(claims.flatMap(claim => claim.sources))
       const result = await modelCall('write', {
-        plan: state.plan, claims, language: state.input.language, history: state.history,
+        plan: state.plan, claims, language: state.input.language, today: state.input.today, history: state.history,
         sources: state.verified.sources.filter(source => cited.has(source.id))
           .map(({ id, title, text, publishedAt }) => ({ id, title, text: text.slice(0, 1200), publishedAt })),
       })
@@ -164,8 +164,8 @@ export function renderResearchReport(state) {
     return `### ${markdownText(section.heading)}\n\n${paragraphs.join('\n\n')}`
   })
   const method = english
-    ? `The research reviewed ${state.verified.sources.length} available passages against the questions below. Claims were assessed using source excerpts and checked for independent corroboration.`
-    : `本轮围绕以下问题审查了 ${state.verified.sources.length} 条可访问资料摘录，依据原文片段评估各项论断，并检查是否有独立来源相互印证。`
+    ? `The research reviewed ${state.verified.sources.length} available passages against the research questions. Claims were assessed using source excerpts and checked for independent corroboration.`
+    : `本轮围绕上述研究问题审查了 ${state.verified.sources.length} 条可访问资料摘录，依据原文片段评估各项论断，并检查是否有独立来源相互印证。`
   const hasSupport = state.verified.claims.some(claim => claim.status === 'supported')
   return [
     `# ${markdownText(state.plan.topic)}`,
