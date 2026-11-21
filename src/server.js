@@ -253,12 +253,19 @@ export function registerRoutes(ctx, options) {
       if (!settings) throw coded('model-disabled', 'Configure and enable a research model')
       const model = modelFor(settings, 'research', options.modelConfig)
       if (!model) throw coded('model-key', 'Set GROVE_MODEL_KEY for the host')
-      if (!['plan', 'review', 'write'].every(step => typeof model[step] === 'function')) {
+      if (!['plan', 'review'].every(step => typeof model[step] === 'function')) {
         throw coded('model-disabled', 'The configured model adapter does not support deep research')
       }
+      const config = options.modelConfig
+      const reportSettings = config?.reportWriting && selectModel(config, 'report', dsh)
       const web = options.dshWeb
       const hostSearch = !links?.length && await web?.searchAvailable()
       return { model, hostSearch,
+        write(input, options) {
+          const writer = reportSettings ? modelFor(reportSettings, 'report', config) : model
+          if (typeof writer?.write !== 'function') throw coded('model-disabled', 'The report writing model is unavailable')
+          return writer.write(input, options)
+        },
         search: links?.length ? null : hostSearch ? web.search : options.researchSearch?.(),
         readPage: web?.readPage ?? options.readResearchPage }
     },
@@ -344,7 +351,7 @@ export function registerRoutes(ctx, options) {
         const input = await readJson(request)
         const config = parseModelSettings(input, options.modelConfig, dsh)
         if (input?.test === true) {
-          await testModel(config, input.role === 'research' ? 'research' : 'default', modelFor, dsh)
+          await testModel(config, ['research', 'report'].includes(input.role) ? input.role : 'default', modelFor, dsh)
           return json({ ok: true })
         }
         const model = await verifyModelSettings(config, options.modelConfig, input?.verify === true, modelFor, dsh)

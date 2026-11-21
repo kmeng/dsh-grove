@@ -27,6 +27,7 @@ function usesModel(config, dsh) {
 
 export function selectModel(config, role, dsh) {
   if (!usesModel(config, dsh)) return null
+  if (role === 'report') return config?.reportWriting ?? selectModel(config, 'research', dsh)
   if (role === 'research' && config?.deepResearch) return config.deepResearch
   if (source(config, dsh) !== 'dsh') return config
   const selected = dsh?.defaultSelection()
@@ -71,7 +72,9 @@ export function readModelSettings(config, provider, dsh) {
   return { enabled, source: source(config, dsh), name: config?.name, endpoint: config?.endpoint,
     inspirationLinks: config?.inspirationLinks === true, webSearch: config?.webSearch === true,
     dshDefault: selected, deepResearch, customResearch: config?.customResearch ?? (deepResearch?.source === 'dsh' ? null : deepResearch), connection: main,
-    researchConnection: deepResearch ? connection('research') : main, changeId: config?.changeId }
+    researchConnection: deepResearch ? connection('research') : main,
+    reportWriting: config?.reportWriting ?? null,
+    reportConnection: config?.reportWriting ? connection('report') : deepResearch ? connection('research') : main, changeId: config?.changeId }
 }
 
 export function parseModelSettings(input, previous, dsh) {
@@ -95,6 +98,17 @@ export function parseModelSettings(input, previous, dsh) {
       deepResearch = customResearch
     }
   }
+  let reportWriting = previous?.reportWriting ?? null
+  if (enabled && input?.reportWriting !== undefined) {
+    const value = input.reportWriting
+    if (value === null) reportWriting = null
+    else if (value?.source === 'dsh') {
+      if (![value.provider, value.model].every(field => typeof field === 'string' && field.trim() && field.length <= 200)) {
+        throw invalid('model-dsh-route', 'Choose a dsh model for report writing')
+      }
+      reportWriting = { source: 'dsh', provider: value.provider, model: value.model }
+    } else reportWriting = modelFields(value)
+  }
   const custom = enabled && modelSource === 'custom' ? modelFields(input) : {
     ...(typeof previous?.name === 'string' ? { name: previous.name } : {}),
     ...(typeof previous?.endpoint === 'string' ? { endpoint: previous.endpoint } : {}),
@@ -103,14 +117,15 @@ export function parseModelSettings(input, previous, dsh) {
     enabled, source: modelSource, ...custom,
     inspirationLinks: (input?.inspirationLinks ?? previous?.inspirationLinks) === true,
     webSearch: (input?.webSearch ?? previous?.webSearch) === true,
-    deepResearch, customResearch,
+    deepResearch, customResearch, reportWriting,
   }
 }
 
 export async function testModel(config, role, factory, dsh) {
   const model = selectModel(config, role, dsh)
   if (!model) throw invalid('model-disabled', 'Enable a model before testing')
-  const provider = factory?.(model, role, config)
+  const effectiveRole = role === 'report' && !config.reportWriting ? 'research' : role
+  const provider = factory?.(model, effectiveRole, config)
   if (!provider) throw invalid(model.source === 'dsh' ? 'model-dsh-route' : 'model-key', 'The model is unavailable')
   const reply = await provider.investigate({
     question: 'This is a connection test. Return only {"text":"OK","citations":[]}.', materials: [], history: [],
@@ -121,7 +136,9 @@ export async function testModel(config, role, factory, dsh) {
 }
 
 export async function verifyModelSettings(config, previous, verify, factory, dsh) {
-  const roles = config.deepResearch ? ['default', 'research'] : ['default']
+  const roles = ['default']
+  if (config.deepResearch) roles.push('research')
+  if (config.reportWriting) roles.push('report')
   const connections = await Promise.all(roles.map(async role => {
     const model = selectModel(config, role, dsh)
     if (!model) return [role, null]

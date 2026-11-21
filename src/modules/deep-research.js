@@ -47,7 +47,7 @@ async function collectFollowups(state, model, retrieve) {
 }
 
 export const stagedResearch = {
-  async run({ model, retrieve, checkpoint, initial }) {
+  async run({ model, write = model.write?.bind(model), retrieve, checkpoint, initial }) {
     const state = { ...initial }
     async function step(key, action) {
       if (state[key] !== undefined) return
@@ -59,15 +59,16 @@ export const stagedResearch = {
       const withBudget = size => input.sources ? { ...input, sources: input.sources.map(source => ({
         ...source, text: source.text.slice(0, size),
       })) } : input
+      const call = method === 'write' ? write : model[method].bind(model)
       try {
-        return await model[method](withBudget(2200))
+        return await call(withBudget(2200))
       } catch (error) {
         if (error.code !== 'model-timeout') throw error
         const retries = (state.automaticRetries ?? 0) + 1
         state.automaticRetries = retries
         await checkpoint('automaticRetries', retries)
         await checkpoint('retrying', true)
-        try { return await model[method](withBudget(800), { lowerEffort: true }) }
+        try { return await call(withBudget(800), { lowerEffort: true }) }
         finally { await checkpoint('retrying', false) }
       }
     }
@@ -106,9 +107,23 @@ export const stagedResearch = {
       return { claims: assessment(reviewed, sources), sources, unavailable }
     })
     await step('written', async () => {
-      const result = await modelCall('write', { plan: state.plan, claims: state.verified.claims, language: state.input.language, history: state.history })
-      if (!Array.isArray(result?.nextSteps)) throw invalid()
-      return { summary: line(result.summary, 3000), nextSteps: questions(result.nextSteps, 6) }
+      const claims = state.verified.claims.map((claim, index) => ({ ...claim, id: index + 1 }))
+      const result = await modelCall('write', {
+        plan: state.plan, claims, language: state.input.language, history: state.history,
+        sources: state.verified.sources.map(({ id, title, text, publishedAt }) => ({ id, title, text, publishedAt })),
+      })
+      if (!Array.isArray(result?.sections) || !result.sections.length || result.sections.length > 6) throw invalid()
+      const sections = result.sections.map(section => {
+        if (!Array.isArray(section?.paragraphs) || !section.paragraphs.length || section.paragraphs.length > 6) throw invalid()
+        const paragraphs = section.paragraphs.map(paragraph => {
+          if (!Array.isArray(paragraph?.claims) || !paragraph.claims.length ||
+            paragraph.claims.some(id => !Number.isInteger(id) || id < 1 || id > claims.length)) throw invalid()
+          return { text: line(paragraph.text, 3200), claims: [...new Set(paragraph.claims)] }
+        })
+        return { heading: line(section.heading, 120), paragraphs }
+      })
+      return { summary: line(result.summary, 3000), sections, limitations: line(result.limitations, 3000),
+        conclusion: line(result.conclusion, 3000), nextSteps: questions(result.nextSteps, 6) }
     })
     return state
   },
@@ -138,12 +153,29 @@ export function renderResearchReport(state) {
     return `${numbers.get(source.id)}. ${markdownText(source.title)} · ${location}${source.publishedAt ? ' · ' + markdownText(source.publishedAt) : ''}`
   })
 
+  const analysis = state.written.sections?.map(section => {
+    const paragraphs = section.paragraphs.map(paragraph => {
+      const ids = new Set(paragraph.claims.flatMap(index => state.verified.claims[index - 1].sources))
+      const refs = [...ids].map(id => `[${numbers.get(id)}]`).join(' ')
+      return markdownText(paragraph.text) + (refs ? ' ' + refs : '')
+    })
+    return `### ${markdownText(section.heading)}\n\n${paragraphs.join('\n\n')}`
+  })
+  const method = english
+    ? `The research reviewed ${state.verified.sources.length} available passages against the questions below. Claims were assessed using source excerpts and checked for independent corroboration.`
+    : `本轮围绕以下问题审查了 ${state.verified.sources.length} 条可访问资料摘录，依据原文片段评估各项论断，并检查是否有独立来源相互印证。`
   const hasSupport = state.verified.claims.some(claim => claim.status === 'supported')
   return [
     `# ${markdownText(state.plan.topic)}`,
     `## ${title.summary}\n\n${hasSupport ? '' : title.insufficient + (english ? '. ' : '。 ')}${markdownText(state.written.summary)}`,
     `## ${title.questions}\n\n${state.plan.questions.map(question => '- ' + markdownText(question)).join('\n')}`,
-    `## ${title.claims}\n\n${claims.join('\n')}`,
+    ...(analysis ? [
+      `## ${english ? 'Scope and method' : '研究范围与方法'}\n\n${method}`,
+      `## ${english ? 'Analysis' : '研究分析'}\n\n${analysis.join('\n\n')}`,
+      `## ${english ? 'Limitations' : '证据局限'}\n\n${markdownText(state.written.limitations)}`,
+      `## ${english ? 'Conclusion' : '结论'}\n\n${markdownText(state.written.conclusion)}`,
+    ] : []),
+    `## ${title.claims}${analysis ? (english ? ' (Appendix)' : '（附录）') : ''}\n\n${claims.join('\n')}`,
     ...(state.written.nextSteps.length ? [`## ${title.next}\n\n${state.written.nextSteps.map(item => '- ' + markdownText(item)).join('\n')}`] : []),
     `## ${title.sources}\n\n${references.length ? references.join('\n') : title.noSources}${unavailable.length ? '\n\n' + unverified : ''}`,
   ].join('\n\n')

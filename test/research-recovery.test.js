@@ -17,7 +17,7 @@ test('a timeout retries the same research review once with less input and lower 
         if (calls.length === 1) throw Object.assign(new Error('timed out'), { code: 'model-timeout' })
         return { claims: [{ text: 'A change', explanation: 'Official data', status: 'insufficient', sources: ['open'] }], followups: [] }
       },
-      async write() { return { summary: 'A change', nextSteps: [] } },
+      async write() { return { summary: 'A change', sections: [{ heading: 'Analysis', paragraphs: [{ text: 'A change', claims: [1] }] }], limitations: 'Limited evidence', conclusion: 'A change', nextSteps: [] } },
     },
   })
   assert.equal(calls.length, 2)
@@ -39,7 +39,7 @@ test('blocked evidence cannot support findings and the report marks the missing 
           { text: 'Another change', explanation: 'Missing evidence', status: 'insufficient', sources: [] },
         ], followups: [] }
       },
-      async write() { return { summary: 'One change verified by an available source', nextSteps: [] } },
+      async write() { return { summary: 'One change verified by an available source', sections: [{ heading: 'Analysis', paragraphs: [{ text: 'One change verified by an available source', claims: [1] }] }], limitations: 'Limited evidence', conclusion: 'One change verified by an available source', nextSteps: [] } },
     },
   })
   const report = renderResearchReport(state)

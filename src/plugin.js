@@ -45,6 +45,13 @@ export function apply(ctx, config = {}) {
       return provider
     },
     model: (settings, role, modelConfig) => {
+      if (role === 'report') {
+        const credential = process.env.GROVE_REPORT_MODEL_KEY
+          || (settings.endpoint === modelConfig?.deepResearch?.endpoint ? process.env.GROVE_RESEARCH_MODEL_KEY : undefined)
+          || (settings.endpoint === modelConfig?.endpoint ? process.env.GROVE_MODEL_KEY : undefined)
+        if (!credential) throw Object.assign(new Error('Set GROVE_REPORT_MODEL_KEY for the host'), { code: 'model-report-key' })
+        return httpModel({ ...settings, credential })
+      }
       const override = role === 'research' && modelConfig?.deepResearch
       const credential = override
         ? process.env.GROVE_RESEARCH_MODEL_KEY || (modelConfig.source !== 'dsh' && settings.endpoint === modelConfig.endpoint ? process.env.GROVE_MODEL_KEY : undefined)
