@@ -26,7 +26,7 @@ test('a timeout retries the same research review once with less input and lower 
   assert.deepEqual(state.verified.claims[0].sources, ['open'])
 })
 
-test('blocked evidence cannot support findings and the report marks the missing verification', async () => {
+test('blocked sources stay out of references and evidence ratings stay out of the report', async () => {
   const state = await stagedResearch.run({
     initial: { input: { language: 'en' }, plan: { topic: 'Data', questions: ['What changed?'] } },
     retrieve: async () => [blocked, valid],
@@ -45,7 +45,8 @@ test('blocked evidence cannot support findings and the report marks the missing 
   const report = renderResearchReport(state)
   assert.match(report, /<https:\/\/example\.org\/open>/)
   assert.doesNotMatch(report, /https:\/\/example\.net\/blocked/)
-  assert.match(report, /could not be independently verified/i)
+  assert.match(report, /## References/)
+  assert.doesNotMatch(report, /could not be independently verified|insufficient evidence|next steps/i)
 })
 
 test('dsh research retry lowers only the outgoing route for that call', async () => {
