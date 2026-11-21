@@ -1,8 +1,63 @@
+import { jsonrepair } from 'jsonrepair'
+
 const invalid = () => Object.assign(new Error('Invalid deep research response'), { code: 'model-response' })
 
 function line(value, length) {
   if (typeof value !== 'string' || !value.trim()) throw invalid()
   return value.trim().replace(/\s+/g, ' ').slice(0, length)
+}
+
+function reportError(detail) {
+  return Object.assign(invalid(), { detail })
+}
+
+function escapeReportQuotes(text) {
+  // A report writer can insert a straight quote inside a prose field without JSON escaping.
+  return text.replace(/^([ \t]*"(?:title|summary|heading|text|conclusion)"[ \t]*:[ \t]*)"(.*)"([ \t]*,?[ \t]*)$/gm,
+    (_, prefix, value, suffix) => prefix + '"' + value.replace(/\\[\s\S]|"/g,
+      part => part === '"' ? '\\"' : part) + '"' + suffix)
+}
+
+function readReportOutput(output) {
+  if (typeof output?.rawReport !== 'string') return { result: output }
+  const raw = output.rawReport.trim()
+  if (!raw) throw reportError(output.finish === 'stop' ? 'empty' : 'incomplete')
+  const fenced = /```(?:json)?\s*(\{[\s\S]*?)\s*```/i.exec(raw)
+  const text = fenced?.[1] ?? raw
+  const reason = output.finish && output.finish !== 'stop' ? 'incomplete' : undefined
+  try {
+    return { result: JSON.parse(text), reason: reason ?? (fenced && fenced[0] !== raw ? 'json' : undefined) }
+  } catch {
+    try {
+      const escaped = escapeReportQuotes(text)
+      return { result: JSON.parse(jsonrepair(escaped)), reason: reason ?? 'json' }
+    } catch {
+      throw reportError(reason ?? 'json')
+    }
+  }
+}
+
+function validateReport(output, allowedClaims) {
+  const { result, reason } = readReportOutput(output)
+  const local = typeof output?.rawReport === 'string'
+  if (!Array.isArray(result?.sections) || !result.sections.length || result.sections.length > 6) throw reportError('schema')
+  let normalized = false
+  const sections = result.sections.map(section => {
+    if (!Array.isArray(section?.paragraphs) || !section.paragraphs.length || section.paragraphs.length > 6) throw reportError('schema')
+    const paragraphs = section.paragraphs.map(paragraph => {
+      const rawClaims = paragraph?.claims
+      const claims = local && Array.isArray(rawClaims)
+        ? rawClaims.map(id => typeof id === 'string' && /^\d+$/.test(id.trim()) ? Number(id) : id)
+        : rawClaims
+      if (!Array.isArray(claims) || !claims.length || claims.some(id => !allowedClaims.has(id))) throw reportError('citations')
+      if (claims.some((id, index) => id !== rawClaims[index])) normalized = true
+      return { text: line(paragraph.text, 3200), claims: [...new Set(claims)] }
+    })
+    return { heading: line(section.heading, 120), paragraphs }
+  })
+  return { title: result.title === undefined ? undefined : line(result.title, 100),
+    summary: line(result.summary, 3000), sections, conclusion: line(result.conclusion, 3000),
+    reason: reason ?? (normalized ? 'citations' : undefined) }
 }
 
 function questions(value, max) {
@@ -52,7 +107,7 @@ async function collectFollowups(state, model, retrieve) {
 }
 
 export const stagedResearch = {
-  async run({ model, write = model.write?.bind(model), retrieve, checkpoint, initial }) {
+  async run({ model, write = model.write?.bind(model), writerName = model.name, retrieve, checkpoint, initial }) {
     const state = { ...initial }
     async function step(key, action) {
       if (state[key] !== undefined) return
@@ -68,7 +123,7 @@ export const stagedResearch = {
       try {
         return await call(withBudget(2200))
       } catch (error) {
-        if (error.code !== 'model-timeout' && !(method === 'write' && error.code === 'model-response')) throw error
+        if (error.code !== 'model-timeout' && !(method === 'write' && error.code === 'model-response' && !error.noRewrite)) throw error
         const retries = (state.automaticRetries ?? 0) + 1
         state.automaticRetries = retries
         await checkpoint('automaticRetries', retries)
@@ -154,28 +209,27 @@ export const stagedResearch = {
         ...(claim.status === 'disputed' && { context: claim.explanation.slice(0, 180) }),
       })).filter(claim => !references.length || claim.sources.length)
       const allowedClaims = new Set(writingClaims.map(claim => claim.id))
-      const result = await modelCall('write', {
-        topic: state.plan.topic, questions: state.plan.questions, language: state.input.language, today: state.input.today,
-        claims: writingClaims,
-        sources: references.map(source => {
-          const excerpts = [...new Set(claims.flatMap(claim => (claim.quotes ?? [])
-            .filter(quote => quote.id === source.id).map(quote => quote.text)))].slice(0, 3)
-          return { id: numbers.get(source.id), title: source.title, publishedAt: source.publishedAt,
-            excerpts: excerpts.length ? excerpts : [source.text.trim().slice(0, 320)] }
-        }),
-      })
-      if (!Array.isArray(result?.sections) || !result.sections.length || result.sections.length > 6) throw invalid()
-      const sections = result.sections.map(section => {
-        if (!Array.isArray(section?.paragraphs) || !section.paragraphs.length || section.paragraphs.length > 6) throw invalid()
-        const paragraphs = section.paragraphs.map(paragraph => {
-          if (!Array.isArray(paragraph?.claims) || !paragraph.claims.length ||
-            paragraph.claims.some(id => !allowedClaims.has(id))) throw invalid()
-          return { text: line(paragraph.text, 3200), claims: [...new Set(paragraph.claims)] }
+      const progress = { model: writerName, startedAt: Date.now() }
+      await checkpoint('writing', { ...progress, phase: 'writing' })
+      try {
+        const output = await modelCall('write', {
+          topic: state.plan.topic, questions: state.plan.questions, language: state.input.language, today: state.input.today,
+          claims: writingClaims,
+          sources: references.map(source => {
+            const excerpts = [...new Set(claims.flatMap(claim => (claim.quotes ?? [])
+              .filter(quote => quote.id === source.id).map(quote => quote.text)))].slice(0, 3)
+            return { id: numbers.get(source.id), title: source.title, publishedAt: source.publishedAt,
+              excerpts: excerpts.length ? excerpts : [source.text.trim().slice(0, 320)] }
+          }),
         })
-        return { heading: line(section.heading, 120), paragraphs }
-      })
-      return { title: result.title === undefined ? undefined : line(result.title, 100),
-        summary: line(result.summary, 3000), sections, conclusion: line(result.conclusion, 3000) }
+        const { reason, ...report } = validateReport(output, allowedClaims)
+        await checkpoint('writing', { ...progress, phase: 'complete', reason, endedAt: Date.now() })
+        return report
+      } catch (error) {
+        const reason = error.detail ?? (error.code === 'model-response' ? 'schema' : undefined)
+        await checkpoint('writing', { ...progress, phase: 'failed', reason, endedAt: Date.now() })
+        throw error
+      }
     })
     return state
   },

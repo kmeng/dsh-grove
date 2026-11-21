@@ -112,3 +112,59 @@ test('successive retrieval rounds add distinct material and resume without re-se
   assert.equal(state.verified.sources.length, 3)
   assert.match(renderResearchReport(state), /https:\/\/example\.org\/third-search/)
 })
+
+test('repairs a local report in place and exposes the writing diagnosis', async () => {
+  const initial = {
+    input: { language: 'zh' }, plan: { topic: '研究报告', questions: ['问题'] },
+    collected: [valid], review: { followups: [] },
+    verified: { sources: [valid], claims: [{ text: '事实', explanation: '原文', sources: ['open'] }] },
+  }
+  const diagnostic = []
+  let writes = 0
+  const state = await stagedResearch.run({
+    initial, model: {}, writerName: 'qwen3.8-27b-mlx-32k:latest',
+    write: async () => {
+      writes++
+      return { rawReport: `{
+        "summary": "研究摘要",
+        "sections": [{
+          "heading": "分析",
+          "paragraphs": [{
+            "text": "已经写好的正文引用了 "seed draft" 和 "design justice"。",
+            "claims": ["1"],
+          }],
+        }],
+        "conclusion": "结论"
+      }` }
+    },
+    retrieve: () => assert.fail('verified material must be reused'),
+    checkpoint: async (key, value) => { if (key === 'writing') diagnostic.push(value) },
+  })
+  assert.equal(writes, 1)
+  assert.match(renderResearchReport(state), /已经写好的正文引用了 "seed draft" 和 "design justice"。 \[1\]/)
+  assert.equal(diagnostic[0].model, 'qwen3.8-27b-mlx-32k:latest')
+  assert.equal(diagnostic.at(-1).phase, 'complete')
+  assert.equal(diagnostic.at(-1).reason, 'json')
+  assert.ok(diagnostic.at(-1).endedAt >= diagnostic[0].startedAt)
+})
+
+test('an empty local report stops at writing and keeps the specific failure', async () => {
+  const initial = {
+    input: { language: 'zh' }, plan: { topic: '报告', questions: ['问题'] },
+    collected: [valid], review: { followups: [] },
+    verified: { sources: [valid], claims: [{ text: '事实', explanation: '原文', sources: ['open'] }] },
+  }
+  let writes = 0
+  const saved = []
+  await assert.rejects(stagedResearch.run({
+    initial, model: {}, writerName: 'qwen', write: async () => {
+      writes++
+      return { rawReport: '', finish: 'stop' }
+    },
+    retrieve: () => assert.fail('already verified'),
+    checkpoint: async (key, value) => { if (key === 'writing') saved.push(value) },
+  }), { code: 'model-response', detail: 'empty' })
+  assert.equal(writes, 1)
+  assert.equal(saved.at(-1).phase, 'failed')
+  assert.equal(saved.at(-1).reason, 'empty')
+})

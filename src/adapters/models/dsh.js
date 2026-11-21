@@ -48,6 +48,7 @@ export function createDshModels(ctx) {
       if (!available(selection)) throw failure('model-dsh-route', 'This model route is unavailable in dsh')
       return modelTasks(selection.model, async (system, input, requestOptions) => {
         const local = /^ollama(?:-|$)/i.test(selection.provider)
+        const recoverReport = local && requestOptions?.reportOutput === true
         const timeout = requestOptions?.timeoutMs ?? 60_000
         const signal = AbortSignal.timeout(local ? Math.max(timeout, 600_000) : timeout)
         const key = identity(selection)
@@ -68,23 +69,32 @@ export function createDshModels(ctx) {
           const blocks = new Map()
           let finish
           for await (const chunk of (call ? call.stream(options) : runtime.stream(options))) {
+            if (recoverReport && chunk.type === 'text-delta') {
+              blocks.set(chunk.index, (blocks.get(chunk.index) ?? '') + chunk.text)
+            }
             if (chunk.type === 'block-end' && chunk.block?.type === 'text') blocks.set(chunk.index, chunk.block.text)
             if (chunk.type === 'finish') finish = chunk.reason
           }
           signal.throwIfAborted()
-          if (finish?.failure) throw finish.failure
-          if (finish?.kind !== 'stop') throw failure('modelResponse', 'The model did not finish the JSON response')
           const text = [...blocks].sort(([a], [b]) => a - b).map(([, block]) => block).join('').trim()
+          if (recoverReport && (!finish?.failure || text)) return { rawReport: text, finish: finish?.kind }
+          if (finish?.failure) throw finish.failure
+          if (finish?.kind !== 'stop') {
+            throw Object.assign(failure('modelResponse', 'The model did not finish the JSON response'), { detail: 'incomplete' })
+          }
+          if (!text) throw Object.assign(failure('modelResponse', 'The model returned no text'), { detail: 'empty' })
           let result
           try {
             result = JSON.parse(text.replace(/^```(?:json)?\s*([\s\S]*?)\s*```$/i, '$1'))
           } catch {
-            throw failure('modelResponse', 'The model did not return JSON')
+            throw Object.assign(failure('modelResponse', 'The model did not return JSON'), { detail: 'json' })
           }
           checks.set(key, { status: 'connected', checkedAt: new Date().toISOString() })
           return result
         } catch (error) {
           const mapped = requestFailure(error, signal)
+          if (error.detail) mapped.detail = error.detail
+          if (recoverReport && mapped.code === 'model-response') mapped.noRewrite = true
           checks.set(key, { status: 'failed', code: mapped.code, message: mapped.message, checkedAt: new Date().toISOString() })
           throw mapped
         }

@@ -140,7 +140,7 @@ function progress(run, running = false) {
   ).values()].filter(source => !source.unavailable))
   return { id, scope, topic, direction, created, report, error, attachment: run.attachment,
     status: status === 'running' && !running ? 'interrupted' : status,
-    plan,
+    plan, writing: run.writing,
     collected: available?.map(({ title }) => title),
     sourceLinks: available?.map(source => source.url ?? null),
     round: collected ? Math.max(run.searchRound ?? 1, 1 + (run.rounds?.length ?? 0)) : undefined,
@@ -175,7 +175,7 @@ export function researchRuns({ context, workflow, parseAttachment }) {
   async function perform(store, jobs, run, available) {
     try {
       const state = await workflow.run({
-        model: available.model, write: available.write, initial: run,
+        model: available.model, write: available.write, writerName: available.writerName, initial: run,
         retrieve: (queries, scope) => collect(store, run, queries, available, scope),
         async checkpoint(step, value) {
           if (step === 'plan' && run.question) {
@@ -315,8 +315,10 @@ export function researchRuns({ context, workflow, parseAttachment }) {
           await jobs.write(run)
           return progress(run)
         }
-        const available = await providers(run.links, run.localOnly === true)
-        const changedToHostSearch = available.hostSearch && !run.localOnly && !run.hostSearch
+        const available = run.verified && run.web && run.error?.code !== 'research-no-evidence'
+          ? await context({ links: run.links })
+          : await providers(run.links, run.localOnly === true)
+        const changedToHostSearch = available.hostSearch && !run.localOnly && !run.hostSearch && !run.verified
         if (changedToHostSearch) {
           run.hostSearch = true
           delete run.plan
