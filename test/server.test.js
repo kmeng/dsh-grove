@@ -274,6 +274,7 @@ test('inspiration discovery is opt-in and research preserves exact origin throug
   const work = await call(routes.works, { action: 'save', title: 'Field guide', body: 'Measure both.', basis: { id: knowledge.meta.id, version: 1 } })
   const detail = await call(routes.inspirations, { ...ref, version: updated.meta.version, action: 'detail' })
   assert.equal(detail.studies[0].id, study.meta.id)
+  assert.equal(detail.studies[0].activity, study.meta.modified ?? study.meta.created)
   assert.equal(detail.studies[0].reports[0].summary, report.body)
   assert.equal(detail.studies[0].knowledge[0].id, knowledge.meta.id)
   assert.equal(detail.studies[0].works[0].id, work.meta.id)
@@ -362,6 +363,9 @@ test('deep research checkpoints progress, verifies citations, and reopens its Ma
   assert.equal((await updated.json()).meta.review, 'confirmed')
   const reopened = await (await call(routes.deepResearch, { action: 'list', topic })).json()
   assert.equal(reopened.runs[0].report.version, 2)
+  const detail = await (await call(routes.inspirations, { ...ideaRef, action: 'detail' })).json()
+  assert.equal(detail.studies[0].activity, reopened.runs[0].created)
+  assert.equal(detail.studies[0].reports[0].review, 'confirmed')
 })
 
 test('deep research reuses exact imported versions when web search yields no sources', async t => {

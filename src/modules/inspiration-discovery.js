@@ -1,3 +1,5 @@
+import { researchRunStore } from '../adapters/storage/obsidian/research-runs.js'
+
 const byRecent = (a, b) => String(b.meta.modified ?? b.meta.created).localeCompare(String(a.meta.modified ?? a.meta.created))
 const derivesFrom = (note, ids) => note.meta.links?.some(link => link.kind === 'derived' && ids.has(link.id))
 const relatesTo = (note, id) => note.meta.links?.some(link => link.kind === 'related' && link.id === id)
@@ -12,16 +14,23 @@ function preview({ meta, body }) {
 export async function inspirationHistory(store, id) {
   const notes = (await store.list()).filter(note => note.meta.status !== 'archived').sort(byRecent)
   const origins = new Set([id])
-  return notes.filter(note => note.meta.type === 'research' && derivesFrom(note, origins)).map(study => {
+  const studies = notes.filter(note => note.meta.type === 'research' && derivesFrom(note, origins))
+  if (!studies.length) return []
+  const studyIds = new Set(studies.map(({ meta }) => meta.id))
+  const activity = new Map()
+  for (const run of await researchRunStore(store).list()) {
+    if (studyIds.has(run.topic) && run.created > (activity.get(run.topic) ?? '')) activity.set(run.topic, run.created)
+  }
+  return studies.map(study => {
     const reports = notes.filter(note => note.meta.type === 'report' && relatesTo(note, study.meta.id))
     const reportIds = new Set(reports.map(note => note.meta.id))
     const knowledge = notes.filter(note => ['concept', 'claim', 'theory', 'method'].includes(note.meta.type) && derivesFrom(note, reportIds))
     const basisIds = new Set([...reportIds, ...knowledge.map(note => note.meta.id)])
     const works = notes.filter(note => note.meta.type === 'output' && derivesFrom(note, basisIds))
     const finding = notes.find(note => note.meta.type === 'finding' && relatesTo(note, study.meta.id))
-    return { ...preview(study), latest: finding ? preview(finding).summary : undefined,
+    return { ...preview(study), activity: activity.get(study.meta.id) ?? study.meta.modified ?? study.meta.created, latest: finding ? preview(finding).summary : undefined,
       reports: reports.map(preview), knowledge: knowledge.map(preview), works: works.map(preview) }
-  })
+  }).sort((a, b) => b.activity.localeCompare(a.activity))
 }
 
 export async function discoverInspirations(store, model, note) {

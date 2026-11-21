@@ -77,6 +77,8 @@ window.__ModuleLoader__.load({
       'research.attach': '添加资料',
       'research.removeAttachment': '移除',
       'research.process': '研究过程',
+      'research.userTurn': '你的研究问题',
+      'research.assistantTurn': '研究回应',
       'research.incomplete': '研究未完成',
       'err.research-no-evidence': '没有找到可引用的资料。补充资料或公开链接后，可以继续研究。',
       'err.research-attachment': '无法读取附件：{message}',
@@ -153,7 +155,7 @@ window.__ModuleLoader__.load({
       'idea.origin': '这轮研究从哪里开始',
       'idea.openOriginal': '看看灵感原文',
       'idea.openStudy': '回看研究',
-      'idea.continueStudy': '继续深挖',
+      'idea.continueStudy': '继续研究',
       'idea.ongoing': '进行中',
       'idea.savedReport': '研究报告',
       'idea.reportVersion': '第 {version} 版',
@@ -340,6 +342,8 @@ window.__ModuleLoader__.load({
       'research.attach': 'Attach material',
       'research.removeAttachment': 'Remove',
       'research.process': 'Research process',
+      'research.userTurn': 'Your research question',
+      'research.assistantTurn': 'Research response',
       'research.incomplete': 'Research incomplete',
       'err.research-no-evidence': 'No citable sources were found. Add material or a public link to continue.',
       'err.research-attachment': 'Cannot read the attachment: {message}',
@@ -863,7 +867,7 @@ window.__ModuleLoader__.load({
                     else navigate('home')
                   } })
                   : page === 'idea'
-                    ? h(InspirationPage, { key: vault + ':' + seed.id + ':' + seed.version, reference: seed, onNavigate: navigate, modelConfig: modelConfig, onSettings: openSettings })
+                    ? h(InspirationPage, { key: vault + ':' + seed.id + ':' + seed.version, reference: seed, onNavigate: navigate, reportRevision: reportRevision, modelConfig: modelConfig, onSettings: openSettings })
                   : page === 'knowledge' || page === 'works'
                     ? h(AssetPage, { key: page, kind: page, seed: seed, onNavigate: navigate })
                     : h(InspirationHome, {
@@ -1020,7 +1024,7 @@ window.__ModuleLoader__.load({
           if (active) setDetail(value)
         }, function (problem) { if (active) setError(problem) })
         return function () { active = false }
-      }, [ref.id, ref.version])
+      }, [ref.id, ref.version, props.reportRevision])
 
       useEffect(function () {
         if (!detail) return
@@ -1062,15 +1066,15 @@ window.__ModuleLoader__.load({
             h('h3', { className: 'gr-h2' }, T('idea.studies')),
             detail.studies.map(function (study) {
               return h('article', { className: 'gr-stack gr-origin-topic', key: study.id },
-                h('div', { className: 'gr-row' }, h('h4', { className: 'gr-h2' }, study.title),
-                  study.status === 'open' ? h('span', { className: 'gr-meta' }, T('idea.ongoing')) : null),
+                h('div', { className: 'gr-row gr-study-heading' },
+                  h('div', null, h('h4', { className: 'gr-h2' }, study.title), inspirationTime(study.activity)),
+                  h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () {
+                    props.onNavigate('research', { resume: study.id, idea: ref })
+                  } }, T('idea.continueStudy'))),
                 study.latest || study.summary ? h('p', { className: 'gr-prose' }, study.latest || study.summary) : null,
-                h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () {
-                  props.onNavigate('research', { resume: study.id, idea: ref })
-                } }, T(study.status === 'open' && !study.reports.length ? 'idea.continueStudy' : 'idea.openStudy')),
                 study.reports.map(function (report) {
                   return h('section', { className: 'gr-origin-report gr-stack', key: report.id },
-                    h('p', { className: 'gr-meta' }, T(report.review === 'draft' ? 'deep.draft' : 'idea.savedReport'), ' · ', T('idea.reportVersion', { version: report.version })),
+                    h('p', { className: 'gr-meta' }, T(report.review === 'draft' ? 'deep.draft' : 'report.confirmed'), ' · ', T('idea.reportVersion', { version: report.version })),
                     h('h4', { className: 'gr-h2' }, report.title),
                     h('p', { className: 'gr-prose' }, report.summary),
                     h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () {
@@ -1147,7 +1151,7 @@ window.__ModuleLoader__.load({
       var requested = useRef(null)
       var scope = { idea: props.idea, topic: props.topic, knowledge: props.knowledge }
       var running = run?.status === 'running'
-      var setupErrors = ['model-disabled', 'model-key', 'model-research-key', 'model-dsh-auth', 'model-dsh-route', 'research-search-disabled', 'research-search-key']
+      var setupErrors = ['model-disabled', 'model-key', 'model-research-key', 'model-report-key', 'model-dsh-auth', 'model-dsh-route', 'research-search-disabled', 'research-search-key']
       var configurationNeeded = setupErrors.includes(error?.code)
 
       useEffect(function () {
@@ -1930,6 +1934,8 @@ window.__ModuleLoader__.load({
       var [pollRevision, setPollRevision] = useState(0)
       var top = useRef(null)
       var visit = useRef(0)
+      var flow = useRef(null)
+      var follow = useRef(true)
 
       useEffect(function () {
         var active = true
@@ -1953,7 +1959,14 @@ window.__ModuleLoader__.load({
         top.current?.closest?.('.gr-scroll')?.scrollTo(0, 0)
       }, [selected?.meta.id, creating])
 
+      var newest = runs[0]
+      useEffect(function () {
+        var element = flow.current
+        if (element && follow.current) element.scrollTop = element.scrollHeight
+      }, [newest?.id, newest?.status, newest?.written, newest?.collected?.length, newest?.verified?.length])
+
       function select(study) {
+        follow.current = true
         visit.current++
         setSourceSeed(null)
         setRuns([])
@@ -1988,6 +2001,7 @@ window.__ModuleLoader__.load({
       }, [originalRef?.id, originalRef?.version])
 
       function showRun(run) {
+        follow.current = true
         setRuns(function (items) {
           return [run].concat(items.filter(function (item) { return item.id !== run.id }))
             .sort(function (a, b) { return b.created.localeCompare(a.created) })
@@ -2020,31 +2034,40 @@ window.__ModuleLoader__.load({
 
       var originalBody = originalRef && original?.id === originalRef.id && original.version === originalRef.version
         ? original.body : origin?.excerpt
-      return h(React.Fragment, null,
-        h('div', { className: 'gr-row', ref: top },
+      var fromIdea = !!(props.seed?.idea || sourceSeed?.idea)
+      return h('section', { className: 'gr-conversation' },
+        h('header', { className: 'gr-conversation-header', ref: top },
           h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () {
-            if (creating && sourceSeed?.idea) props.onBack()
+            if (fromIdea) props.onBack()
             else select(null)
-          } }, T(creating && sourceSeed?.idea ? 'idea.back' : 'research.overview'))),
-        h('h1', null, selected?.meta.title || T('research.newConversation')),
-        notice,
-        originalBody ? h('aside', { className: 'gr-card gr-stack' },
-          h('h2', { className: 'gr-h2' }, T('research.originText')), h('p', { className: 'gr-prose' }, originalBody)) : null,
-        runs.slice().reverse().map(function (run) {
-          return h('article', { key: run.id, className: 'gr-stack' },
-            h('p', { className: 'gr-prompt' }, run.direction || run.plan?.topic || selected?.meta.title),
-            run.attachment ? h('p', { className: 'gr-meta' }, T('source.title'), ' · ', run.attachment.name) : null,
-            h(ResearchProcess, { run: run, busy: retrying || runs.some(function (item) { return item.status === 'running' }),
-              onRetry: id && !run.report ? function () { retryTurn(run) } : null }),
-            run.status === 'complete' && run.summary ? h('p', { className: 'gr-prose' }, run.summary) : null,
-            id && run.status === 'complete' && run.report ? h(ReportEntry, { id: id, initialReport: run.report, title: run.plan?.topic, revision: props.reportRevision, onNavigate: props.onNavigate }) : null)
-        }),
-        id ? h('details', null,
-          h('summary', null, T('source.title')),
-          selected.body ? h('p', { className: 'gr-prose' }, selected.body) : null,
-          h(ResearchSources, { key: id, id: id }),
-          h(LegacyFindings, { key: 'findings:' + id, id: id }),
-          h(ResearchReports, { id: id, excluded: runs.map(function (run) { return run.report?.id }), revision: props.reportRevision, onNavigate: props.onNavigate })) : null,
+          } }, '← ', T(fromIdea ? 'idea.back' : 'research.overview')),
+          h('h1', null, selected?.meta.title || T('research.newConversation'))),
+        h('div', { className: 'gr-conversation-flow', ref: flow, onScroll: function (event) {
+          var element = event.currentTarget
+          follow.current = element.scrollHeight - element.clientHeight - element.scrollTop < 72
+        } },
+          notice,
+          originalBody ? h('details', { className: 'gr-conversation-context', open: creating || undefined },
+            h('summary', null, T('research.originText')), h('p', { className: 'gr-prose' }, originalBody)) : null,
+          runs.slice().reverse().map(function (run) {
+            return h('article', { key: run.id, className: 'gr-conversation-turn' },
+              h('div', { className: 'gr-conversation-user', 'aria-label': T('research.userTurn') },
+                inspirationTime(run.created),
+                h('p', { className: 'gr-prompt' }, run.direction || run.plan?.topic || selected?.meta.title),
+                run.attachment ? h('p', { className: 'gr-meta' }, T('source.title'), ' · ', run.attachment.name) : null),
+              h('div', { className: 'gr-stack', 'aria-label': T('research.assistantTurn') },
+                h(ResearchProcess, { run: run, busy: retrying || runs.some(function (item) { return item.status === 'running' }),
+                  onRetry: id && !run.report ? function () { retryTurn(run) } : null }),
+                run.status === 'complete' && run.summary ? h('p', { className: 'gr-prose gr-conversation-response' }, run.summary) : null,
+                id && run.status === 'complete' && run.report ? h(ReportEntry, { id: id, initialReport: run.report, title: run.plan?.topic, revision: props.reportRevision, onNavigate: props.onNavigate }) : null))
+          }),
+          id ? h('div', { className: 'gr-conversation-resources' },
+            h('details', null,
+              h('summary', null, T('source.title')),
+              selected.body ? h('p', { className: 'gr-prose' }, selected.body) : null,
+              h(ResearchSources, { key: id, id: id }),
+              h(LegacyFindings, { key: 'findings:' + id, id: id })),
+            h(ResearchReports, { id: id, excluded: runs.map(function (run) { return run.report?.id }), revision: props.reportRevision, onNavigate: props.onNavigate })) : null),
         h(DeepResearchPanel, { key: id || 'new', idea: idea, topic: id,
           knowledge: !id ? sourceSeed?.origin : undefined, refresh: pollRevision,
           onSettings: props.onSettings, modelConfig: props.modelConfig,
@@ -2084,9 +2107,9 @@ window.__ModuleLoader__.load({
     }
 
     var CSS = [
-      '.gr-root{--gr-paper:light-dark(#f7f8f2,#19211d);--gr-surface:light-dark(#fffefa,#222d26);--gr-ink:light-dark(#24342b,#e5eee5);--gr-muted:light-dark(#55675b,#adbdaf);--gr-line:light-dark(#dce3d8,#43554a);--gr-wash:light-dark(#e9efe3,#293a30);--gr-green:light-dark(#285342,#bce0c9);--gr-on-green:light-dark(#fff,#173629);--gr-error:light-dark(#a52d25,#ffb4aa);height:100%;min-height:0;display:flex;flex-direction:column;background:var(--gr-paper);color:var(--gr-ink);font-family:inherit;font-size:13px;line-height:1.6;box-sizing:border-box;padding-top:min(var(--dsh-frame-top-clearance,0px),28px)}',
+      '.gr-root{--gr-paper:var(--dsw-alias-bg-base,Canvas);--gr-surface:var(--dsw-alias-bg-layer-2,Canvas);--gr-ink:var(--dsw-alias-label-primary,CanvasText);--gr-muted:var(--dsw-alias-label-secondary,GrayText);--gr-line:var(--dsw-alias-border-l2,light-dark(#dcdfe4,#45454a));--gr-wash:var(--dsw-specific-sidebar-fill,light-dark(#f5f6f8,#27282d));--gr-primary:var(--dsw-alias-button-primary-fill,ButtonText);--gr-on-primary:var(--dsw-alias-label-primary-foreground,ButtonFace);--gr-link:var(--dsw-alias-button-info-fill,LinkText);--gr-error:var(--dsw-alias-state-error-primary,light-dark(#a52d25,#ffb4aa));height:100%;min-height:0;display:flex;flex-direction:column;background:var(--gr-paper);color:var(--gr-ink);font-family:inherit;font-size:13px;line-height:1.6;box-sizing:border-box;padding-top:min(var(--dsh-frame-top-clearance,0px),28px)}',
       '.gr-markdown a,.gr-card a{overflow-wrap:anywhere}',
-      '.gr-research-composer{position:sticky;bottom:0;z-index:1}.gr-compose-actions{justify-content:space-between}.gr-research-composer textarea{min-height:64px}',
+      '.gr-research-composer{flex:none}.gr-compose-actions{justify-content:space-between}.gr-research-composer textarea{min-height:64px}',
       '.gr-root{container-type:inline-size}',
       '.gr-report-entry{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;overflow-wrap:anywhere}',
       '.gr-report-preview{order:2;flex:0 0 clamp(380px,46cqw,680px);min-width:0;min-height:0;display:flex;flex-direction:column;background:var(--gr-surface);border-left:1px solid var(--gr-line);overflow-wrap:anywhere}',
@@ -2096,9 +2119,22 @@ window.__ModuleLoader__.load({
       '.gr-preview-content .gr-markdown{font-size:14px;line-height:1.7}.gr-preview-markdown{min-height:280px}',
       '.gr-preview-actions{flex:none;padding:12px 22px;border-top:1px solid var(--gr-line)}',
       '@container (max-width:850px){.gr-has-preview>.gr-scroll,.gr-has-preview>.gr-nav{display:none}.gr-has-preview>.gr-report-preview{flex:1 1 auto;border-left:0;width:100%}}',
-      '.gr-prompt{margin-left:12%;padding:10px 13px;background:var(--gr-wash);border-radius:12px;overflow-wrap:anywhere}',
+      '.gr-scroll:has(.gr-view:not([hidden])>.gr-conversation) .gr-inner{height:100%;max-width:900px;padding-block:0;gap:0}',
+      '.gr-scroll:has(.gr-view:not([hidden])>.gr-conversation) :is(.gr-head,.gr-foot){display:none}',
+      '.gr-view:not([hidden]):has(>.gr-conversation),.gr-conversation{display:flex;flex:1 1 auto;flex-direction:column;min-height:0}',
+      '.gr-conversation-header{flex:none;display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--gr-line)}',
+      '.gr-conversation-header h1{margin:0;font-size:16px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+      '.gr-conversation-header .gr-btn{flex:none}',
+      '.gr-conversation-flow{flex:1 1 auto;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:24px;padding:20px 4px}',
+      '.gr-conversation-turn{display:grid;gap:14px}.gr-conversation-user{display:grid;justify-items:end;gap:4px}',
+      '.gr-prompt{margin:0;max-width:85%;padding:10px 14px;background:var(--dsw-specific-bubble,var(--gr-wash));border-radius:16px;white-space:pre-wrap;overflow-wrap:anywhere}',
+      '.gr-conversation-response{font-size:var(--dsh-content-font-size,14px)}',
+      '.gr-conversation-context,.gr-conversation-resources{color:var(--gr-muted)}.gr-conversation-resources{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start}',
+      '.gr-conversation-resources>.gr-card{padding:0;border:0;background:transparent}',
+      '.gr-conversation .gr-research-composer{margin-bottom:12px;border-radius:16px;background:var(--dsw-specific-input-major,var(--gr-surface))}',
+      '.gr-study-heading{justify-content:space-between}',
       '.gr-nav{order:-1;display:flex;flex-direction:column;gap:5px;flex:none;width:130px;padding:20px 10px;border-right:1px solid var(--gr-line);background:var(--gr-wash)}',
-      '.gr-nav .gr-btn{text-align:left}.gr-nav [aria-current=page]{background:var(--gr-green);color:var(--gr-on-green)}',
+      '.gr-nav .gr-btn{text-align:left}.gr-nav [aria-current=page]{background:var(--gr-primary);color:var(--gr-on-primary)}',
       '.gr-root:has(>.gr-nav){flex-direction:row}.gr-scroll{min-width:0}',
       '@media(max-width:580px){.gr-root:has(>.gr-nav){flex-direction:column}.gr-nav{width:auto;flex-direction:row;flex-wrap:wrap;padding:6px;border-right:0;border-bottom:1px solid var(--gr-line)}.gr-nav .gr-btn{text-align:center;flex:1;white-space:nowrap}}',
       '.gr-scroll{flex:1 1 auto;min-height:0;overflow:auto;container-type:inline-size}',
@@ -2116,7 +2152,7 @@ window.__ModuleLoader__.load({
       '.gr-head-actions{display:flex;align-items:center;gap:8px;margin-left:auto;flex-wrap:wrap;max-width:100%}',
       '.gr-pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--gr-muted);border:1px solid var(--gr-line);border-radius:999px;padding:3px 10px;white-space:nowrap;background:var(--gr-surface)}',
       '.gr-dot{width:6px;height:6px;border-radius:50%;background:var(--gr-muted)}',
-      '.gr-dot-ok{background:var(--gr-green)}',
+      '.gr-dot-ok{background:var(--dsw-alias-state-success-primary,#23834d)}',
       '.gr-view:not([hidden]){display:flex;flex-direction:column;gap:18px;min-width:0}',
       '.gr-dot-error{background:var(--gr-error)}',
       '.gr-model-options[open]>.gr-stack{margin-top:12px}',
@@ -2129,7 +2165,7 @@ window.__ModuleLoader__.load({
       '.gr-card form:not(.gr-row):not(.gr-search-row){display:flex;flex-direction:column;align-items:flex-start;gap:12px}',
       '.gr-card form>label:not(.gr-row){display:block;width:100%;overflow-wrap:anywhere}',
       '.gr-card label>:is(.gr-input,.gr-textarea){margin-top:6px}',
-      '.gr-root input[type=checkbox]{accent-color:var(--gr-green)}',
+      '.gr-root input[type=checkbox]{accent-color:var(--gr-primary)}',
       '.gr-root select{background:var(--gr-wash);color:inherit;border:1px solid var(--gr-line);border-radius:6px;padding:4px 8px;font:inherit}',
       '.gr-card button,.gr-stack button{max-width:100%;overflow-wrap:anywhere;text-align:left}',
       '.gr-search-row{display:flex;gap:8px;align-items:center}.gr-search-row input{flex:1;min-width:0}',
@@ -2150,23 +2186,23 @@ window.__ModuleLoader__.load({
       '.gr-origin-topic{padding-block:8px}',
       '.gr-origin-topic+.gr-origin-topic{border-top:1px solid var(--gr-line);padding-top:14px}',
       '.gr-origin-report{padding:12px 14px;border:1px solid var(--gr-line);border-radius:10px;background:var(--gr-surface)}',
-      '.gr-origin-page .gr-origin-link{background:transparent;color:var(--gr-green);padding:4px 0}',
-      '.gr-markdown{overflow-wrap:anywhere}.gr-markdown :is(ul,ol){margin:0;padding-inline-start:22px}.gr-markdown :is(h3,h4,h5,h6){margin:0}.gr-markdown a{color:var(--gr-green)}',
+      '.gr-origin-page .gr-origin-link{background:transparent;color:var(--gr-primary);padding:4px 0}',
+      '.gr-markdown{overflow-wrap:anywhere}.gr-markdown :is(ul,ol){margin:0;padding-inline-start:22px}.gr-markdown :is(h3,h4,h5,h6){margin:0}.gr-markdown a{color:var(--gr-link)}',
       '.gr-prose{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.6}',
       '.gr-h2{font-size:15px;font-weight:600;line-height:1.4}',
       '.gr-body{color:var(--gr-muted);font-size:13px}',
       '.gr-meta{font-size:12px;color:var(--gr-muted)}',
-      '.gr-btn{appearance:none;border:0;border-radius:8px;background:var(--gr-green);color:var(--gr-on-green);font:inherit;font-size:13px;font-weight:600;padding:8px 14px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;align-self:flex-start}',
+      '.gr-btn{appearance:none;border:0;border-radius:8px;background:var(--gr-primary);color:var(--gr-on-primary);font:inherit;font-size:13px;font-weight:600;padding:8px 14px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;align-self:flex-start}',
       '.gr-btn:hover{opacity:.92}',
       '.gr-btn:disabled{opacity:.5;cursor:default}',
       '.gr-btn-ghost{background:transparent;color:var(--gr-ink);border:1px solid var(--gr-line)}',
       '.gr-btn-sm{padding:5px 10px;font-size:12px;font-weight:500}',
       '.gr-input,.gr-textarea{width:100%;box-sizing:border-box;background:var(--gr-wash);border:1px solid var(--gr-line);border-radius:8px;color:var(--gr-ink);font:inherit;font-size:13px;padding:9px 11px;outline:none}',
       '.gr-textarea{min-height:96px;resize:vertical;line-height:1.6}',
-      '.gr-root :is(button,input,textarea,select,summary,a):focus-visible{outline:2px solid var(--gr-green);outline-offset:1px}',
+      '.gr-root :is(button,input,textarea,select,summary,a):focus-visible{outline:2px solid var(--gr-primary);outline-offset:1px}',
       '.gr-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;min-width:0}',
       '.gr-root [role=alert],.gr-err{color:var(--gr-error);font-size:12px;white-space:pre-wrap}',
-      '.gr-ok{color:var(--gr-green)}',
+      '.gr-ok{color:var(--gr-primary)}',
       '.gr-path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;background:var(--gr-wash);border:1px solid var(--gr-line);border-radius:6px;padding:2px 6px;word-break:break-all}',
       '.gr-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:10px}',
       '.gr-stat{border:1px solid var(--gr-line);border-radius:10px;padding:12px;background:var(--gr-paper);min-width:0}',
