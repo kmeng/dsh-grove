@@ -123,11 +123,11 @@ export const stagedResearch = {
       })).filter(claim => !references.length || claim.sources.length)
       const allowedClaims = new Set(writingClaims.map(claim => claim.id))
       const result = await modelCall('write', {
-        topic: state.plan.topic, language: state.input.language, today: state.input.today,
+        topic: state.plan.topic, questions: state.plan.questions, language: state.input.language, today: state.input.today,
         claims: writingClaims,
         sources: references.map(source => {
           const excerpts = [...new Set(claims.flatMap(claim => (claim.quotes ?? [])
-            .filter(quote => quote.id === source.id).map(quote => quote.text)))].slice(0, 2)
+            .filter(quote => quote.id === source.id).map(quote => quote.text)))].slice(0, 3)
           return { id: numbers.get(source.id), title: source.title, publishedAt: source.publishedAt,
             excerpts: excerpts.length ? excerpts : [source.text.trim().slice(0, 320)] }
         }),
