@@ -260,7 +260,7 @@ export function registerRoutes(ctx, options) {
       const reportSettings = config?.reportWriting && selectModel(config, 'report', dsh)
       const web = options.dshWeb
       const hostSearch = !links?.length && await web?.searchAvailable()
-      return { model, hostSearch,
+      return { model, hostSearch, writerName: reportSettings?.model ?? reportSettings?.name ?? model.name,
         write(input, options) {
           const writer = reportSettings ? modelFor(reportSettings, 'report', config) : model
           if (typeof writer?.write !== 'function') throw coded('model-disabled', 'The report writing model is unavailable')

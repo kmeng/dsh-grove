@@ -137,3 +137,24 @@ test('repairs a local report in place and exposes the writing diagnosis', async 
   assert.equal(diagnostic.at(-1).reason, 'json')
   assert.ok(diagnostic.at(-1).endedAt >= diagnostic[0].startedAt)
 })
+
+test('an empty local report stops at writing and keeps the specific failure', async () => {
+  const initial = {
+    input: { language: 'zh' }, plan: { topic: '报告', questions: ['问题'] },
+    collected: [valid], review: { followups: [] },
+    verified: { sources: [valid], claims: [{ text: '事实', explanation: '原文', sources: ['open'] }] },
+  }
+  let writes = 0
+  const saved = []
+  await assert.rejects(stagedResearch.run({
+    initial, model: {}, writerName: 'qwen', write: async () => {
+      writes++
+      return { rawReport: '', finish: 'stop' }
+    },
+    retrieve: () => assert.fail('already verified'),
+    checkpoint: async (key, value) => { if (key === 'writing') saved.push(value) },
+  }), { code: 'model-response', detail: 'empty' })
+  assert.equal(writes, 1)
+  assert.equal(saved.at(-1).phase, 'failed')
+  assert.equal(saved.at(-1).reason, 'empty')
+})

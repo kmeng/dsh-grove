@@ -184,6 +184,17 @@ window.__ModuleLoader__.load({
       'err.model-timeout': '等待模型响应超时。可以从已保存的进度重试。',
       'research.round': '第 {round} 轮检索与核查',
       'report.empty': '还未生成报告',
+      'writing.active': '正在撰写报告',
+      'writing.complete': '报告撰写完成',
+      'writing.failed': '报告撰写失败',
+      'writing.interrupted': '报告撰写中断',
+      'writing.elapsed': '耗时 {seconds} 秒',
+      'writing.repaired': '已修复返回格式',
+      'writing.incomplete': '模型在完成输出前结束',
+      'writing.empty': '模型没有返回报告正文',
+      'writing.json': '模型返回的 JSON 无法解析',
+      'writing.schema': '模型返回的报告缺少必需内容或章节结构有误',
+      'writing.citations': '报告中的引用编号与已核查资料不匹配',
       'report.fileLabel': '研究报告：',
       'err.model-response': '模型返回的正文或引用格式不正确。请重试，或更换支持 JSON 输出的模型。',
       'research.notesOptional': '研究记录（可选）',
@@ -452,6 +463,17 @@ window.__ModuleLoader__.load({
       'err.model-timeout': 'The model did not respond before its deadline. Retry from the saved progress.',
       'research.round': 'Searching and checking · round {round}',
       'report.empty': 'No report yet',
+      'writing.active': 'Writing report',
+      'writing.complete': 'Report writing complete',
+      'writing.failed': 'Report writing failed',
+      'writing.interrupted': 'Report writing interrupted',
+      'writing.elapsed': 'Elapsed {seconds} s',
+      'writing.repaired': 'Response format repaired',
+      'writing.incomplete': 'The model stopped before finishing its output',
+      'writing.empty': 'The model returned no report text',
+      'writing.json': 'The model returned unparseable JSON',
+      'writing.schema': 'The report is incomplete or has an invalid section structure',
+      'writing.citations': 'The citation numbers do not match the reviewed material',
       'report.fileLabel': 'Research report: ',
       'err.model-response': 'The model returned invalid text or citations. Retry or choose a model that supports JSON output.',
       'research.notesOptional': 'Research notes (optional)',
@@ -1247,6 +1269,25 @@ window.__ModuleLoader__.load({
           } }, T('err.retry'))) : null)
     }
 
+    function WritingStatus(props) {
+      var writing = props.writing
+      var [now, setNow] = useState(Date.now)
+      useEffect(function () {
+        if (!props.running || writing.endedAt) return
+        setNow(Date.now())
+        var timer = setInterval(function () { setNow(Date.now()) }, 1000)
+        return function () { clearInterval(timer) }
+      }, [props.running, writing.startedAt, writing.endedAt])
+      var phase = writing.phase === 'complete' ? 'complete' : writing.phase === 'failed' ? 'failed' : props.running ? 'active' : 'interrupted'
+      var elapsed = writing.endedAt || (props.running ? now : null)
+      return h('div', { className: 'gr-stack gr-writing-status' },
+        h('p', { className: 'gr-meta' }, T('writing.' + phase),
+          writing.model ? ' · ' + writing.model : '',
+          elapsed ? ' · ' + T('writing.elapsed', { seconds: Math.max(0, Math.floor((elapsed - writing.startedAt) / 1000)) }) : ''),
+        writing.reason ? h('p', { className: 'gr-meta', role: phase === 'failed' ? 'alert' : undefined },
+          phase === 'complete' ? T('writing.repaired') + ' · ' : '', T('writing.' + writing.reason)) : null)
+    }
+
     function ResearchProcess(props) {
       var run = props.run
       var running = run.status === 'running'
@@ -1257,6 +1298,7 @@ window.__ModuleLoader__.load({
           running ? h('span', { className: 'gr-run-spinner', 'aria-hidden': true }) : null,
           running && !run.retrying && status === 'deep.checking' && run.round
             ? T('research.round', { round: run.round }) : T(status)),
+        run.writing ? h(WritingStatus, { writing: run.writing, running: running }) : null,
         run.plan || run.collected || run.verified ? h('details', { open: running ? true : undefined },
           h('summary', null, T('research.process')),
           run.plan ? h('div', null, h('h4', null, T('deep.plan')),
@@ -1275,7 +1317,8 @@ window.__ModuleLoader__.load({
               return h('li', { key: index }, T('deep.' + item.status), ' · ', item.text)
             }))) : null) : null,
         run.status === 'failed' || run.status === 'interrupted' ? h('div', { className: 'gr-stack' },
-          h('p', null, run.error ? messageOf(run.error) : T('deep.interrupted')),
+          run.error?.code === 'model-response' && run.writing?.reason ? null :
+            h('p', null, run.error ? messageOf(run.error) : T('deep.interrupted')),
           props.onRetry ? h('button', { className: 'gr-btn gr-btn-ghost', disabled: props.busy,
             onClick: props.onRetry }, T('err.retry')) : null) : null)
     }
