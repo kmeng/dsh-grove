@@ -18,6 +18,22 @@ function escapeReportQuotes(text) {
       part => part === '"' ? '\\"' : part) + '"' + suffix)
 }
 
+function parserDiagnostic(error, text) {
+  const message = error.message ?? ''
+  const category = /end of (?:JSON )?(?:input|string)|unexpected end/i.test(message) ? 'unexpected-end'
+    : /unterminated string/i.test(message) ? 'unterminated-string'
+      : /property name|object key/i.test(message) ? 'object-key'
+        : /colon expected|expected ':'/i.test(message) ? 'missing-colon'
+          : /expected ','/i.test(message) ? 'missing-separator'
+            : /unexpected (?:character|token)/i.test(message) ? 'unexpected-character' : 'invalid-syntax'
+  const offset = error.position ?? Number(/(?:at )?position (\d+)(?:\s|$)/i.exec(message)?.[1])
+  if (!Number.isInteger(offset) || offset < 0 || offset > text.length) return { category }
+  // Preserve only JSON delimiters, never the parser message or the underlying prose.
+  const mask = value => value.replace(/[^{}\[\]:,"\\]/gu, '·')
+  return { category, offset, shape: mask(text.slice(Math.max(0, offset - 24), offset)) +
+    '│' + mask(text.slice(offset, offset + 24)) }
+}
+
 function readReportOutput(output) {
   if (typeof output?.rawReport !== 'string') return { result: output }
   const raw = output.rawReport.trim()
@@ -27,12 +43,20 @@ function readReportOutput(output) {
   const reason = output.finish && output.finish !== 'stop' ? 'incomplete' : undefined
   try {
     return { result: JSON.parse(text), reason: reason ?? (fenced && fenced[0] !== raw ? 'json' : undefined) }
-  } catch {
+  } catch (parseError) {
+    let repairInput = escapeReportQuotes(text)
     try {
-      const escaped = escapeReportQuotes(text)
-      return { result: JSON.parse(jsonrepair(escaped)), reason: reason ?? 'json' }
-    } catch {
-      throw reportError(reason ?? 'json')
+      repairInput = jsonrepair(repairInput)
+      return { result: JSON.parse(repairInput), reason: reason ?? 'json' }
+    } catch (repairError) {
+      const finish = ['stop', 'length', 'error', 'aborted', 'tool-calls'].includes(output.finish) ? output.finish : 'unknown'
+      throw Object.assign(reportError(reason ?? 'json'), {
+        diagnostic: {
+          finish, characters: output.rawReport.length,
+          parse: parserDiagnostic(parseError, text),
+          repair: parserDiagnostic(repairError, repairInput),
+        },
+      })
     }
   }
 }
@@ -227,7 +251,7 @@ export const stagedResearch = {
         return report
       } catch (error) {
         const reason = error.detail ?? (error.code === 'model-response' ? 'schema' : undefined)
-        await checkpoint('writing', { ...progress, phase: 'failed', reason, endedAt: Date.now() })
+        await checkpoint('writing', { ...progress, phase: 'failed', reason, diagnostic: error.diagnostic, endedAt: Date.now() })
         throw error
       }
     })

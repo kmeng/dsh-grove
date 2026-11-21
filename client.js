@@ -193,6 +193,7 @@ window.__ModuleLoader__.load({
       'writing.incomplete': '模型在完成输出前结束',
       'writing.empty': '模型没有返回报告正文',
       'writing.json': '模型返回的 JSON 无法解析',
+      'writing.diagnostic': '查看解析诊断',
       'writing.schema': '模型返回的报告缺少必需内容或章节结构有误',
       'writing.citations': '报告中的引用编号与已核查资料不匹配',
       'report.fileLabel': '研究报告：',
@@ -472,6 +473,7 @@ window.__ModuleLoader__.load({
       'writing.incomplete': 'The model stopped before finishing its output',
       'writing.empty': 'The model returned no report text',
       'writing.json': 'The model returned unparseable JSON',
+      'writing.diagnostic': 'View parsing diagnostics',
       'writing.schema': 'The report is incomplete or has an invalid section structure',
       'writing.citations': 'The citation numbers do not match the reviewed material',
       'report.fileLabel': 'Research report: ',
@@ -1285,7 +1287,10 @@ window.__ModuleLoader__.load({
           writing.model ? ' · ' + writing.model : '',
           elapsed ? ' · ' + T('writing.elapsed', { seconds: Math.max(0, Math.floor((elapsed - writing.startedAt) / 1000)) }) : ''),
         writing.reason ? h('p', { className: 'gr-meta', role: phase === 'failed' ? 'alert' : undefined },
-          phase === 'complete' ? T('writing.repaired') + ' · ' : '', T('writing.' + writing.reason)) : null)
+          phase === 'complete' ? T('writing.repaired') + ' · ' : '', T('writing.' + writing.reason)) : null,
+        writing.diagnostic ? h('details', null,
+          h('summary', null, T('writing.diagnostic')),
+          h('pre', { className: 'gr-code' }, JSON.stringify(writing.diagnostic, null, 2))) : null)
     }
 
     function ResearchProcess(props) {

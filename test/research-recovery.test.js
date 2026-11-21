@@ -168,3 +168,24 @@ test('an empty local report stops at writing and keeps the specific failure', as
   assert.equal(saved.at(-1).phase, 'failed')
   assert.equal(saved.at(-1).reason, 'empty')
 })
+
+test('persists structural JSON diagnostics without persisting report text', async () => {
+  const rawReport = '{"summary":"PRIVATE_WORD", : "value"}'
+  let writing
+  await assert.rejects(stagedResearch.run({
+    initial: {
+      input: { language: 'zh' }, plan: { topic: '报告', questions: ['问题'] },
+      collected: [valid], review: { followups: [] },
+      verified: { sources: [valid], claims: [{ text: '事实', explanation: '原文', sources: ['open'] }] },
+    },
+    model: {}, write: async () => ({ rawReport, finish: 'stop' }),
+    retrieve: () => assert.fail('already verified'),
+    checkpoint: async (key, value) => { if (key === 'writing') writing = value },
+  }), { code: 'model-response', detail: 'json' })
+  assert.equal(writing.diagnostic.characters, rawReport.length)
+  assert.equal(writing.diagnostic.finish, 'stop')
+  assert.equal(writing.diagnostic.parse.offset, 27)
+  assert.equal(writing.diagnostic.repair.offset, 27)
+  assert.match(writing.diagnostic.parse.shape, /│:/)
+  assert.doesNotMatch(JSON.stringify(writing), /PRIVATE_WORD|summary|value/)
+})
