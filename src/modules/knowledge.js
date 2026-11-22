@@ -38,8 +38,10 @@ export async function knowledgeDetail(store, id, version) {
   return { ...note, report, studyId: study?.id }
 }
 
+export function isKnowledgeType(type) { return knowledgeTypes.has(type) }
+
 export function isKnowledge({ meta }) {
-  return knowledgeTypes.has(meta.type) && meta.status !== 'archived'
+  return isKnowledgeType(meta.type) && meta.status !== 'archived'
 }
 
 export async function listKnowledge(store, query) {
