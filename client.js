@@ -2041,7 +2041,7 @@ window.__ModuleLoader__.load({
 
       useEffect(function () {
         var entry = opened.current
-        var panel = entry?.closest('.gr-work-preview')
+        var panel = entry?.closest('.gr-work-flow')
         if (!panel) return
         entry.open = true
         var delta = entry.getBoundingClientRect().top - panel.getBoundingClientRect().top
@@ -2110,6 +2110,7 @@ window.__ModuleLoader__.load({
       var [progress, setProgress] = useState(null)
       var [elapsed, setElapsed] = useState(0)
       var [pane, setPane] = useState('conversation')
+      var [tools, setTools] = useState('')
       var [error, setError] = useState(null)
       var [file, setFile] = useState(null)
       var [alt, setAlt] = useState('')
@@ -2261,14 +2262,43 @@ window.__ModuleLoader__.load({
               }),
               activity?.message ? h('div', { className: 'gr-conversation-user' },
                 h('p', { className: 'gr-prompt' }, activity.message)) : null,
-              !activity ? nextStep() : null),
+              !activity ? nextStep() : null,
+              tools === 'sources' ? h(WorkMaterials, { draft: draft, run: run, busy: busy, section: section }, function () { return null }) : null,
+              writing && tools === 'images' ? h('form', { className: 'gr-work-upload gr-stack', onSubmit: upload },
+              h('h3', { className: 'gr-h2' }, T('work.addImage')),
+              h('label', null, T('work.imagePlacement'), h('select', { value: slot, disabled: busy,
+                onChange: function (event) { setSlot(event.target.value) } },
+                h('option', { value: 'section' }, part?.heading), h('option', { value: 'cover' }, T('work.cover')))),
+              h('label', null, T('work.imageFile'), h('input', { ref: imageInput, type: 'file',
+                accept: 'image/png,image/jpeg,image/webp', disabled: busy,
+                onChange: function (event) { setFile(event.target.files[0] || null) } })),
+              h('label', null, T('work.alt'), h('input', { className: 'gr-input', value: alt, maxLength: 240, required: true,
+                disabled: busy, onChange: function (event) { setAlt(event.target.value) } })),
+              h('label', null, T('work.caption'), h('input', { className: 'gr-input', value: caption, maxLength: 500,
+                disabled: busy, onChange: function (event) { setCaption(event.target.value) } })),
+              h('div', { className: 'gr-row' },
+                h('button', { type: 'button', className: 'gr-btn gr-btn-ghost', disabled: busy, onClick: function () {
+                  run('visual', { section: slot === 'cover' ? null : section, language: T('work.send') === ZH['work.send'] ? 'zh' : 'en' })
+                } }, T('work.suggestImage')),
+                h('button', { className: 'gr-btn gr-btn-ghost', disabled: busy || !file || !alt.trim() }, T('work.addImage')),
+                currentImage ? h('button', { type: 'button', className: 'gr-btn gr-btn-ghost', disabled: busy,
+                  onClick: function () { run('remove-image', { section: slot === 'cover' ? null : section }) }
+                }, T('work.removeImage')) : null)) : null),
+
             activity && progress ? h('div', { className: 'gr-work-progress' },
               h('span', { className: 'gr-run-spinner', 'aria-hidden': true }),
               h('span', { role: 'status' }, progress === 'writing' && activity.heading
                 ? T('work.progress.section', { heading: activity.heading }) : T('work.progress.' + progress)),
               h('span', { className: 'gr-meta' }, T('work.progress.elapsed', { seconds: elapsed }))) : null,
             h('div', { className: 'gr-work-controls gr-stack' }, h('form', { className: 'gr-stack', onSubmit: send },
-              writing && part ? h('p', { className: 'gr-meta' }, T('work.activeSection'), ' ', part.heading) : null,
+              h('div', { className: 'gr-row' },
+                writing && part ? h('label', null, T('work.activeSection'), ' ', h('select', { value: section,
+                  disabled: busy || editingText !== null, onChange: function (event) { setSection(Number(event.target.value)) } },
+                  draft.sections.map(function (item, index) { return h('option', { key: item.id || item.heading, value: index }, item.heading) }))) : null,
+                h('button', { type: 'button', className: 'gr-btn gr-btn-ghost', 'aria-pressed': tools === 'sources',
+                  onClick: function () { setTools(tools === 'sources' ? '' : 'sources') } }, T('work.sources')),
+                writing ? h('button', { type: 'button', className: 'gr-btn gr-btn-ghost', 'aria-pressed': tools === 'images',
+                  onClick: function () { setTools(tools === 'images' ? '' : 'images') } }, T('work.addImage')) : null),
               h('textarea', { className: 'gr-textarea', value: message, maxLength: 6000, disabled: busy || editingText !== null,
                 placeholder: T('work.prompt.' + draft.stage), 'aria-label': T('work.direction'),
                 onChange: function (event) { setMessage(event.target.value) } }),
@@ -2291,48 +2321,18 @@ window.__ModuleLoader__.load({
                   h('button', { className: 'gr-btn', disabled: busy || !editingText.trim() }, T('work.saveSection')),
                   h('button', { type: 'button', className: 'gr-btn gr-btn-ghost', disabled: busy,
                     onClick: function () { setEditingText(null) } }, T('work.cancelEdit'))))) : null)),
-          h('section', { className: 'gr-card gr-stack gr-work-preview', tabIndex: 0, 'aria-label': T('work.preview') },
-            h('h2', { className: 'gr-h2' }, T('work.preview')),
-            draft.topic.audience ? h('p', { className: 'gr-meta' }, T('work.audience'), ' ', draft.topic.audience) : null,
-            draft.topic.thesis ? h('p', { className: 'gr-body' }, draft.topic.thesis) : null,
-            draft.coverVisual ? h('p', { className: 'gr-meta' }, T('work.visual'), ' ', draft.coverVisual) : null,
-            draft.cover ? h(WorkImage, draft.cover) : null,
-            h(WorkMaterials, { draft: draft, run: run, busy: busy }, function (view) {
-              return draft.sections.map(function (entry, index) {
-                var refs = entry.body ? entry.usedSources : entry.plannedSources
-                return h('section', { key: entry.heading, className: 'gr-work-section gr-stack' },
-                writing ? h('button', { className: 'gr-btn gr-btn-ghost gr-work-section-button', type: 'button',
-                  disabled: busy || editingText !== null, 'aria-pressed': index === section, onClick: function () { setSection(index) }
-                }, entry.heading) : h('h3', null, entry.heading),
-                h('p', { className: 'gr-meta' }, entry.point),
-                entry.visual ? h('p', { className: 'gr-meta' }, T('work.visual'), ' ', entry.visual) : null,
-                entry.body ? h(ReportMarkdown, { body: entry.body, workImages: true }) : null,
-                refs?.length ? h(React.Fragment, null,
-                  h('p', { className: 'gr-meta' }, T(entry.body ? 'work.usedSources' : 'work.plannedSources')),
-                  h(WorkSourceList, { sources: refs, onRead: view })) : null,
-                entry.image ? h(WorkImage, entry.image) : null)
-              })
-            }),
-            writing ? h('form', { className: 'gr-work-upload gr-stack', onSubmit: upload },
-              h('h3', { className: 'gr-h2' }, T('work.addImage')),
-              h('label', null, T('work.imagePlacement'), h('select', { value: slot, disabled: busy,
-                onChange: function (event) { setSlot(event.target.value) } },
-                h('option', { value: 'section' }, part?.heading), h('option', { value: 'cover' }, T('work.cover')))),
-              h('label', null, T('work.imageFile'), h('input', { ref: imageInput, type: 'file',
-                accept: 'image/png,image/jpeg,image/webp', disabled: busy,
-                onChange: function (event) { setFile(event.target.files[0] || null) } })),
-              h('label', null, T('work.alt'), h('input', { className: 'gr-input', value: alt, maxLength: 240, required: true,
-                disabled: busy, onChange: function (event) { setAlt(event.target.value) } })),
-              h('label', null, T('work.caption'), h('input', { className: 'gr-input', value: caption, maxLength: 500,
-                disabled: busy, onChange: function (event) { setCaption(event.target.value) } })),
-              h('div', { className: 'gr-row' },
-                h('button', { type: 'button', className: 'gr-btn gr-btn-ghost', disabled: busy, onClick: function () {
-                  run('visual', { section: slot === 'cover' ? null : section, language: T('work.send') === ZH['work.send'] ? 'zh' : 'en' })
-                } }, T('work.suggestImage')),
-                h('button', { className: 'gr-btn gr-btn-ghost', disabled: busy || !file || !alt.trim() }, T('work.addImage')),
-                currentImage ? h('button', { type: 'button', className: 'gr-btn gr-btn-ghost', disabled: busy,
-                  onClick: function () { run('remove-image', { section: slot === 'cover' ? null : section }) }
-                }, T('work.removeImage')) : null)) : null)))
+          h('section', { className: 'gr-card gr-work-preview', 'aria-label': T('work.preview') },
+            h('h2', { className: 'gr-h2 gr-work-preview-title' }, T('work.preview')),
+            h('div', { className: 'gr-work-preview-scroll gr-stack', tabIndex: 0 },
+              draft.topic.title ? h('h3', null, draft.topic.title) : null,
+              draft.cover ? h(WorkImage, draft.cover) : null,
+              draft.sections.map(function (entry, index) {
+                return h('section', { key: entry.id || entry.heading, className: 'gr-work-section gr-stack',
+                  'data-current': writing && index === section },
+                  h('h3', null, entry.heading),
+                  entry.body ? h(ReportMarkdown, { body: entry.body, workImages: true }) : h('p', { className: 'gr-meta' }, entry.point),
+                  entry.image ? h(WorkImage, entry.image) : null)
+              })))))
     }
 
     function WorkPage(props) {
@@ -2688,10 +2688,9 @@ window.__ModuleLoader__.load({
       '.gr-work-composer>.gr-work-tabs{display:none}.gr-work-tabs [aria-pressed=true]{background:var(--gr-line)}',
       '.gr-work-layout{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);grid-template-rows:minmax(0,1fr);gap:16px}',
       '.gr-work-chat{display:flex;flex-direction:column;min-width:0;min-height:0;gap:8px}',
-      '.gr-work-flow,.gr-work-preview{min-height:0;overflow:auto;overscroll-behavior:contain}',
+      '.gr-work-flow,.gr-work-preview-scroll{min-height:0;overflow:auto;overscroll-behavior:contain}',
       '.gr-work-flow{flex:1 1 auto;padding:14px;border:1px solid var(--gr-line);border-radius:10px}',
-      '.gr-work-layout>.gr-work-preview{display:block}',
-      '.gr-work-layout>.gr-work-preview>*+*{margin-block-start:12px}',
+      '.gr-work-layout>.gr-work-preview{min-height:0;overflow:hidden}.gr-work-preview-title{flex:none}.gr-work-preview-scroll{flex:1}.gr-work-section[data-current=true]{border-top-color:var(--gr-link)}',
       '.gr-work-controls{flex:none;max-height:45%;overflow:auto;overscroll-behavior:contain}',
       '.gr-work-controls .gr-textarea{min-height:64px;max-height:120px}',
       '.gr-work-progress{display:flex;flex:none;align-items:center;gap:8px;padding-inline:6px}',
