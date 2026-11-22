@@ -26,7 +26,8 @@
 
 ## 发布
 
-- [ ] 版本号按语义化升位，`package.json` 与 `package-lock.json` 一致
+- [ ] 当前发布线是 `0.6.x`。从 `0.6.9` 继续使用 `0.6.10`、`0.6.11` 等补丁号，收到维护者明确指示后才切换到 `0.7.0`。
+- [ ] `package.json` 与 `package-lock.json` 一致。
 - [ ] `npm pack --dry-run` 清单符合预期（含 `icon.svg`、`locale/*`、`docs/DETAIL.*`、`src/*`、`cordis.patch.yml`；不含 `test/`、`brand/`）
 - [ ] 在临时 profile 里装一次、看到 `grove` 行、再删掉
 - [ ] 发布后核对 registry 上的版本与 tarball 内容
