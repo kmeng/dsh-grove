@@ -256,11 +256,11 @@ test('knowledge expands the report inline, filters by tag, and resumes the origi
   loadModule().factory(requireStub).apply(ctx)
   const page = registrations.find(item => item.name === 'main').component
   const knowledge = activeView(page()).children[0]
-  const note = { id: 'note', version: 1, title: '储能方案' }
+  const note = { id: 'note', version: 1, title: 'AI 时代以用户为中心的设计' }
   const other = { id: 'other', version: 1, title: '市场分析' }
   const detail = { meta: note, body: '摘录', studyId: 'original-study',
     report: { meta: { version: 2 }, body: '含参考资料的完整报告' } }
-  const state = [[{ meta: note, tags: ['储能'], related: [other], summary: '储能摘要' },
+  const state = [[{ meta: note, tags: ['以用户为中心的设计', 'UCD'], related: [other], summary: '以用户为中心的设计（UCD）' },
     { meta: other, tags: ['市场'], related: [], summary: '市场摘要' }], '', detail]
   let navigation
   const props = { ...knowledge.props, onNavigate: (...args) => { navigation = args } }
@@ -284,7 +284,15 @@ test('knowledge expands the report inline, filters by tag, and resumes the origi
   assert.ok(!buttons.some(node => ['新建知识', '编辑', '查看依据', '带着这条知识深挖'].some(label => node.children.includes(label))))
   buttons.find(node => node.children.includes('继续研究')).props.onClick()
   assert.deepEqual(navigation, ['research', { resume: 'original-study' }])
-  tree.find(node => node?.type === 'select').props.onChange({ target: { value: '市场' } })
+  const filter = tree.find(node => node?.type === 'select')
+  for (const tag of ['UCD', '以用户为中心的设计']) {
+    assert.ok(buttons.some(node => node.props['aria-pressed'] === false && node.children.includes(tag)))
+    filter.props.onChange({ target: { value: tag } })
+    const matching = collect(render())
+    assert.ok(matching.includes(note.title))
+    assert.ok(!matching.some(node => node?.type === 'article' && node.props.key === other.id))
+  }
+  filter.props.onChange({ target: { value: '市场' } })
   const filtered = collect(render())
   assert.ok(filtered.includes(other.title))
   assert.ok(!filtered.includes(note.title))
