@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto'
 import { workDraftStore } from '../adapters/storage/obsidian/research-runs.js'
 import { saveWorkImage } from '../adapters/storage/obsidian/work-images.js'
 import { findWorkKnowledge, readWorkSource, sameSource, sourceRef, suggestWorkSources, workSourceLimit, workSources } from './work-sources.js'
+import { startResearch } from './research.js'
 import { readWork, saveWork } from './works.js'
 
 const pending = new Map()
@@ -159,6 +160,13 @@ export async function workDrafts(vault, input, resolveModel, generateImage = asy
     if (draft.finalizing && input.action !== 'draft-finish') invalid('The article is being saved', 'work-conflict')
     if (input.revision !== draft.revision && !(draft.finalizing && input.action === 'draft-finish')) invalid('The draft changed, reopen it before continuing', 'work-conflict')
     switch (input.action) {
+      case 'draft-research': {
+        if (draft.stage !== 'writing') invalid('Confirm an outline before researching a section')
+        const section = sectionAt(draft, input.section)
+        const direction = text(section.heading + ' — ' + section.point, 300)
+        const study = await startResearch(vault, direction, '', [], { draftId: draft.id, sectionId: section.id })
+        return { study: study.meta.id, direction }
+      }
       case 'draft-ask':
         await ask(vault, draft, input, resolveModel, progress)
         break
@@ -175,11 +183,15 @@ export async function workDrafts(vault, input, resolveModel, generateImage = asy
       case 'draft-source-add': {
         const picked = sourceRef(await readWorkSource(vault, input.ref))
         const section = input.section ? sectionAt(draft, input.section) : null
-        const refs = (section?.sources ?? workSources(draft)).filter(ref => ref.id !== picked.id)
+        const selected = section?.sources ?? workSources(draft)
+        if ((!section || section.sources) && selected.some(ref => sameSource(ref, picked))) return draft
+        const refs = selected.filter(ref => ref.id !== picked.id)
         if (refs.length >= workSourceLimit) invalid('Choose up to five sources')
         if (section) section.sources = [...refs, picked]
-        else draft.sources = [...refs, picked]
-        draft.sourcesAdjusted = true
+        else {
+          draft.sources = [...refs, picked]
+          draft.sourcesAdjusted = true
+        }
         break
       }
       case 'draft-source-remove': {

@@ -1,7 +1,7 @@
-export async function startResearch(store, question, body, origin) {
+export async function startResearch(store, question, body, origin, workOrigin) {
   const origins = Array.isArray(origin) ? origin : origin ? [origin] : []
   const entry = await store.create({ type: 'question', title: question, body: question })
-  return store.create({ type: 'research', title: entry.meta.title, body, question: entry.meta.id, links: origins.map(ref => ({ kind: 'derived', id: ref.id, version: ref.version, excerpt: ref.excerpt })) })
+  return store.create({ type: 'research', title: entry.meta.title, body, question: entry.meta.id, workOrigin, links: origins.map(ref => ({ kind: 'derived', id: ref.id, version: ref.version, excerpt: ref.excerpt })) })
 }
 
 export async function listResearch(store) {

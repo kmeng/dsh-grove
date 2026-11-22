@@ -1099,3 +1099,53 @@ test('work drafts find related knowledge, allow changes, and trace the exact use
   assert.equal(draft.sources.length, 2)
   assert.equal(draft.sections[0].body, '已写好的小节。')
 })
+
+test('a confirmed report returns to its persisted work section and adds only its exact version', async t => {
+  const path = await fixture(t)
+  const { workDraftStore } = await import('../src/adapters/storage/obsidian/research-runs.js')
+  const { randomUUID } = await import('node:crypto')
+  const vault = new Vault(path)
+  const records = workDraftStore(vault)
+  const id = randomUUID()
+  const sectionId = randomUUID()
+  const original = { schema: 1, id, revision: 0, stage: 'writing', topic: { title: '街道观察', thesis: '对比早晚' },
+    sections: [
+      { id: randomUUID(), heading: '第一节', point: '上午', body: '保留我的第一节', confirmed: true, usedSources: [] },
+      { id: sectionId, heading: '第二节', point: '傍晚', body: '保留我的第二节', confirmed: true, usedSources: [] },
+    ], discussions: {}, modified: new Date().toISOString() }
+  await records.write(original)
+  function service() {
+    const { ctx, registered } = host()
+    registerRoutes(ctx, { current: () => ({ path }) })
+    return (route, input) => registered.get(route).fetch(request(route, input))
+  }
+  let call = service()
+  const json = async (route, input, status = 200) => {
+    const response = await call(route, input)
+    assert.equal(response.status, status)
+    return response.json()
+  }
+  const start = await json(routes.works, { action: 'draft-research', id, section: sectionId, revision: 0 })
+  assert.deepEqual(await records.read(id), original)
+  const study = await vault.get(start.study)
+  assert.deepEqual(study.meta.workOrigin, { draftId: id, sectionId })
+  const report = await vault.create({ type: 'report', body: '待确认', review: 'draft',
+    links: [{ kind: 'related', id: study.meta.id, version: study.meta.version }] })
+  await json(routes.reports, { action: 'adopt-work', id: report.meta.id, version: 1 }, 400)
+  const second = await json(routes.reports, { action: 'confirm', research: start.study, id: report.meta.id, version: 1, body: '核查材料 B' })
+  const third = await json(routes.reports, { action: 'confirm', research: start.study, id: report.meta.id, version: 2, body: '后续修订 C' })
+  assert.equal(third.meta.version, 3)
+  call = service()
+  const detail = await json(routes.reports, { action: 'read', id: report.meta.id, version: 2 })
+  assert.deepEqual(detail.workOrigin, { draftId: id, sectionId })
+  const adopt = { action: 'adopt-work', id: report.meta.id, version: second.meta.version }
+  assert.deepEqual(await json(routes.reports, adopt), { draftId: id, sectionId })
+  const adopted = await json(routes.works, { action: 'draft-read', id })
+  assert.equal(adopted.sections[1].sources[0].version, 2)
+  assert.equal(adopted.sections[1].sources[0].id, report.meta.id)
+  assert.deepEqual({ ...adopted, modified: original.modified, revision: 0,
+    sections: [adopted.sections[0], { ...adopted.sections[1], sources: undefined }] },
+  { ...original, sections: [original.sections[0], { ...original.sections[1], sources: undefined }] })
+  await json(routes.reports, adopt)
+  assert.deepEqual(await records.read(id), adopted)
+})
