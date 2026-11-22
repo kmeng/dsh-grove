@@ -24,6 +24,7 @@ window.__ModuleLoader__.load({
     var CAPTURE = '/api/grove/capture'
     var KNOWLEDGE = '/api/grove/knowledge'
     var WORKS = '/api/grove/works'
+    var WORK_IMAGE = '/api/grove/work-image'
     var MODEL = '/api/grove/model'
     var MODEL_UPDATE = '/api/grove/model/settings'
     var FINDINGS = '/api/grove/findings'
@@ -208,6 +209,41 @@ window.__ModuleLoader__.load({
       'asset.title': '标题',
       'asset.body': '正文',
       'asset.newWork': '新建作品',
+      'work.phase.topic': '主题',
+      'work.phase.outline': '提纲',
+      'work.phase.writing': '逐节写作',
+      'work.back': '返回作品',
+      'work.conversation': '创作对话',
+      'work.preview': '文章预览',
+      'work.startHint': '先说说你想写什么、写给谁，以及希望读者带走什么。',
+      'work.prompt.topic': '讨论文章主题与核心判断…',
+      'work.prompt.outline': '讨论章节顺序、各节的核心观点和可用材料…',
+      'work.prompt.writing': '给当前小节补充观点、例子或修改意见…',
+      'work.direction': '写作方向',
+      'work.send': '发送',
+      'work.editSection': '自己写本节',
+      'work.saveSection': '保存本节',
+      'work.cancelEdit': '取消修改',
+      'work.working': '正在准备回复…',
+      'work.confirmTopic': '确认主题',
+      'work.confirmOutline': '确认提纲',
+      'work.reviseOutline': '修改提纲',
+      'work.finish': '保存为作品',
+      'work.audience': '读者',
+      'work.activeSection': '当前小节',
+      'work.visual': '配图建议',
+      'work.suggestImage': '生成配图提示词',
+      'work.addImage': '添加图片',
+      'work.imagePlacement': '放置位置',
+      'work.cover': '封面',
+      'work.imageFile': '图片文件（PNG、JPEG、WebP，最大 4 MiB）',
+      'work.alt': '替代文字',
+      'work.caption': '图注',
+      'work.removeImage': '移除图片',
+      'work.drafts': '创作草稿',
+      'work.savedWorks': '已保存作品',
+      'work.untitled': '未命名作品',
+      'work.empty': '还没有保存的作品。',
       'asset.backKnowledge': '返回知识笔记',
       'asset.save': '保存',
       'asset.basis': '查看依据',
@@ -488,6 +524,41 @@ window.__ModuleLoader__.load({
       'asset.title': 'Title',
       'asset.body': 'Body',
       'asset.newWork': 'New work',
+      'work.phase.topic': 'Topic',
+      'work.phase.outline': 'Outline',
+      'work.phase.writing': 'Writing',
+      'work.back': 'Back to works',
+      'work.conversation': 'Writing conversation',
+      'work.preview': 'Article preview',
+      'work.startHint': 'Start with what you want to write, who it is for, and what readers should take away.',
+      'work.prompt.topic': 'Discuss the topic and central idea…',
+      'work.prompt.outline': 'Discuss the order, main point and material for each section…',
+      'work.prompt.writing': 'Give this section an example, point, or revision…',
+      'work.direction': 'Writing direction',
+      'work.send': 'Send',
+      'work.editSection': 'Write this section',
+      'work.saveSection': 'Save section',
+      'work.cancelEdit': 'Cancel editing',
+      'work.working': 'Preparing a reply…',
+      'work.confirmTopic': 'Confirm topic',
+      'work.confirmOutline': 'Confirm outline',
+      'work.reviseOutline': 'Revise outline',
+      'work.finish': 'Save as work',
+      'work.audience': 'Audience',
+      'work.activeSection': 'Current section',
+      'work.visual': 'Image suggestion',
+      'work.suggestImage': 'Suggest an image prompt',
+      'work.addImage': 'Add image',
+      'work.imagePlacement': 'Placement',
+      'work.cover': 'Cover',
+      'work.imageFile': 'Image file (PNG, JPEG, WebP, up to 4 MiB)',
+      'work.alt': 'Alt text',
+      'work.caption': 'Caption',
+      'work.removeImage': 'Remove image',
+      'work.drafts': 'Writing drafts',
+      'work.savedWorks': 'Saved works',
+      'work.untitled': 'Untitled work',
+      'work.empty': 'No saved works yet.',
       'asset.backKnowledge': 'Back to knowledge note',
       'asset.save': 'Save',
       'asset.basis': 'View basis',
@@ -872,7 +943,7 @@ window.__ModuleLoader__.load({
 
       var navigation = [['home', 'home'], ['ideas', 'ideas'], ['research', 'research'],
         ['knowledge', 'knowledge'], ['works', 'works'], ['settings', 'settings']]
-      var currentNav = settingsOpen ? 'settings' : page === 'idea' ? 'ideas' : page === 'report' ? 'research' : page
+      var currentNav = settingsOpen ? 'settings' : page === 'idea' ? 'ideas' : page === 'report' ? 'research' : page === 'compose' ? 'works' : page
       var connectView = h(Connect, {
         busy: busy, manual: manual, error: error, pathDraft: pathDraft,
         stale: !changing && status && status.configured && !status.usable ? status.vault : null,
@@ -902,6 +973,8 @@ window.__ModuleLoader__.load({
                   } })
                   : page === 'idea'
                     ? h(InspirationPage, { key: vault + ':' + seed.id + ':' + seed.version, reference: seed, onNavigate: navigate, reportRevision: reportRevision, modelConfig: modelConfig, onSettings: openSettings })
+                  : page === 'compose'
+                    ? h(WorkComposer, { key: seed?.draftId || seed?.basis?.id || 'new', seed: seed, onNavigate: navigate })
                   : page === 'knowledge' || page === 'works'
                     ? h(page === 'knowledge' ? KnowledgePage : WorkPage, { key: page, seed: seed, onNavigate: navigate })
                     : h(InspirationHome, {
@@ -1157,6 +1230,10 @@ window.__ModuleLoader__.load({
       }
 
       return h('div', { className: 'gr-markdown gr-stack' }, props.body.split(/\n\s*\n/).map(function (block, index) {
+        if (props.workImages) {
+          var image = /^!\[([^\]\n]*)\]\((work-media\/[a-f0-9]{64}\.(?:png|jpg|webp))\)(?:\n([^\n]+))?$/.exec(block)
+          if (image) return h(WorkImage, { key: index, path: image[2], alt: image[1], caption: image[3] })
+        }
         var lines = block.split('\n')
         var heading = /^(#{1,6}) (.+)$/.exec(block)
         if (heading) return h('h' + Math.min(6, heading[1].length + 2), { key: index }, inline(heading[2]))
@@ -1567,11 +1644,11 @@ window.__ModuleLoader__.load({
         h('p', { role: 'status' }, done ? T('parsers.done') : '')))
     }
 
-    async function readSourceFile(file) {
-      if (file.size > 500000) throw new Error(T('err.too-large'))
+    async function readSourceFile(file, limit) {
+      if (file.size > (limit || 500000)) throw new Error(T('err.too-large'))
       var bytes = new Uint8Array(await file.arrayBuffer())
       var binary = ''
-      for (var i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
+      for (var i = 0; i < bytes.length; i += 16384) binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 16384))
       return btoa(binary)
     }
 
@@ -1766,7 +1843,7 @@ window.__ModuleLoader__.load({
               props.onNavigate('knowledge', { read: kept, returnTo: reportReturn() })
             } }, T('asset.openKnowledge')) : null,
             h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () {
-              props.onNavigate('works', { title: report.meta.title, body: report.body,
+              props.onNavigate('compose', { title: report.meta.title,
                 basis: { id: report.meta.id, version: report.meta.version }, returnTo: reportReturn() })
             } }, T('asset.compose'))) : null,
           report && !editing && studyId ? h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () {
@@ -1838,7 +1915,7 @@ window.__ModuleLoader__.load({
               props.onNavigate('research', { resume: detail.studyId })
             } }, T('idea.continueStudy')) : null,
             h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () {
-              props.onNavigate('works', { title: detail.meta.title, body: detail.body, basis: ref,
+              props.onNavigate('compose', { title: detail.meta.title, basis: ref,
                 returnTo: { page: 'knowledge', seed: { read: ref, returnTo: returnTo }, label: 'asset.backKnowledge' } })
             } }, T('asset.compose'))),
           detail.meta.version === entry.meta.version && entry.related.length ? h('section', { className: 'gr-stack' },
@@ -1880,12 +1957,195 @@ window.__ModuleLoader__.load({
         })))
     }
 
+    function WorkImage(props) {
+      return h('figure', { className: 'gr-work-image' },
+        h('img', { src: WORK_IMAGE + '?file=' + encodeURIComponent(props.path.split('/').at(-1)), alt: props.alt, loading: 'lazy' }),
+        props.caption ? h('figcaption', null, props.caption) : null)
+    }
+
+    function WorkComposer(props) {
+      var [draft, setDraft] = useState(null)
+      var [message, setMessage] = useState('')
+      var [section, setSection] = useState(0)
+      var [editingText, setEditingText] = useState(null)
+      var [slot, setSlot] = useState('section')
+      var [busy, setBusy] = useState(true)
+      var [error, setError] = useState(null)
+      var [file, setFile] = useState(null)
+      var [alt, setAlt] = useState('')
+      var [caption, setCaption] = useState('')
+      var imageInput = useRef(null)
+      var initial = useRef(null)
+      var flow = useRef(null)
+
+      function load() {
+        var seed = props.seed
+        return api(WORKS, seed?.draftId
+          ? { action: 'draft-read', id: seed.draftId }
+          : { action: 'draft-start', title: seed?.title, basis: seed?.basis })
+      }
+
+      useEffect(function () {
+        var active = true
+        initial.current ??= load()
+        initial.current.then(function (result) {
+          if (active) { setDraft(result); setBusy(false) }
+        }, function (problem) {
+          if (active) { setError(problem); setBusy(false) }
+        })
+        return function () { active = false }
+      }, [])
+
+      useEffect(function () {
+        if (flow.current) flow.current.scrollTop = flow.current.scrollHeight
+      }, [draft?.turns.length, busy])
+
+      async function run(action, fields) {
+        if (!draft || busy) return false
+        setBusy(true)
+        setError(null)
+        try {
+          var extra = typeof fields === 'function' ? await fields() : fields
+          var result = await api(WORKS, { action: 'draft-' + action, id: draft.id, revision: draft.revision, ...extra })
+          if (result.work) props.onNavigate('works', { read: result.work })
+          else {
+            setDraft(result)
+            setSection(Math.min(section, Math.max(0, result.sections.length - 1)))
+          }
+          return true
+        } catch (problem) {
+          setError(problem)
+          return false
+        } finally {
+          setBusy(false)
+        }
+      }
+
+      function send(event) {
+        event.preventDefault()
+        if (!message.trim()) return
+        var language = /\p{Script=Han}/u.test(message) || T('work.send') === ZH['work.send'] ? 'zh' : 'en'
+        run('ask', { message: message, section: section, language: language })
+          .then(function (saved) { if (saved) setMessage('') })
+      }
+
+      function upload(event) {
+        event.preventDefault()
+        if (!file || !alt.trim()) return
+        run('image', async function () {
+          return { section: slot === 'cover' ? null : section,
+            bytes: await readSourceFile(file, 4 * 1024 * 1024), alt: alt, caption: caption }
+        }).then(function (saved) {
+          if (saved) {
+            setFile(null); setAlt(''); setCaption('')
+            if (imageInput.current) imageInput.current.value = ''
+          }
+        })
+      }
+
+      var part = draft?.sections[section]
+      var writing = draft?.stage === 'writing'
+      var canFinish = writing && draft.sections.length > 0 && draft.sections.every(function (entry) { return !!entry.body })
+      var currentImage = slot === 'cover' ? draft?.cover : part?.image
+      var phase = draft ? T('work.phase.' + draft.stage) : T('loading')
+      return h('section', { className: 'gr-work-composer gr-stack' },
+        h('div', { className: 'gr-row gr-work-header' },
+          h('button', { className: 'gr-btn gr-origin-link', onClick: function () { props.onNavigate('works') } }, '← ', T('work.back')),
+          h('h1', { className: 'gr-preview-title' }, draft?.topic.title || T('asset.newWork')),
+          draft ? h('span', { className: 'gr-meta' }, phase) : null),
+        props.seed?.returnTo ? h('button', { className: 'gr-btn gr-origin-link', onClick: function () {
+          props.onNavigate(props.seed.returnTo.page, props.seed.returnTo.seed)
+        } }, T(props.seed.returnTo.label)) : null,
+        error ? h('p', { role: 'alert' }, messageOf(error)) : null,
+        !draft ? (busy ? h('p', { role: 'status' }, T('loading')) :
+          h('button', { className: 'gr-btn', onClick: async function () {
+            setBusy(true)
+            setError(null)
+            try { setDraft(await load()) } catch (problem) { setError(problem) } finally { setBusy(false) }
+          } }, T('err.retry'))) : h('div', { className: 'gr-work-layout' },
+          h('section', { className: 'gr-stack', 'aria-label': T('work.conversation') },
+            h('div', { className: 'gr-work-flow gr-stack', role: 'log', ref: flow, 'aria-label': T('work.conversation') },
+              !draft.turns.length ? h('p', { className: 'gr-body' }, T('work.startHint')) : null,
+              draft.turns.map(function (turn, index) {
+                return h('div', { key: index, className: turn.role === 'user' ? 'gr-conversation-user' : 'gr-conversation-response' },
+                  turn.role === 'user' ? h('p', { className: 'gr-prompt' }, turn.body) : h(ReportMarkdown, { body: turn.body }))
+              }),
+              busy ? h('p', { role: 'status' }, T('work.working')) : null),
+            h('form', { className: 'gr-stack', onSubmit: send },
+              writing && part ? h('p', { className: 'gr-meta' }, T('work.activeSection'), ' ', part.heading) : null,
+              h('textarea', { className: 'gr-textarea', value: message, maxLength: 6000, disabled: busy || editingText !== null,
+                placeholder: T('work.prompt.' + draft.stage), 'aria-label': T('work.direction'),
+                onChange: function (event) { setMessage(event.target.value) } }),
+              h('div', { className: 'gr-row' },
+                h('button', { className: 'gr-btn', disabled: busy || editingText !== null || !message.trim() }, T('work.send')),
+                draft.stage === 'topic' && draft.topic.title && draft.topic.thesis
+                  ? h('button', { type: 'button', className: 'gr-btn gr-btn-ghost', disabled: busy,
+                    onClick: function () { run('confirm-topic') } }, T('work.confirmTopic')) : null,
+                draft.stage === 'outline' && draft.sections.length
+                  ? h('button', { type: 'button', className: 'gr-btn gr-btn-ghost', disabled: busy,
+                    onClick: function () { run('confirm-outline') } }, T('work.confirmOutline')) : null,
+                writing ? h('button', { type: 'button', className: 'gr-btn gr-btn-ghost', disabled: busy || editingText !== null,
+                  onClick: function () { run('revise-outline') } }, T('work.reviseOutline')) : null,
+                writing ? h('button', { type: 'button', className: 'gr-btn gr-btn-ghost', disabled: busy || editingText !== null || !canFinish,
+                  onClick: function () { run('finish') } }, T('work.finish')) : null)),
+            writing && part ? h('form', { className: 'gr-stack', onSubmit: function (event) {
+              event.preventDefault()
+              run('section', { section: section, body: editingText }).then(function (saved) { if (saved) setEditingText(null) })
+            } }, editingText === null ?
+              h('button', { type: 'button', className: 'gr-btn gr-btn-ghost', disabled: busy,
+                onClick: function () { setEditingText(part.body) } }, T('work.editSection')) :
+              h(React.Fragment, null,
+                h('textarea', { className: 'gr-textarea', value: editingText, maxLength: 12000, disabled: busy,
+                  'aria-label': part.heading, onChange: function (event) { setEditingText(event.target.value) } }),
+                h('div', { className: 'gr-row' },
+                  h('button', { className: 'gr-btn', disabled: busy || !editingText.trim() }, T('work.saveSection')),
+                  h('button', { type: 'button', className: 'gr-btn gr-btn-ghost', disabled: busy,
+                    onClick: function () { setEditingText(null) } }, T('work.cancelEdit'))))) : null),
+          h('section', { className: 'gr-card gr-stack', 'aria-label': T('work.preview') },
+            h('h2', { className: 'gr-h2' }, T('work.preview')),
+            draft.basis?.title ? h('p', { className: 'gr-meta' }, T('asset.basis'), ' · ', draft.basis.title, ' · v', draft.basis.version) : null,
+            draft.topic.audience ? h('p', { className: 'gr-meta' }, T('work.audience'), ' ', draft.topic.audience) : null,
+            draft.topic.thesis ? h('p', { className: 'gr-body' }, draft.topic.thesis) : null,
+            draft.coverVisual ? h('p', { className: 'gr-meta' }, T('work.visual'), ' ', draft.coverVisual) : null,
+            draft.cover ? h(WorkImage, draft.cover) : null,
+            draft.sections.map(function (entry, index) {
+              return h('section', { key: entry.heading, className: 'gr-work-section gr-stack' },
+                writing ? h('button', { className: 'gr-btn gr-btn-ghost gr-work-section-button', type: 'button',
+                  disabled: busy || editingText !== null, 'aria-pressed': index === section, onClick: function () { setSection(index) }
+                }, entry.heading) : h('h3', null, entry.heading),
+                h('p', { className: 'gr-meta' }, entry.point),
+                entry.visual ? h('p', { className: 'gr-meta' }, T('work.visual'), ' ', entry.visual) : null,
+                entry.body ? h(ReportMarkdown, { body: entry.body, workImages: true }) : null,
+                entry.image ? h(WorkImage, entry.image) : null)
+            }),
+            writing ? h('form', { className: 'gr-work-upload gr-stack', onSubmit: upload },
+              h('h3', { className: 'gr-h2' }, T('work.addImage')),
+              h('label', null, T('work.imagePlacement'), h('select', { value: slot, disabled: busy,
+                onChange: function (event) { setSlot(event.target.value) } },
+                h('option', { value: 'section' }, part?.heading), h('option', { value: 'cover' }, T('work.cover')))),
+              h('label', null, T('work.imageFile'), h('input', { ref: imageInput, type: 'file',
+                accept: 'image/png,image/jpeg,image/webp', disabled: busy,
+                onChange: function (event) { setFile(event.target.files[0] || null) } })),
+              h('label', null, T('work.alt'), h('input', { className: 'gr-input', value: alt, maxLength: 240, required: true,
+                disabled: busy, onChange: function (event) { setAlt(event.target.value) } })),
+              h('label', null, T('work.caption'), h('input', { className: 'gr-input', value: caption, maxLength: 500,
+                disabled: busy, onChange: function (event) { setCaption(event.target.value) } })),
+              h('div', { className: 'gr-row' },
+                h('button', { type: 'button', className: 'gr-btn gr-btn-ghost', disabled: busy, onClick: function () {
+                  run('visual', { section: slot === 'cover' ? null : section, language: T('work.send') === ZH['work.send'] ? 'zh' : 'en' })
+                } }, T('work.suggestImage')),
+                h('button', { className: 'gr-btn gr-btn-ghost', disabled: busy || !file || !alt.trim() }, T('work.addImage')),
+                currentImage ? h('button', { type: 'button', className: 'gr-btn gr-btn-ghost', disabled: busy,
+                  onClick: function () { run('remove-image', { section: slot === 'cover' ? null : section }) }
+                }, T('work.removeImage')) : null)) : null)))
+    }
+
     function WorkPage(props) {
       var [items, setItems] = useState([])
       var [selected, setSelected] = useState(null)
-      var [draft, setDraft] = useState(props.seed)
-      var [title, setTitle] = useState(props.seed?.title || '')
-      var [body, setBody] = useState(props.seed?.body || '')
+      var [drafts, setDrafts] = useState([])
+      var [draft, setDraft] = useState(null)
+      var [body, setBody] = useState('')
       var [basis, setBasis] = useState(null)
       var [busy, setBusy] = useState(false)
       var [error, setError] = useState(null)
@@ -1894,8 +2154,9 @@ window.__ModuleLoader__.load({
       function list() { return api(WORKS, { action: 'list' }).then(function (result) { setItems(result.items) }) }
       useEffect(function () {
         list().catch(setError)
+        api(WORKS, { action: 'draft-list' }).then(function (data) { setDrafts(data.drafts) }, setError)
         if (props.seed?.read) run(function () { return read(props.seed.read.id, props.seed.read.version) })
-      }, [])
+      }, [props.seed])
 
       async function run(operation) {
         setBusy(true)
@@ -1910,24 +2171,14 @@ window.__ModuleLoader__.load({
         var entry = await api(WORKS, { action: 'read', id: id, version: version })
         setSelected(entry)
         setDraft(null)
-        setTitle(entry.meta.title)
         setBody(entry.body)
-        setBasis(null)
-      }
-
-      function start() {
-        setSelected(null)
-        setDraft({})
-        setTitle('')
-        setBody('')
         setBasis(null)
       }
 
       function save(event) {
         event.preventDefault()
         run(async function () {
-          var input = { action: 'save', body: body, title: title, basis: draft?.basis }
-          if (selected) { input.id = selected.meta.id; input.version = selected.meta.version }
+          var input = { action: 'save', body: body, id: selected.meta.id, version: selected.meta.version }
           var entry = await api(WORKS, input)
           await read(entry.meta.id, entry.meta.version)
           await list()
@@ -1952,17 +2203,31 @@ window.__ModuleLoader__.load({
           h('button', { className: 'gr-btn gr-origin-link', onClick: function () {
             props.onNavigate(returnTo.page, returnTo.seed)
           } }, '← ', T(returnTo.label))) : null,
-        h(PageHeading, { title: 'asset.works', busy: busy, onAction: start,
+        h(PageHeading, { title: 'asset.works', busy: busy, onAction: function () { props.onNavigate('compose') },
           action: 'asset.newWork' }),
         error ? h('p', { role: 'alert' }, messageOf(error)) : null,
         message ? h('p', { role: 'status' }, message) : null,
-        items.length ? h('div', { className: 'gr-stack' }, items.map(function (entry) {
-          return h('button', { key: entry.meta.id, className: 'gr-btn gr-btn-ghost', disabled: busy,
-            onClick: function () { run(function () { return read(entry.meta.id, entry.meta.version) }) } }, entry.meta.title)
-        })) : null,
+        !selected && drafts.length ? h('section', { className: 'gr-stack' },
+          h('h2', { className: 'gr-h2' }, T('work.drafts')),
+          drafts.map(function (entry) {
+            return h('button', { key: entry.id, className: 'gr-btn gr-btn-ghost gr-work-list-item', disabled: busy,
+              onClick: function () { props.onNavigate('compose', { draftId: entry.id }) }
+            }, entry.topic.title || T('work.untitled'), h('span', { className: 'gr-meta' }, T('work.phase.' + entry.stage)))
+          })) : null,
+        !selected ? h('section', { className: 'gr-stack' },
+          drafts.length ? h('h2', { className: 'gr-h2' }, T('work.savedWorks')) : null,
+          items.length ? items.map(function (entry) {
+            return h('button', { key: entry.meta.id, className: 'gr-btn gr-btn-ghost gr-work-list-item', disabled: busy,
+              onClick: function () { run(function () { return read(entry.meta.id, entry.meta.version) }) } }, entry.meta.title)
+          }) : h('p', { className: 'gr-meta' }, T('work.empty'))) :
+          h('button', { className: 'gr-btn gr-origin-link', disabled: busy, onClick: function () {
+            setSelected(null)
+            setDraft(null)
+            setBasis(null)
+          } }, '← ', T('work.back')),
         selected && !draft ? h('article', { className: 'gr-card gr-stack' },
           h('h2', { className: 'gr-h2' }, selected.meta.title),
-          h(ReportMarkdown, { body: selected.body }),
+          h(ReportMarkdown, { body: selected.body, workImages: true }),
           h('div', { className: 'gr-row' },
             h('label', null, T('report.history'), ' ', h('select', { value: selected.meta.version, disabled: busy,
               onChange: function (event) {
@@ -1973,8 +2238,7 @@ window.__ModuleLoader__.load({
             h('button', { className: 'gr-btn gr-btn-ghost', disabled: selected.meta.version !== selected.versions[0],
               onClick: function () { setDraft({}) } }, T('asset.edit')))) : null,
         draft ? h('form', { className: 'gr-card', onSubmit: save },
-          selected ? h('h3', null, selected.meta.title) : h('label', null, T('asset.title'),
-            h('input', { className: 'gr-input', value: title, maxLength: 300, required: true, onChange: function (event) { setTitle(event.target.value) } })),
+          h('h3', null, selected.meta.title),
           selected ? h('label', null, T('report.history'),
             h('select', { value: selected.meta.version, disabled: busy, onChange: function (event) {
               var version = Number(event.target.value)
@@ -2224,6 +2488,16 @@ window.__ModuleLoader__.load({
       '.gr-root{container-type:inline-size}',
       '.gr-report-entry{display:flex;align-items:center;gap:6px;flex-wrap:wrap;overflow-wrap:anywhere}',
       '.gr-report-preview{order:2;flex:0 0 clamp(380px,46cqw,680px);min-width:0;min-height:0;display:flex;flex-direction:column;background:var(--gr-surface);border-left:1px solid var(--gr-line);overflow-wrap:anywhere}',
+      '.gr-scroll:has(.gr-work-composer) .gr-inner{max-width:1200px}',
+      '.gr-work-header{gap:12px}.gr-work-header h1{overflow-wrap:anywhere}',
+      '.gr-work-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start}',
+      '@container (max-width:840px){.gr-work-layout{grid-template-columns:minmax(0,1fr)}}',
+      '.gr-work-flow{min-height:160px;max-height:52vh;overflow:auto;padding:14px;border:1px solid var(--gr-line);border-radius:10px}',
+      '.gr-work-section{border-top:1px solid var(--gr-line);padding-top:10px;overflow-wrap:anywhere}',
+      '.gr-work-section-button[aria-pressed=true]{background:var(--gr-wash);font-weight:650}',
+      '.gr-work-section-button,.gr-work-list-item{text-align:start;overflow-wrap:anywhere}.gr-work-list-item{display:flex;align-items:center;justify-content:space-between;gap:12px}',
+      '.gr-work-upload label{display:grid;gap:4px;min-width:0}.gr-work-upload :is(input,select){max-width:100%}',
+      '.gr-work-image{margin:0;max-width:100%;display:grid;gap:4px}.gr-work-image img{display:block;max-width:100%;height:auto;border-radius:8px}.gr-work-image figcaption{color:var(--gr-muted);font-size:12px}',
       '.gr-preview-head{padding:16px 22px;border-bottom:1px solid var(--gr-line);flex:none;gap:8px}',
       '.gr-preview-toolbar{justify-content:space-between}.gr-preview-title{margin:0;font-size:19px;line-height:1.35}',
       '.gr-preview-content{flex:1 1 auto;min-height:0;overflow:auto;padding:20px 22px;display:block}',
