@@ -937,7 +937,7 @@ window.__ModuleLoader__.load({
           return h('button', { key: destination, type: 'button', className: 'gr-nav-item',
             'aria-current': currentNav === destination ? 'page' : undefined,
             onClick: destination === 'settings' ? openSettings : function () { navigate(destination) },
-          }, T('nav.' + label))
+          }, h(NavigationIcon, { name: destination }), h('span', null, T('nav.' + label)))
         })),
       )
     }
@@ -2196,6 +2196,22 @@ window.__ModuleLoader__.load({
       ))
     }
 
+    var navigationPaths = {
+      home: 'M3 10l9-7 9 7v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z M9 21v-7h6v7',
+      ideas: 'M9 18h6 M10 22h4 M8 15c0-2-3-3.5-3-7a7 7 0 0 1 14 0c0 3.5-3 5-3 7',
+      research: 'M15.5 15.5 21 21 M18 10.5a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0z M7 11l2 2 4-4',
+      knowledge: 'M12 6c-3-3-7-3-10-2v15c4-1 7 0 10 2 3-2 6-3 10-2V4c-3-1-7-1-10 2v15',
+      works: 'M13 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10z M13 3v7h7 M8 14h8 M8 17h5',
+      settings: 'M10 3h4l.7 2.6 2 .9 2.4-1.2 2 3.4-1.9 1.9v2.8l1.9 1.9-2 3.4-2.4-1.2-2 .9-.7 2.6h-4l-.7-2.6-2-.9-2.4 1.2-2-3.4 1.9-1.9v-2.8L2.9 8.7l2-3.4 2.4 1.2 2-.9z M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0z',
+    }
+
+    function NavigationIcon(props) {
+      return h('svg', { className: 'gr-nav-icon', width: 16, height: 16, viewBox: '0 0 24 24',
+        fill: 'none', stroke: 'currentColor', strokeWidth: 1.75, strokeLinecap: 'round',
+        strokeLinejoin: 'round', 'aria-hidden': true, focusable: 'false' },
+      h('path', { d: navigationPaths[props.name] }))
+    }
+
     function GroveIcon(props) {
       var size = Number(props && props.size) || 16
       return h(GroveMark, { size: size })
@@ -2232,9 +2248,9 @@ window.__ModuleLoader__.load({
       '.gr-conversation .gr-research-composer{margin-bottom:12px;border-radius:16px;background:var(--dsw-specific-input-major,var(--gr-surface))}',
       '.gr-study-heading{justify-content:space-between}',
       '.gr-nav{order:-1;display:flex;flex-direction:column;gap:5px;flex:none;width:130px;padding:20px 10px;border-right:1px solid var(--gr-line);background:var(--gr-wash)}',
-      '.gr-nav-item{width:100%;min-height:32px;padding:4px var(--dsh-sidebar-row-padding,10px);border:0;border-radius:8px;background:transparent;color:var(--gr-ink);font:inherit;text-align:start;cursor:pointer}.gr-nav-item:hover{background:var(--dsw-alias-interactive-bg-hover-accent,var(--gr-line))}.gr-nav-item[aria-current=page]{background:var(--dsw-specific-sidebar-nav-item-active,var(--gr-line));color:var(--gr-ink);font-weight:600}',
+      '.gr-nav-icon{flex:none}.gr-nav-item{display:flex;align-items:center;gap:8px;width:100%;min-height:32px;padding:4px var(--dsh-sidebar-row-padding,10px);border:0;border-radius:8px;background:transparent;color:var(--gr-ink);font:inherit;text-align:start;cursor:pointer}.gr-nav-item:hover{background:var(--dsw-alias-interactive-bg-hover-accent,var(--gr-line))}.gr-nav-item[aria-current=page]{background:var(--dsw-specific-sidebar-nav-item-active,var(--gr-line));color:var(--gr-ink);font-weight:600}',
       '.gr-root:has(>.gr-nav){flex-direction:row}.gr-scroll{min-width:0}',
-      '@media(max-width:580px){.gr-root:has(>.gr-nav){flex-direction:column}.gr-nav{width:auto;flex-direction:row;flex-wrap:wrap;padding:6px;border-right:0;border-bottom:1px solid var(--gr-line)}.gr-nav-item{width:auto;text-align:center;flex:1;white-space:nowrap}}',
+      '@media(max-width:580px){.gr-root:has(>.gr-nav){flex-direction:column}.gr-nav{width:auto;flex-direction:row;flex-wrap:wrap;padding:6px;border-right:0;border-bottom:1px solid var(--gr-line)}.gr-nav-item{width:auto;justify-content:center;flex:1;white-space:nowrap}}',
       '.gr-scroll{flex:1 1 auto;min-height:0;overflow:auto;container-type:inline-size}',
       '.gr-knowledge-toggle{display:flex;width:100%;justify-content:space-between;gap:12px;text-align:start}',
       '.gr-knowledge-summary{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;margin:6px 0;font-size:13px;line-height:1.5;overflow-wrap:anywhere}',
