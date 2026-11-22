@@ -224,9 +224,20 @@ window.__ModuleLoader__.load({
       'work.editSection': '自己写本节',
       'work.saveSection': '保存本节',
       'work.cancelEdit': '取消修改',
-      'work.working': '正在准备回复…',
-      'work.confirmTopic': '确认主题',
-      'work.confirmOutline': '确认提纲',
+      'work.progress.preparing': '正在加载草稿和素材',
+      'work.progress.topic': '正在生成主题建议',
+      'work.progress.outline': '正在拟提纲',
+      'work.progress.writing': '正在处理当前小节',
+      'work.progress.visual': '正在拟配图提示词',
+      'work.progress.saving': '正在保存草稿',
+      'work.progress.elapsed': '已等待 {seconds} 秒',
+      'work.progress.section': '正在处理「{heading}」',
+      'work.confirmTopic': '使用当前主题，进入提纲讨论',
+      'work.confirmOutline': '使用当前提纲，从第一节开始写',
+      'work.topicNext': '主题和核心判断合适时，进入提纲讨论。也可以继续发消息调整。',
+      'work.outlineNext': '各节的顺序与核心观点合适时，开始写第一节。之后仍可修改提纲。',
+      'work.previewTab': '预览',
+      'work.conversationTab': '对话',
       'work.reviseOutline': '修改提纲',
       'work.finish': '保存为作品',
       'work.audience': '读者',
@@ -539,9 +550,20 @@ window.__ModuleLoader__.load({
       'work.editSection': 'Write this section',
       'work.saveSection': 'Save section',
       'work.cancelEdit': 'Cancel editing',
-      'work.working': 'Preparing a reply…',
-      'work.confirmTopic': 'Confirm topic',
-      'work.confirmOutline': 'Confirm outline',
+      'work.progress.preparing': 'Loading the draft and material',
+      'work.progress.topic': 'Developing the topic',
+      'work.progress.outline': 'Drafting the outline',
+      'work.progress.writing': 'Working on the selected section',
+      'work.progress.visual': 'Preparing an image prompt',
+      'work.progress.saving': 'Saving the draft',
+      'work.progress.elapsed': 'Waiting for {seconds} s',
+      'work.progress.section': 'Working on “{heading}”',
+      'work.confirmTopic': 'Use this topic and discuss the outline',
+      'work.confirmOutline': 'Use this outline and start section one',
+      'work.topicNext': 'If the topic and central idea look right, move on to the outline. You can also send another message to refine them.',
+      'work.outlineNext': 'If the order and main points look right, start with the first section. You can revise the outline later.',
+      'work.previewTab': 'Preview',
+      'work.conversationTab': 'Conversation',
       'work.reviseOutline': 'Revise outline',
       'work.finish': 'Save as work',
       'work.audience': 'Audience',
@@ -1970,6 +1992,10 @@ window.__ModuleLoader__.load({
       var [editingText, setEditingText] = useState(null)
       var [slot, setSlot] = useState('section')
       var [busy, setBusy] = useState(true)
+      var [activity, setActivity] = useState(null)
+      var [progress, setProgress] = useState(null)
+      var [elapsed, setElapsed] = useState(0)
+      var [pane, setPane] = useState('conversation')
       var [error, setError] = useState(null)
       var [file, setFile] = useState(null)
       var [alt, setAlt] = useState('')
@@ -1977,6 +2003,7 @@ window.__ModuleLoader__.load({
       var imageInput = useRef(null)
       var initial = useRef(null)
       var flow = useRef(null)
+      var following = useRef(true)
 
       function load() {
         var seed = props.seed
@@ -1997,26 +2024,49 @@ window.__ModuleLoader__.load({
       }, [])
 
       useEffect(function () {
-        if (flow.current) flow.current.scrollTop = flow.current.scrollHeight
-      }, [draft?.turns.length, busy])
+        if (following.current && flow.current) flow.current.scrollTop = flow.current.scrollHeight
+      }, [draft?.turns, activity, pane])
+
+      useEffect(function () {
+        if (!activity) return
+        var active = true
+        var timeout
+        var ticker = setInterval(function () {
+          setElapsed(Math.floor((Date.now() - activity.started) / 1000))
+        }, 1000)
+        async function poll() {
+          try {
+            var data = await api(WORKS, { action: 'draft-progress', id: draft.id })
+            if (active && data.progress?.action === 'draft-' + activity.action) setProgress(data.progress.phase)
+          } catch {}
+          if (active) timeout = setTimeout(poll, 700)
+        }
+        if (activity.action === 'ask' || activity.action === 'visual') poll()
+        return function () { active = false; clearInterval(ticker); clearTimeout(timeout) }
+      }, [activity])
 
       async function run(action, fields) {
         if (!draft || busy) return false
         setBusy(true)
         setError(null)
+        setElapsed(0)
+        setProgress(action === 'ask' || action === 'visual' ? 'preparing' : 'saving')
+        setActivity({ action: action, message: action === 'ask' ? fields.message : '',
+          heading: action === 'ask' ? draft.sections[section]?.heading : '', started: Date.now() })
         try {
           var extra = typeof fields === 'function' ? await fields() : fields
           var result = await api(WORKS, { action: 'draft-' + action, id: draft.id, revision: draft.revision, ...extra })
           if (result.work) props.onNavigate('works', { read: result.work })
           else {
             setDraft(result)
-            setSection(Math.min(section, Math.max(0, result.sections.length - 1)))
+            setSection(action === 'confirm-outline' ? 0 : Math.min(section, Math.max(0, result.sections.length - 1)))
           }
           return true
         } catch (problem) {
           setError(problem)
           return false
         } finally {
+          setActivity(null)
           setBusy(false)
         }
       }
@@ -2048,6 +2098,22 @@ window.__ModuleLoader__.load({
       var canFinish = writing && draft.sections.length > 0 && draft.sections.every(function (entry) { return !!entry.body })
       var currentImage = slot === 'cover' ? draft?.cover : part?.image
       var phase = draft ? T('work.phase.' + draft.stage) : T('loading')
+      var canConfirmTopic = draft?.stage === 'topic' && draft.topic.title && draft.topic.thesis
+      var canConfirmOutline = draft?.stage === 'outline' && draft.sections.length
+      function nextStep() {
+        if (canConfirmTopic) return h('section', { className: 'gr-card gr-stack gr-work-next' },
+          h('h3', { className: 'gr-h2' }, draft.topic.title),
+          h('p', null, draft.topic.thesis),
+          h('p', { className: 'gr-meta' }, T('work.topicNext')),
+          h('button', { className: 'gr-btn', disabled: busy || !!message.trim(),
+            onClick: function () { run('confirm-topic') } }, T('work.confirmTopic')))
+        if (canConfirmOutline) return h('section', { className: 'gr-card gr-stack gr-work-next' },
+          h('ol', null, draft.sections.map(function (part) { return h('li', { key: part.heading }, part.heading) })),
+          h('p', { className: 'gr-meta' }, T('work.outlineNext')),
+          h('button', { className: 'gr-btn', disabled: busy || !!message.trim(),
+            onClick: function () { run('confirm-outline') } }, T('work.confirmOutline')))
+        return null
+      }
       return h('section', { className: 'gr-work-composer gr-stack' },
         h('div', { className: 'gr-row gr-work-header' },
           h('button', { className: 'gr-btn gr-origin-link', onClick: function () { props.onNavigate('works') } }, '← ', T('work.back')),
@@ -2057,33 +2123,43 @@ window.__ModuleLoader__.load({
           props.onNavigate(props.seed.returnTo.page, props.seed.returnTo.seed)
         } }, T(props.seed.returnTo.label)) : null,
         error ? h('p', { role: 'alert' }, messageOf(error)) : null,
+        draft ? h('div', { className: 'gr-row gr-work-tabs', 'aria-label': T('asset.works') },
+          ['conversation', 'preview'].map(function (tab) {
+            return h('button', { key: tab, className: 'gr-btn gr-btn-ghost', 'aria-pressed': pane === tab,
+              onClick: function () { setPane(tab) } }, T('work.' + tab + 'Tab'))
+          })) : null,
         !draft ? (busy ? h('p', { role: 'status' }, T('loading')) :
           h('button', { className: 'gr-btn', onClick: async function () {
             setBusy(true)
             setError(null)
             try { setDraft(await load()) } catch (problem) { setError(problem) } finally { setBusy(false) }
-          } }, T('err.retry'))) : h('div', { className: 'gr-work-layout' },
-          h('section', { className: 'gr-stack', 'aria-label': T('work.conversation') },
-            h('div', { className: 'gr-work-flow gr-stack', role: 'log', ref: flow, 'aria-label': T('work.conversation') },
+          } }, T('err.retry'))) : h('div', { className: 'gr-work-layout', 'data-pane': pane },
+          h('section', { className: 'gr-work-chat', 'aria-label': T('work.conversation') },
+            h('div', { className: 'gr-work-flow gr-stack', role: 'log', ref: flow, tabIndex: 0, 'aria-label': T('work.conversation'),
+                onScroll: function (event) {
+                  var region = event.currentTarget
+                  following.current = region.scrollHeight - region.clientHeight - region.scrollTop < 48
+                } },
               !draft.turns.length ? h('p', { className: 'gr-body' }, T('work.startHint')) : null,
               draft.turns.map(function (turn, index) {
                 return h('div', { key: index, className: turn.role === 'user' ? 'gr-conversation-user' : 'gr-conversation-response' },
                   turn.role === 'user' ? h('p', { className: 'gr-prompt' }, turn.body) : h(ReportMarkdown, { body: turn.body }))
               }),
-              busy ? h('p', { role: 'status' }, T('work.working')) : null),
-            h('form', { className: 'gr-stack', onSubmit: send },
+              activity?.message ? h('div', { className: 'gr-conversation-user' },
+                h('p', { className: 'gr-prompt' }, activity.message)) : null,
+              !activity ? nextStep() : null),
+            activity && progress ? h('div', { className: 'gr-work-progress' },
+              h('span', { className: 'gr-run-spinner', 'aria-hidden': true }),
+              h('span', { role: 'status' }, progress === 'writing' && activity.heading
+                ? T('work.progress.section', { heading: activity.heading }) : T('work.progress.' + progress)),
+              h('span', { className: 'gr-meta' }, T('work.progress.elapsed', { seconds: elapsed }))) : null,
+            h('div', { className: 'gr-work-controls gr-stack' }, h('form', { className: 'gr-stack', onSubmit: send },
               writing && part ? h('p', { className: 'gr-meta' }, T('work.activeSection'), ' ', part.heading) : null,
               h('textarea', { className: 'gr-textarea', value: message, maxLength: 6000, disabled: busy || editingText !== null,
                 placeholder: T('work.prompt.' + draft.stage), 'aria-label': T('work.direction'),
                 onChange: function (event) { setMessage(event.target.value) } }),
               h('div', { className: 'gr-row' },
                 h('button', { className: 'gr-btn', disabled: busy || editingText !== null || !message.trim() }, T('work.send')),
-                draft.stage === 'topic' && draft.topic.title && draft.topic.thesis
-                  ? h('button', { type: 'button', className: 'gr-btn gr-btn-ghost', disabled: busy,
-                    onClick: function () { run('confirm-topic') } }, T('work.confirmTopic')) : null,
-                draft.stage === 'outline' && draft.sections.length
-                  ? h('button', { type: 'button', className: 'gr-btn gr-btn-ghost', disabled: busy,
-                    onClick: function () { run('confirm-outline') } }, T('work.confirmOutline')) : null,
                 writing ? h('button', { type: 'button', className: 'gr-btn gr-btn-ghost', disabled: busy || editingText !== null,
                   onClick: function () { run('revise-outline') } }, T('work.reviseOutline')) : null,
                 writing ? h('button', { type: 'button', className: 'gr-btn gr-btn-ghost', disabled: busy || editingText !== null || !canFinish,
@@ -2100,8 +2176,8 @@ window.__ModuleLoader__.load({
                 h('div', { className: 'gr-row' },
                   h('button', { className: 'gr-btn', disabled: busy || !editingText.trim() }, T('work.saveSection')),
                   h('button', { type: 'button', className: 'gr-btn gr-btn-ghost', disabled: busy,
-                    onClick: function () { setEditingText(null) } }, T('work.cancelEdit'))))) : null),
-          h('section', { className: 'gr-card gr-stack', 'aria-label': T('work.preview') },
+                    onClick: function () { setEditingText(null) } }, T('work.cancelEdit'))))) : null)),
+          h('section', { className: 'gr-card gr-stack gr-work-preview', tabIndex: 0, 'aria-label': T('work.preview') },
             h('h2', { className: 'gr-h2' }, T('work.preview')),
             draft.basis?.title ? h('p', { className: 'gr-meta' }, T('asset.basis'), ' · ', draft.basis.title, ' · v', draft.basis.version) : null,
             draft.topic.audience ? h('p', { className: 'gr-meta' }, T('work.audience'), ' ', draft.topic.audience) : null,
@@ -2488,11 +2564,24 @@ window.__ModuleLoader__.load({
       '.gr-root{container-type:inline-size}',
       '.gr-report-entry{display:flex;align-items:center;gap:6px;flex-wrap:wrap;overflow-wrap:anywhere}',
       '.gr-report-preview{order:2;flex:0 0 clamp(380px,46cqw,680px);min-width:0;min-height:0;display:flex;flex-direction:column;background:var(--gr-surface);border-left:1px solid var(--gr-line);overflow-wrap:anywhere}',
-      '.gr-scroll:has(.gr-work-composer) .gr-inner{max-width:1200px}',
+      '.gr-scroll:has(.gr-view:not([hidden])>.gr-work-composer){overflow:hidden}',
+      '.gr-scroll:has(.gr-view:not([hidden])>.gr-work-composer) .gr-inner{height:100%;max-width:1440px;padding-block:12px;gap:0}',
+      '.gr-scroll:has(.gr-view:not([hidden])>.gr-work-composer) :is(.gr-head,.gr-foot){display:none}',
+      '.gr-view:not([hidden]):has(>.gr-work-composer),.gr-work-composer{min-height:0;flex:1 1 auto}',
       '.gr-work-header{gap:12px}.gr-work-header h1{overflow-wrap:anywhere}',
-      '.gr-work-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start}',
-      '@container (max-width:840px){.gr-work-layout{grid-template-columns:minmax(0,1fr)}}',
-      '.gr-work-flow{min-height:160px;max-height:52vh;overflow:auto;padding:14px;border:1px solid var(--gr-line);border-radius:10px}',
+      '.gr-work-tabs{display:none}.gr-work-tabs [aria-pressed=true]{background:var(--gr-line)}',
+      '.gr-work-layout{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);grid-template-rows:minmax(0,1fr);gap:16px}',
+      '.gr-work-chat{display:flex;flex-direction:column;min-width:0;min-height:0;gap:8px}',
+      '.gr-work-flow,.gr-work-preview{min-height:0;overflow:auto;overscroll-behavior:contain}',
+      '.gr-work-flow{flex:1 1 auto;padding:14px;border:1px solid var(--gr-line);border-radius:10px}',
+      '.gr-work-preview{display:block}',
+      '.gr-work-preview>*+*{margin-block-start:12px!important}',
+      '.gr-work-controls{flex:none;max-height:45%;overflow:auto;overscroll-behavior:contain}',
+      '.gr-work-controls .gr-textarea{min-height:64px;max-height:120px}',
+      '.gr-work-progress{display:flex;flex:none;align-items:center;gap:8px;padding-inline:6px}',
+      '.gr-work-next ol{margin:0;padding-inline-start:24px}',
+      '@container (max-width:780px){.gr-work-tabs{display:flex}.gr-work-layout{grid-template-columns:minmax(0,1fr)}.gr-work-layout[data-pane=conversation]>.gr-work-preview,.gr-work-layout[data-pane=preview]>.gr-work-chat{display:none}}',
+      '@media(prefers-reduced-motion:reduce){.gr-work-progress .gr-run-spinner{animation:none}}',
       '.gr-work-section{border-top:1px solid var(--gr-line);padding-top:10px;overflow-wrap:anywhere}',
       '.gr-work-section-button[aria-pressed=true]{background:var(--gr-wash);font-weight:650}',
       '.gr-work-section-button,.gr-work-list-item{text-align:start;overflow-wrap:anywhere}.gr-work-list-item{display:flex;align-items:center;justify-content:space-between;gap:12px}',
