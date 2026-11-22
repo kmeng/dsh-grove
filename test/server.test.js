@@ -918,6 +918,8 @@ test('a work resumes after closing and saves a versioned illustrated article fro
   const { ctx, registered } = host()
   let failModel = false
   const stages = []
+  const topicEntered = Promise.withResolvers()
+  const releaseTopic = Promise.withResolvers()
   registerRoutes(ctx, {
     current: () => ({ path }), modelConfig: { enabled: true },
     model: () => ({ async compose(input) {
@@ -929,7 +931,11 @@ test('a work resumes after closing and saves a versioned illustrated article fro
       }
       assert.equal(input.source.body, basis.body)
       if (failModel) throw Object.assign(new Error('Offline'), { code: 'model-network' })
-      if (input.stage === 'topic') return { reply: '建议从现场观察入手。', title: '同一条街，两种走法', audience: '街坊', thesis: '对照时段再判断树荫的影响。' }
+      if (input.stage === 'topic') {
+        topicEntered.resolve()
+        await releaseTopic.promise
+        return { reply: '建议从现场观察入手。', title: '同一条街，两种走法', audience: '街坊', thesis: '对照时段再判断树荫的影响。' }
+      }
       if (input.stage === 'outline') return { reply: '先写观察，再解释原因。', sections: [
         { heading: '走过同一条街', point: '描述两侧的区别', visual: '用街景照片对照' },
         { heading: '比较不同时段', point: '补做两次走访' },
@@ -947,7 +953,16 @@ test('a work resumes after closing and saves a versioned illustrated article fro
     return result
   }
   await change('confirm-topic', {}, 400)
-  await change('ask', { message: '写给街坊，讲讲树荫', language: 'zh' })
+  const topic = change('ask', { message: '写给街坊，讲讲树荫', language: 'zh' })
+  try {
+    await topicEntered.promise
+    const response = await post('draft-progress', { id: draft.id })
+    assert.deepEqual(await response.json(), { progress: { action: 'draft-ask', phase: 'topic' } })
+  } finally {
+    releaseTopic.resolve()
+  }
+  await topic
+  assert.deepEqual(await (await post('draft-progress', { id: draft.id })).json(), { progress: null })
   await change('confirm-topic')
   await change('ask', { message: '先写观察，再谈解释', language: 'zh' })
   await change('confirm-outline')

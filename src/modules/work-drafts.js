@@ -5,7 +5,7 @@ import { exactVersion } from './version-reference.js'
 import { readWork, saveWork } from './works.js'
 
 const basisTypes = new Set(['concept', 'theory', 'claim', 'method', 'report'])
-const pending = new Set()
+const pending = new Map()
 
 function invalid(message, code = 'invalid-body') {
   throw Object.assign(new Error(message), { code })
@@ -45,12 +45,13 @@ function articleBody(draft) {
   ].filter(Boolean).join('\n\n')
 }
 
-async function ask(vault, draft, input, resolveModel) {
+async function ask(vault, draft, input, resolveModel, progress) {
   const direction = text(input.message, 6000)
   if (!direction) invalid('Enter a writing direction')
   const selected = draft.stage === 'writing' ? sectionAt(draft, input.section) : null
   const original = await source(vault, draft.basis)
   const model = resolveModel()
+  progress.phase = draft.stage
   const result = await model.compose({
     stage: draft.stage, language: input.language === 'en' ? 'en' : 'zh', direction,
     topic: draft.topic, selected: selected && { heading: selected.heading, point: selected.point, body: selected.body },
@@ -107,8 +108,10 @@ export async function workDrafts(vault, input, resolveModel) {
   }
   if (typeof input.id !== 'string' || !/^[a-f0-9-]{36}$/.test(input.id)) invalid('Choose a writing draft')
   const key = vault.path + ':' + input.id
+  if (input.action === 'draft-progress') return { progress: pending.get(key) ?? null }
   if (pending.has(key)) invalid('Another change to this draft is in progress', 'work-conflict')
-  pending.add(key)
+  const progress = { action: input.action, phase: 'preparing' }
+  pending.set(key, progress)
   try {
     const draft = await records.read(input.id)
     if (draft.published) {
@@ -118,7 +121,7 @@ export async function workDrafts(vault, input, resolveModel) {
     if (input.revision !== draft.revision) invalid('The draft changed, reopen it before continuing', 'work-conflict')
     switch (input.action) {
       case 'draft-ask':
-        await ask(vault, draft, input, resolveModel)
+        await ask(vault, draft, input, resolveModel, progress)
         break
       case 'draft-confirm-topic':
         if (draft.stage !== 'topic' || !draft.topic.title || !draft.topic.thesis) invalid('Confirm a title and central idea first')
@@ -135,6 +138,7 @@ export async function workDrafts(vault, input, resolveModel) {
       case 'draft-visual': {
         if (draft.stage !== 'writing') invalid('Confirm the outline before planning images')
         const selected = input.section === null ? null : sectionAt(draft, input.section)
+        progress.phase = 'visual'
         const result = await resolveModel().compose({
           stage: 'visual', language: input.language === 'en' ? 'en' : 'zh',
           topic: draft.topic, placement: selected ? 'section' : 'cover',
@@ -186,6 +190,7 @@ export async function workDrafts(vault, input, resolveModel) {
     }
     draft.revision += 1
     draft.modified = new Date().toISOString()
+    progress.phase = 'saving'
     await records.write(draft)
     return draft.published ? { work: draft.published } : draft
   } finally {
