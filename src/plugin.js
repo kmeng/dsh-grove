@@ -32,6 +32,7 @@ export function apply(ctx, config = {}) {
   // The panel routes stay registered without a vault so the cold start can pick one.
   if (typeof ctx.inject === 'function') registerRoutes(ctx, {
     current: () => configuredVault(config),
+    organizeKnowledge: true,
     parsers: documentParsers(config.parsers),
     pdfEnabled: config.parsers?.pdf !== false,
     modelConfig: config.model,

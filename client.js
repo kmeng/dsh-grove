@@ -216,6 +216,11 @@ window.__ModuleLoader__.load({
       'asset.copy': '复制正文',
       'asset.copied': '已复制',
       'asset.missing': '来源不可用。',
+      'asset.filterTags': '筛选标签',
+      'asset.allTags': '全部标签',
+      'asset.related': '相关知识',
+      'asset.noMatches': '没有符合条件的知识。',
+      'asset.emptyKnowledge': '还没有收藏的知识。',
       'report.review': '审核为报告草稿',
       'report.discard': '丢弃未保存草稿',
       'model.enabled': '启用 AI 深挖',
@@ -491,6 +496,11 @@ window.__ModuleLoader__.load({
       'asset.copy': 'Copy body',
       'asset.copied': 'Copied',
       'asset.missing': 'The source is unavailable.',
+      'asset.filterTags': 'Filter by tag',
+      'asset.allTags': 'All tags',
+      'asset.related': 'Related knowledge',
+      'asset.noMatches': 'No knowledge matches this tag.',
+      'asset.emptyKnowledge': 'No saved knowledge yet.',
       'report.review': 'Review as report draft',
       'report.discard': 'Discard unsaved draft',
       'model.enabled': 'Enable AI research',
@@ -1771,7 +1781,8 @@ window.__ModuleLoader__.load({
     }
 
     function KnowledgePage(props) {
-      var [items, setItems] = useState([])
+      var [items, setItems] = useState(null)
+      var [tag, setTag] = useState('')
       var [detail, setDetail] = useState(null)
       var [loading, setLoading] = useState(null)
       var [error, setError] = useState(null)
@@ -1792,24 +1803,51 @@ window.__ModuleLoader__.load({
       }
 
       useEffect(function () {
-        api(KNOWLEDGE, { action: 'list' }).then(function (result) { setItems(result.items) }, setError)
+        setTag('')
+        api(KNOWLEDGE, { action: 'browse' }).then(function (result) { setItems(result.items) }, setError)
         if (props.seed?.read) open(props.seed.read)
       }, [props.seed])
 
-      function renderDetail() {
+      var entries = items || []
+      var tags = Array.from(new Set(entries.flatMap(function (entry) { return entry.tags }))).sort(function (a, b) {
+        return a.localeCompare(b)
+      })
+      var visible = tag ? entries.filter(function (entry) { return entry.tags.includes(tag) }) : entries
+
+      function filterBy(value) {
+        setTag(value)
+        if (value && !entries.some(function (entry) {
+          return entry.meta.id === detail?.meta.id && entry.tags.includes(value)
+        })) setDetail(null)
+      }
+
+      function renderDetail(entry) {
         var ref = { id: detail.meta.id, version: detail.meta.version }
         return h('div', { className: 'gr-stack gr-knowledge-detail' },
           detail.report ? h('p', { className: 'gr-meta' }, T('report.title'), ' · v', detail.report.meta.version) : null,
           detail.reportMissing ? h('p', { role: 'status' }, T('asset.missing')) : null,
           h(ReportMarkdown, { body: detail.report?.body ?? detail.body }),
           h('div', { className: 'gr-row' },
+            detail.versions?.length > 1 ? h('label', null, T('report.history'), ' ',
+              h('select', { value: ref.version, disabled: !!loading, onChange: function (event) {
+                open({ id: ref.id, version: Number(event.target.value) })
+              } }, detail.versions.map(function (version) {
+                return h('option', { key: version, value: version }, 'v' + version)
+              }))) : null,
             detail.studyId ? h('button', { className: 'gr-btn', onClick: function () {
               props.onNavigate('research', { resume: detail.studyId })
             } }, T('idea.continueStudy')) : null,
             h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () {
               props.onNavigate('works', { title: detail.meta.title, body: detail.body, basis: ref,
                 returnTo: { page: 'knowledge', seed: { read: ref, returnTo: returnTo }, label: 'asset.backKnowledge' } })
-            } }, T('asset.compose'))))
+            } }, T('asset.compose'))),
+          detail.meta.version === entry.meta.version && entry.related.length ? h('section', { className: 'gr-stack' },
+            h('h3', { className: 'gr-h2' }, T('asset.related')),
+            h('div', { className: 'gr-row' }, entry.related.map(function (related) {
+              return h('button', { key: related.id, className: 'gr-btn gr-btn-ghost', disabled: !!loading,
+                onClick: function () { setTag(''); open(related) }
+              }, related.title)
+            }))) : null)
       }
 
       return h(React.Fragment, null,
@@ -1819,7 +1857,12 @@ window.__ModuleLoader__.load({
           } }, '← ', T(returnTo.label))) : null,
         h(PageHeading, { title: 'asset.knowledge' }),
         error ? h('p', { role: 'alert' }, messageOf(error)) : null,
-        h('div', { className: 'gr-stack' }, items.map(function (entry) {
+        tags.length ? h('label', { className: 'gr-row' }, T('asset.filterTags'),
+          h('select', { value: tag, disabled: !!loading, onChange: function (event) { filterBy(event.target.value) } },
+            h('option', { value: '' }, T('asset.allTags')),
+            tags.map(function (value) { return h('option', { key: value, value: value }, value) }))) : null,
+        items && !visible.length ? h('p', { className: 'gr-meta' }, T(tag ? 'asset.noMatches' : 'asset.emptyKnowledge')) : null,
+        h('div', { className: 'gr-stack' }, visible.map(function (entry) {
           var expanded = detail?.meta.id === entry.meta.id
           var pending = loading === entry.meta.id
           return h('article', { key: entry.meta.id, className: 'gr-card' },
@@ -1828,7 +1871,12 @@ window.__ModuleLoader__.load({
                 'aria-expanded': expanded, 'aria-busy': pending, disabled: !!loading,
                 onClick: function () { if (expanded) setDetail(null); else open(entry.meta) }
               }, entry.meta.title, h('span', { 'aria-hidden': true }, expanded ? '−' : '+'))),
-            expanded ? renderDetail() : null)
+            !expanded && entry.summary ? h('p', { className: 'gr-knowledge-summary' }, entry.summary) : null,
+            entry.tags.length ? h('div', { className: 'gr-row gr-knowledge-tags' }, entry.tags.map(function (value) {
+              return h('button', { key: value, className: 'gr-btn gr-btn-ghost', 'aria-pressed': value === tag,
+                disabled: !!loading, onClick: function () { filterBy(value === tag ? '' : value) } }, value)
+            })) : null,
+            expanded ? renderDetail(entry) : null)
         })))
     }
 
@@ -2189,6 +2237,10 @@ window.__ModuleLoader__.load({
       '@media(max-width:580px){.gr-root:has(>.gr-nav){flex-direction:column}.gr-nav{width:auto;flex-direction:row;flex-wrap:wrap;padding:6px;border-right:0;border-bottom:1px solid var(--gr-line)}.gr-nav-item{width:auto;text-align:center;flex:1;white-space:nowrap}}',
       '.gr-scroll{flex:1 1 auto;min-height:0;overflow:auto;container-type:inline-size}',
       '.gr-knowledge-toggle{display:flex;width:100%;justify-content:space-between;gap:12px;text-align:start}',
+      '.gr-knowledge-summary{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;margin:6px 0;font-size:13px;line-height:1.5;overflow-wrap:anywhere}',
+      '.gr-knowledge-tags{margin-top:6px}',
+      '.gr-knowledge-tags>.gr-btn{border:1px solid currentColor;border-radius:999px;font-size:12px;min-height:26px;padding:2px 8px}',
+      '.gr-knowledge-tags>.gr-btn[aria-pressed=true]{font-weight:700}',
       '.gr-knowledge-detail{margin-top:12px}',
       '.gr-page-heading{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px 16px}',
       '.gr-page-heading h1{margin:0;font-size:24px;font-weight:650;line-height:1.25;overflow-wrap:anywhere}',
