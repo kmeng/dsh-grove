@@ -14,11 +14,11 @@ function keywords(text) {
     .filter(word => word.length >= 2 && !stopWords.has(word))
 }
 
-export async function searchVault(store, query, { knowledgeOnly = false, relatedOnly = false } = {}) {
+export async function searchVault(store, query, { knowledgeOnly = false, relatedOnly = false, includeReports = false } = {}) {
   const terms = [...new Set(keywords(query.slice(0, 300)))].slice(0, 48)
   if (!terms.length) return []
   return (await store.list())
-    .filter(note => knowledgeOnly ? isKnowledge(note) :
+    .filter(note => knowledgeOnly ? isKnowledge(note) || (includeReports && note.meta.type === 'report' && note.meta.review !== 'draft') :
       searchable.has(note.meta.type) && note.meta.status !== 'archived' && note.meta.review !== 'draft')
     .map(({ meta, body }) => {
       const title = meta.title.normalize('NFKC').toLowerCase()

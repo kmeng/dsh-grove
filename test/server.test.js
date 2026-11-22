@@ -967,30 +967,42 @@ test('a work resumes after closing and saves a versioned illustrated article fro
   await change('ask', { message: '先写观察，再谈解释', language: 'zh' })
   await change('confirm-outline')
   await change('finish', {}, 400)
-  await change('ask', { message: '写第一节', section: 0, language: 'zh' })
+  await change('ask', { message: '写第一节', section: draft.sections[0].id, language: 'zh' })
+  assert.equal(draft.sections[0].body, '')
+  await change('confirm-section', { section: draft.sections[0].id })
   const original = draft.sections[0].body
   failModel = true
-  await change('ask', { message: '写第二节', section: 1, language: 'zh' }, 502)
+  await change('ask', { message: '写第二节', section: draft.sections[1].id, language: 'zh' }, 502)
   const restored = await (await post('draft-read', { id: draft.id })).json()
   assert.equal(restored.revision, draft.revision)
   assert.equal(restored.sections[0].body, original)
   assert.equal(restored.sections[1].body, '')
-  assert.equal(restored.turns.length, 6)
+  assert.equal(Object.values(restored.discussions).flat().length, 6)
   failModel = false
-  await change('section', { section: 1, body: '自己写的第二节，下午再走一次。' })
+  await change('section', { section: draft.sections[1].id, body: '自己写的第二节，下午再走一次。' })
+  await change('confirm-section', { section: draft.sections[1].id })
   assert.equal(draft.sections[0].body, original)
-  await change('visual', { section: 0, language: 'zh' })
+  await change('visual', { section: draft.sections[0].id, language: 'zh' })
   assert.match(draft.sections[0].visual, /平视照片/)
   assert.equal(draft.sections[0].body, original)
-  await change('section', { section: 0, body: '过期修改', revision: draft.revision - 1 }, 409)
+  await change('section', { section: draft.sections[0].id, body: '过期修改', revision: draft.revision - 1 }, 409)
   const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jD5sAAAAASUVORK5CYII='
-  await change('image', { section: 0, bytes: png, alt: '有树荫的人行道', caption: '图一，早晨的现场' })
+  await change('image', { section: draft.sections[0].id, bytes: png, alt: '有树荫的人行道', caption: '图一，早晨的现场' })
   const uri = draft.sections[0].image.path
   const photo = await registered.get(routes.workImage).fetch(request(routes.workImage + '?file=' + uri.split('/')[1]))
   assert.equal(photo.headers.get('content-type'), 'image/png')
   assert.deepEqual(Buffer.from(await photo.arrayBuffer()), Buffer.from(png, 'base64'))
   const rejected = await registered.get(routes.workImage).fetch(request(routes.workImage + '?file=..%2Fsecret.png'))
   assert.equal(rejected.status, 404)
+  await change('plan-add', { section: draft.sections[1].id, kind: 'chart', alt: '两次记录对比' })
+  const chartId = draft.imagePlan[0].id
+  await change('render-chart', { item: chartId, rows: [{ label: '<上午>', value: 30 }, { label: '下午', value: 55 }],
+    unit: '秒', citation: '测试中的步行记录' })
+  const chart = await registered.get(routes.workImage).fetch(request(routes.workImage + '?file=' + draft.imagePlan[0].candidate.split('/')[1]))
+  assert.equal(chart.headers.get('content-type'), 'image/svg+xml')
+  assert.match(await chart.text(), /&lt;上午&gt;/)
+  await change('finish', {}, 400)
+  await change('image-accept', { item: chartId })
   const saved = await change('finish')
   assert.deepEqual(await change('finish'), saved)
   const work = await (await post('read', saved.work)).json()
@@ -999,6 +1011,17 @@ test('a work resumes after closing and saves a versioned illustrated article fro
   assert.deepEqual(work.meta.links, [{ kind: 'derived', id: basis.meta.id, version: 1 }])
   assert.deepEqual((await (await post('draft-list')).json()).drafts, [])
   assert.equal((await (await post('list')).json()).items[0].meta.id, work.meta.id)
+  const keep = async () => {
+    const response = await registered.get(routes.knowledge).fetch(request(routes.knowledge, { action: 'keep-work', work: saved.work }))
+    assert.equal(response.status, 200)
+    return response.json()
+  }
+  const kept = await keep()
+  assert.equal((await keep()).meta.id, kept.meta.id)
+  const detail = await (await registered.get(routes.knowledge).fetch(request(routes.knowledge, {
+    action: 'detail', id: kept.meta.id, version: 1,
+  }))).json()
+  assert.deepEqual({ id: detail.work.meta.id, version: detail.work.meta.version }, saved.work)
   assert.deepEqual(stages, ['topic', 'outline', 'writing', 'writing', 'visual'])
 })
 
@@ -1039,9 +1062,10 @@ test('work drafts find related knowledge, allow changes, and trace the exact use
   assert.deepEqual(new Set(prompts[0].sources.map(s => s.body)), new Set([morning.body, evening.body]))
   await change('confirm-topic')
   await change('ask', { message: '拟一个提纲', language: 'zh' })
-  assert.equal(draft.sections[0].plannedSources.length, 2)
+  assert.equal(draft.outlineCandidate[0].plannedSources.length, 2)
   await change('confirm-outline')
-  await change('ask', { message: '写第一节', language: 'zh', section: 0 })
+  await change('ask', { message: '写第一节', language: 'zh', section: draft.sections[0].id })
+  await change('confirm-section', { section: draft.sections[0].id })
   const written = draft.sections[0].body
   const selectedVersions = draft.sources
   await store.update(morning.meta.id, 1, { body: '更新后的素材，不能替换已引用的版本。' })
@@ -1053,9 +1077,11 @@ test('work drafts find related knowledge, allow changes, and trace the exact use
   await change('source-add', { ref: found.items[0] })
   assert.equal(draft.sections[0].body, written)
   assert.ok(!draft.sources.some(ref => ref.id === morning.meta.id))
-  await change('ask', { message: '写第二节', language: 'zh', section: 1 })
+  await change('ask', { message: '写第二节', language: 'zh', section: draft.sections[1].id })
   assert.ok(!prompts.at(-1).sources.some(note => note.title === morning.meta.title))
-  await change('section', { section: 1, body: '补写后的第二节。' })
+  await change('confirm-section', { section: draft.sections[1].id })
+  await change('section', { section: draft.sections[1].id, body: '补写后的第二节。' })
+  await change('confirm-section', { section: draft.sections[1].id })
   const result = await change('finish')
   const exported = await (await post('read', result.work)).json()
   assert.equal(exported.sources.find(ref => ref.id === morning.meta.id).version, 1)
@@ -1064,7 +1090,7 @@ test('work drafts find related knowledge, allow changes, and trace the exact use
   // Simulate a v0.7.3 draft that has body text but no selected-sources field.
   const legacy = await (await post('draft-start', { title: '树荫步行' })).json()
   const directory = join(await store.folder(), '.work-drafts')
-  await writeFile(join(directory, legacy.id + '.json'), JSON.stringify({ ...legacy, stage: 'writing', sections: [
+  await writeFile(join(directory, legacy.id + '.json'), JSON.stringify({ ...legacy, discussions: undefined, stage: 'writing', sections: [
     { heading: '存量章节', point: '保留手写内容', body: '已写好的小节。' },
   ] }))
   draft = await (await post('draft-read', { id: legacy.id })).json()

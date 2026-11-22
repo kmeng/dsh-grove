@@ -237,6 +237,41 @@ window.__ModuleLoader__.load({
       'work.topicNext': '主题和核心判断合适时，进入提纲讨论。也可以继续发消息调整。',
       'work.outlineNext': '各节的顺序与核心观点合适时，开始写第一节。之后仍可修改提纲。',
       'work.previewTab': '预览',
+      'work.writingModel': '作品写作模型',
+      'work.inheritModel': '继承默认模型',
+      'work.sectionMaterials': '本节素材',
+      'work.articleMaterials': '全篇素材',
+      'work.confirmSection': '确认本节并继续',
+      'work.candidate': '本节候选稿',
+      'work.draftSection': '起草本节',
+      'work.reviseSection': '修订本节',
+      'work.researchSection': '为本节补资料',
+      'work.ready': '文章已准备好，可保存为作品。',
+      'work.outlineImpact': '此提纲会改变已有章节的核心观点或移除章节。确认后应用变更。',
+      'work.outlineReview': '确认前请查看提纲变更。',
+      'work.legacyTurns': '旧版对话',
+      'work.generateImages': '生成配图',
+      'work.planImages': '拟定配图计划',
+      'work.illustrationsMenu': '文内配图',
+      'work.addChartPlan': '增加图表位置',
+      'work.addIllustrationPlan': '增加插图位置',
+      'work.moveImage': '改放到',
+      'work.skipImage': '跳过这张图',
+      'work.acceptImage': '确认使用图片',
+      'work.deletePlan': '删除计划项',
+      'work.renderChart': '生成图表',
+      'work.unit': '数据单位',
+      'work.citation': '数据来源',
+      'work.dataRows': '每行填写名称,数值',
+      'work.callImage': '调用图片模型',
+      'work.imageFallback': '未配置图片模型，可使用提示词或上传图片。',
+      'work.imageEndpointHint': '设置图片模型需使用支持 Base64 响应的 HTTPS 图像接口。',
+      'work.summaryCandidate': '待确认摘要',
+      'work.imageModel': '图片模型（可选）',
+      'work.savedAt': '成稿时间',
+      'work.keepKnowledge': '收录到知识库',
+      'work.summary': '摘要',
+      'work.makeSummary': '整理成稿摘要',
       'work.progress.sources': '正在查找相关知识',
       'work.sources': '本篇素材',
       'work.noSources': '目前没有选入相关知识，可以按主题补选或手动查找。',
@@ -578,6 +613,41 @@ window.__ModuleLoader__.load({
       'work.topicNext': 'If the topic and central idea look right, move on to the outline. You can also send another message to refine them.',
       'work.outlineNext': 'If the order and main points look right, start with the first section. You can revise the outline later.',
       'work.previewTab': 'Preview',
+      'work.writingModel': 'Work writing model',
+      'work.inheritModel': 'Use the default model',
+      'work.sectionMaterials': 'Section materials',
+      'work.articleMaterials': 'Article materials',
+      'work.confirmSection': 'Confirm section and continue',
+      'work.candidate': 'Section candidate',
+      'work.draftSection': 'Draft this section',
+      'work.reviseSection': 'Revise this section',
+      'work.researchSection': 'Research for this section',
+      'work.ready': 'The article is ready to save.',
+      'work.outlineImpact': 'This outline changes or removes written sections. Confirm to apply those changes.',
+      'work.outlineReview': 'Review the outline changes before confirming.',
+      'work.legacyTurns': 'Earlier conversation',
+      'work.generateImages': 'Generate illustrations',
+      'work.planImages': 'Plan illustrations',
+      'work.illustrationsMenu': 'Article illustrations',
+      'work.addChartPlan': 'Add chart placement',
+      'work.addIllustrationPlan': 'Add illustration placement',
+      'work.moveImage': 'Move to',
+      'work.skipImage': 'Skip image',
+      'work.acceptImage': 'Confirm image',
+      'work.deletePlan': 'Remove plan item',
+      'work.renderChart': 'Render chart',
+      'work.unit': 'Unit',
+      'work.citation': 'Data source',
+      'work.dataRows': 'One label,value pair per line',
+      'work.callImage': 'Generate image',
+      'work.imageFallback': 'Configure an image model, or use the prompt or upload an image.',
+      'work.imageEndpointHint': 'Use a Base64-capable HTTPS image endpoint.',
+      'work.summaryCandidate': 'Summary candidate',
+      'work.imageModel': 'Image model (optional)',
+      'work.savedAt': 'Saved at',
+      'work.keepKnowledge': 'Add to knowledge',
+      'work.summary': 'Summary',
+      'work.makeSummary': 'Draft the summary',
       'work.progress.sources': 'Finding related knowledge',
       'work.sources': 'Article materials',
       'work.noSources': 'No knowledge selected yet. Add related entries by topic or search for a specific note.',
@@ -1026,7 +1096,7 @@ window.__ModuleLoader__.load({
                   : page === 'idea'
                     ? h(InspirationPage, { key: vault + ':' + seed.id + ':' + seed.version, reference: seed, onNavigate: navigate, reportRevision: reportRevision, modelConfig: modelConfig, onSettings: openSettings })
                   : page === 'compose'
-                    ? h(WorkComposer, { key: seed?.draftId || seed?.basis?.id || 'new', seed: seed, onNavigate: navigate })
+                    ? h(WorkComposer, { key: seed?.draftId || seed?.basis?.id || 'new', seed: seed, onNavigate: navigate, modelConfig: modelConfig })
                   : page === 'knowledge' || page === 'works'
                     ? h(page === 'knowledge' ? KnowledgePage : WorkPage, { key: page, seed: seed, onNavigate: navigate })
                     : h(InspirationHome, {
@@ -1283,7 +1353,7 @@ window.__ModuleLoader__.load({
 
       return h('div', { className: 'gr-markdown gr-stack' }, props.body.split(/\n\s*\n/).map(function (block, index) {
         if (props.workImages) {
-          var image = /^!\[([^\]\n]*)\]\((work-media\/[a-f0-9]{64}\.(?:png|jpg|webp))\)(?:\n([^\n]+))?$/.exec(block)
+          var image = /^!\[([^\]\n]*)\]\((work-media\/[a-f0-9]{64}\.(?:png|jpg|webp|svg))\)(?:\n([^\n]+))?$/.exec(block)
           if (image) return h(WorkImage, { key: index, path: image[2], alt: image[1], caption: image[3] })
         }
         var lines = block.split('\n')
@@ -1512,7 +1582,7 @@ window.__ModuleLoader__.load({
         try {
           var receipt = await api(MODEL_UPDATE, {
             enabled: config.enabled, source: config.source, name: config.name, endpoint: config.endpoint, deepResearch: config.deepResearch,
-            reportWriting: config.reportWriting, inspirationLinks: config.inspirationLinks, webSearch: config.webSearch, verify: config.enabled,
+            reportWriting: config.reportWriting, workWriting: config.workWriting, imageWriting: config.imageWriting, inspirationLinks: config.inspirationLinks, webSearch: config.webSearch, verify: config.enabled,
           })
           for (var attempt = 0; attempt < 12; attempt++) {
             var current = await api(MODEL).catch(function () { return null })
@@ -1548,6 +1618,9 @@ window.__ModuleLoader__.load({
       var researchSource = !research ? 'inherit' : research.source === 'dsh' ? 'dsh' : 'custom'
       var writer = config?.reportWriting
       var writerSource = !writer ? 'inherit' : writer.source === 'dsh' ? 'dsh' : 'custom'
+      var workWriter = config?.workWriting
+      var workMode = !workWriter ? 'inherit' : workWriter.source === 'dsh' ? 'dsh' : 'custom'
+      var imageWriter = config?.imageWriting
       var catalog = config?.catalog || []
       var defaultModel = config?.dshDefault
       var defaultEntry = catalog.find(function (entry) { return modelKey(entry) === modelKey(defaultModel) })
@@ -1623,7 +1696,23 @@ window.__ModuleLoader__.load({
                 writerSource === 'custom' ? h(React.Fragment, null,
                   fields(writer, function (key, value) { change('reportWriting', Object.assign({}, writer, { [key]: value })) }, 'report'),
                   h('p', { className: 'gr-meta' }, 'GROVE_REPORT_MODEL_KEY')) : null,
-                writer ? h(ModelConnection, { value: config.reportConnection }) : null)) : null),
+                writer ? h(ModelConnection, { value: config.reportConnection }) : null,
+                h('h3', { className: 'gr-h2' }, T('work.writingModel')),
+                h('select', { value: workMode, 'aria-label': T('work.writingModel'), disabled: busy, onChange: function (event) {
+                  var mode = event.target.value
+                  change('workWriting', mode === 'inherit' ? null : mode === 'dsh' ? { source: 'dsh' } : { endpoint: '', name: '' })
+                } }, h('option', { value: 'inherit' }, T('work.inheritModel')), h('option', { value: 'dsh' }, T('model.dshPicker')), h('option', { value: 'custom' }, T('model.custom'))),
+                workMode === 'dsh' ? modelPicker('workWriting', workWriter) : null,
+                workMode === 'custom' ? h(React.Fragment, null, fields(workWriter, function (key, value) {
+                  change('workWriting', Object.assign({}, workWriter, { [key]: value }))
+                }, 'work'), h('p', { className: 'gr-meta' }, 'GROVE_WORK_MODEL_KEY')) : null,
+                h(ModelConnection, { value: config.workConnection }))) : null),
+          h('section', { className: 'gr-card' },
+            h('label', null, h('input', { type: 'checkbox', checked: !!imageWriter, disabled: busy,
+              onChange: function (event) { change('imageWriting', event.target.checked ? { endpoint: '', name: '' } : null) } }), T('work.imageModel')),
+            imageWriter ? h(React.Fragment, null, fields(imageWriter, function (key, value) {
+              change('imageWriting', Object.assign({}, imageWriter, { [key]: value }))
+            }, 'image'), h('p', { className: 'gr-meta' }, T('work.imageEndpointHint'), ' GROVE_IMAGE_MODEL_KEY')) : null),
           h('section', { className: 'gr-card' },
             h('h2', { className: 'gr-h2' }, T('settings.web')),
             h('label', null, h('input', { type: 'checkbox', checked: config.webSearch, disabled: busy,
@@ -1955,7 +2044,10 @@ window.__ModuleLoader__.load({
         return h('div', { className: 'gr-stack gr-knowledge-detail' },
           detail.report ? h('p', { className: 'gr-meta' }, T('report.title'), ' · v', detail.report.meta.version) : null,
           detail.reportMissing ? h('p', { role: 'status' }, T('asset.missing')) : null,
-          h(ReportMarkdown, { body: detail.report?.body ?? detail.body }),
+          detail.work ? h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () {
+            props.onNavigate('works', { read: { id: detail.work.meta.id, version: detail.work.meta.version } })
+          } }, T('asset.works'), ' · v', detail.work.meta.version) : null,
+          h(ReportMarkdown, { body: detail.report?.body ?? detail.body, workImages: !!detail.work }),
           h('div', { className: 'gr-row' },
             detail.versions?.length > 1 ? h('label', null, T('report.history'), ' ',
               h('select', { value: ref.version, disabled: !!loading, onChange: function (event) {
@@ -2035,7 +2127,9 @@ window.__ModuleLoader__.load({
       var review = useRef(0)
       var opened = useRef(null)
       var draft = props.draft
-      var sources = draft.sources ?? (draft.basis ? [draft.basis] : [])
+      var [scope, setScope] = useState('section')
+      var target = scope === 'section' && draft.stage === 'writing' ? draft.sections[props.section] : null
+      var sources = target?.sources ?? draft.sources ?? (draft.basis ? [draft.basis] : [])
       var indexed = new Set(sources.map(workRefKey))
       var canSuggest = !!(draft.topic.title || draft.topic.thesis || query.trim())
 
@@ -2071,10 +2165,13 @@ window.__ModuleLoader__.load({
       return h(React.Fragment, null,
         h('section', { className: 'gr-work-materials gr-stack', 'aria-label': T('work.sources') },
           h('h3', { className: 'gr-h2' }, T('work.sources'), ' · ', sources.length),
+          draft.stage === 'writing' ? h('select', { value: scope, 'aria-label': T('work.sources'), disabled: props.busy,
+            onChange: function (event) { setScope(event.target.value) } },
+            h('option', { value: 'section' }, T('work.sectionMaterials')), h('option', { value: 'article' }, T('work.articleMaterials'))) : null,
           sources.length ? h(WorkSourceList, { sources: sources, onRead: view, action: function (ref) {
             return h('button', { type: 'button', className: 'gr-btn gr-btn-ghost', disabled: props.busy,
               'aria-label': T('work.removeSourceNamed', { title: ref.title }),
-              onClick: function () { props.run('source-remove', { ref: ref }) } }, T('work.removeSource'))
+              onClick: function () { props.run('source-remove', { ref: ref, section: target?.id }) } }, T('work.removeSource'))
           } }) : h('p', { className: 'gr-meta' }, T(draft.sources ? 'work.noSources' : 'work.findAfterTopic')),
           h('form', { className: 'gr-stack', onSubmit: search },
             h('input', { className: 'gr-input', value: query, maxLength: 300, 'aria-label': T('work.searchKnowledge'),
@@ -2082,14 +2179,18 @@ window.__ModuleLoader__.load({
             h('div', { className: 'gr-row' },
               h('button', { className: 'gr-btn gr-btn-ghost', disabled: finding }, T('work.searchKnowledge')),
               h('button', { type: 'button', className: 'gr-btn gr-btn-ghost', disabled: props.busy || !canSuggest || sources.length >= 5,
-                onClick: function () { props.run('source-suggest', { query: query.trim() }) } }, T('work.suggestSources')))),
+                onClick: function () { props.run('source-suggest', { query: query.trim(), section: target?.id }) } }, T('work.suggestSources')))),
+          target?.plannedSources?.length ? h('section', { className: 'gr-stack' },
+            h('p', { className: 'gr-meta' }, T('work.plannedSources')), h(WorkSourceList, { sources: target.plannedSources, onRead: view })) : null,
+          target?.usedSources?.length ? h('section', { className: 'gr-stack' },
+            h('p', { className: 'gr-meta' }, T('work.usedSources')), h(WorkSourceList, { sources: target.usedSources, onRead: view })) : null,
           results && !results.length ? h('p', { className: 'gr-meta' }, T('work.noMatches')) : null,
           results?.length ? h(WorkSourceList, { sources: results, onRead: view, action: function (ref) {
             var picked = indexed.has(workRefKey(ref))
             var atLimit = sources.length >= 5 && !sources.some(function (item) { return item.id === ref.id })
             return h('button', { type: 'button', className: 'gr-btn gr-btn-ghost', disabled: props.busy || picked || atLimit,
               'aria-label': T('work.addSourceNamed', { title: ref.title }),
-              onClick: function () { props.run('source-add', { ref: ref }) }
+              onClick: function () { props.run('source-add', { ref: ref, section: target?.id }) }
             }, T(picked ? 'work.sourceAdded' : 'work.addSource'))
           } }) : null,
           error ? h('p', { role: 'alert' }, messageOf(error)) : null,
@@ -2097,6 +2198,43 @@ window.__ModuleLoader__.load({
             h('summary', null, viewing.meta.title, ' · v', viewing.meta.version),
             h(ReportMarkdown, { body: viewing.body })) : null),
         props.children(view))
+    }
+
+    function WorkImagePlanItem(props) {
+      var item = props.item
+      var [rows, setRows] = useState('')
+      var [unit, setUnit] = useState('')
+      var [citation, setCitation] = useState('')
+      function call(action, fields) { props.run(action, { item: item.id, ...fields }) }
+      return h('section', { className: 'gr-card gr-stack' },
+        h('label', null, T('work.moveImage'), h('select', { value: item.section || '', disabled: props.busy,
+          onChange: function (event) { call('plan-edit', { section: event.target.value || null }) } },
+          h('option', { value: '' }, T('work.cover')), props.sections.map(function (section) {
+            return h('option', { key: section.id, value: section.id }, section.heading)
+          }))),
+        h('p', null, item.prompt),
+        item.kind === 'chart' ? h('div', { className: 'gr-stack' },
+          h('textarea', { className: 'gr-textarea', value: rows, placeholder: T('work.dataRows'), 'aria-label': T('work.dataRows'),
+            onChange: function (event) { setRows(event.target.value) } }),
+          h('input', { className: 'gr-input', value: unit, placeholder: T('work.unit'), 'aria-label': T('work.unit'),
+            onChange: function (event) { setUnit(event.target.value) } }),
+          h('input', { className: 'gr-input', value: citation, placeholder: T('work.citation'), 'aria-label': T('work.citation'),
+            onChange: function (event) { setCitation(event.target.value) } }),
+          h('button', { type: 'button', className: 'gr-btn', disabled: props.busy || !unit || !citation || !rows,
+            onClick: function () { call('render-chart', { unit: unit, citation: citation, rows: rows.trim().split('\n').map(function (line) {
+              var split = line.lastIndexOf(',')
+              return { label: line.slice(0, split), value: split < 0 || !line.slice(split + 1).trim() ? null : Number(line.slice(split + 1)) }
+            }) }) } }, T('work.renderChart'))) :
+          props.configured ? h('button', { type: 'button', className: 'gr-btn', disabled: props.busy,
+            onClick: function () { call('generate-image') } }, T('work.callImage')) : h('p', { className: 'gr-meta' }, T('work.imageFallback')),
+        item.candidate ? h(WorkImage, { path: item.candidate, alt: item.alt, caption: item.caption }) : null,
+        h('div', { className: 'gr-row' },
+          item.candidate ? h('button', { type: 'button', className: 'gr-btn', disabled: props.busy,
+            onClick: function () { call('image-accept') } }, T('work.acceptImage')) : null,
+          h('button', { type: 'button', className: 'gr-btn gr-btn-ghost', disabled: props.busy || item.skipped || item.accepted,
+            onClick: function () { call('plan-skip') } }, T('work.skipImage')),
+          h('button', { type: 'button', className: 'gr-btn gr-btn-ghost', disabled: props.busy,
+            onClick: function () { call('plan-remove') } }, T('work.deletePlan'))))
     }
 
     function WorkComposer(props) {
@@ -2140,7 +2278,7 @@ window.__ModuleLoader__.load({
 
       useEffect(function () {
         if (following.current && flow.current) flow.current.scrollTop = flow.current.scrollHeight
-      }, [draft?.turns, activity, pane])
+      }, [draft?.discussions, activity, pane, section, tools])
 
       useEffect(function () {
         if (!activity) return
@@ -2160,23 +2298,24 @@ window.__ModuleLoader__.load({
         return function () { active = false; clearInterval(ticker); clearTimeout(timeout) }
       }, [activity])
 
-      async function run(action, fields) {
-        if (!draft || busy) return false
+      async function run(action, fields, snapshot) {
+        if (!draft || (busy && !snapshot)) return false
+        var current = snapshot || draft
         setBusy(true)
         setError(null)
         setElapsed(0)
-        setProgress(action === 'source-suggest' ? 'sources' : action === 'ask' || action === 'visual' ? 'preparing' : 'saving')
+        setProgress(action === 'source-suggest' ? 'sources' : action === 'ask' || action === 'visual' ? 'preparing' : ['plan-illustrations', 'generate-image', 'render-chart'].includes(action) ? 'visual' : 'saving')
         setActivity({ action: action, message: action === 'ask' ? fields.message : '',
           heading: action === 'ask' ? draft.sections[section]?.heading : '', started: Date.now() })
         try {
           var extra = typeof fields === 'function' ? await fields() : fields
-          var result = await api(WORKS, { action: 'draft-' + action, id: draft.id, revision: draft.revision, ...extra })
+          var result = await api(WORKS, { action: 'draft-' + action, id: current.id, revision: current.revision, ...extra })
           if (result.work) props.onNavigate('works', { read: result.work })
           else {
             setDraft(result)
-            setSection(action === 'confirm-outline' ? 0 : Math.min(section, Math.max(0, result.sections.length - 1)))
+            setSection(action === 'confirm-section' ? Math.min(section + 1, result.sections.length - 1) : action === 'confirm-outline' ? 0 : Math.min(section, Math.max(0, result.sections.length - 1)))
           }
-          return true
+          return result
         } catch (problem) {
           setError(problem)
           return false
@@ -2190,7 +2329,7 @@ window.__ModuleLoader__.load({
         event.preventDefault()
         if (!message.trim() || busy || editingText !== null) return
         var language = /\p{Script=Han}/u.test(message) || T('work.send') === ZH['work.send'] ? 'zh' : 'en'
-        run('ask', { message: message, section: section, language: language })
+        run('ask', { message: message, section: part?.id, language: language })
           .then(function (saved) { if (saved) setMessage('') })
       }
 
@@ -2198,7 +2337,7 @@ window.__ModuleLoader__.load({
         event.preventDefault()
         if (!file || !alt.trim()) return
         run('image', async function () {
-          return { section: slot === 'cover' ? null : section,
+          return { section: slot === 'cover' ? null : part?.id, item: slot.startsWith('plan:') ? slot.slice(5) : undefined,
             bytes: await readSourceFile(file, 4 * 1024 * 1024), alt: alt, caption: caption }
         }).then(function (saved) {
           if (saved) {
@@ -2210,30 +2349,56 @@ window.__ModuleLoader__.load({
 
       var part = draft?.sections[section]
       var writing = draft?.stage === 'writing'
-      var canFinish = writing && draft.sections.length > 0 && draft.sections.every(function (entry) { return !!entry.body })
-      var currentImage = slot === 'cover' ? draft?.cover : part?.image
+      var canFinish = writing && draft.sections.length > 0 && draft.sections.every(function (entry) { return entry.confirmed && entry.body }) && !Object.keys(draft.sectionCandidates ?? {}).length && !draft.summaryCandidate && !draft.imagePlan?.some(function (item) { return !item.accepted && !item.skipped })
+      var currentImage = slot.startsWith('plan:') ? null : slot === 'cover' ? draft?.cover : part?.image
       var phase = draft ? T('work.phase.' + draft.stage) : T('loading')
-      var canConfirmTopic = draft?.stage === 'topic' && draft.topic.title && draft.topic.thesis
-      var canConfirmOutline = draft?.stage === 'outline' && draft.sections.length
+      var topic = draft?.topicCandidate ?? draft?.topic
+      var turns = draft?.discussions?.[writing ? part?.id : draft?.stage] ?? []
+      var candidate = writing ? draft.sectionCandidates?.[part?.id] : null
+      var canConfirmTopic = draft?.stage === 'topic' && draft.topicCandidate?.title && draft.topicCandidate.thesis
+      var canConfirmOutline = draft?.stage === 'outline' && draft.outlineCandidate?.length
       function nextStep() {
         if (canConfirmTopic) return h('section', { className: 'gr-card gr-stack gr-work-next' },
-          h('h3', { className: 'gr-h2' }, draft.topic.title),
-          h('p', null, draft.topic.thesis),
+          h('h3', { className: 'gr-h2' }, topic.title),
+          h('p', null, topic.thesis),
           h('p', { className: 'gr-meta' }, T('work.topicNext')),
           h('button', { className: 'gr-btn', disabled: busy || !!message.trim(),
-            onClick: function () { run('confirm-topic') } }, T('work.confirmTopic')))
+            onClick: async function () {
+              var next = await run('confirm-topic')
+              if (next) run('ask', { message: T('work.prompt.outline'), language: T('work.send') === ZH['work.send'] ? 'zh' : 'en' }, next)
+            } }, T('work.confirmTopic')))
         if (canConfirmOutline) return h('section', { className: 'gr-card gr-stack gr-work-next' },
-          h('ol', null, draft.sections.map(function (part) { return h('li', { key: part.heading }, part.heading) })),
+          h('ol', null, draft.outlineCandidate.map(function (part) { return h('li', { key: part.heading }, part.heading) })),
           h('p', { className: 'gr-meta' }, T('work.outlineNext')),
           h('button', { className: 'gr-btn', disabled: busy || !!message.trim(),
-            onClick: function () { run('confirm-outline') } }, T('work.confirmOutline')))
+            onClick: function () {
+              var affected = draft.sections.some(function (entry) { return entry.body && !draft.outlineCandidate.some(function (next) {
+                return next.id === entry.id && next.point === entry.point
+              }) })
+              if (!affected || window.confirm(T('work.outlineImpact'))) run('confirm-outline', { allowChanges: affected })
+            } }, T('work.confirmOutline')))
+        if (candidate) return h('section', { className: 'gr-card gr-stack gr-work-next' },
+          h('h3', null, T('work.candidate')), h(ReportMarkdown, { body: candidate.body }),
+          h('button', { className: 'gr-btn', disabled: busy, onClick: function () {
+            run('confirm-section', { section: part.id })
+          } }, T('work.confirmSection')))
+        if (draft?.summaryCandidate) return h('section', { className: 'gr-card gr-stack' },
+          h('h3', null, T('work.summaryCandidate')), h('p', null, draft.summaryCandidate),
+          h('button', { type: 'button', className: 'gr-btn', disabled: busy,
+            onClick: function () { run('confirm-summary') } }, T('work.saveSection')))
+        if (canFinish) return h('div', { className: 'gr-stack' },
+          h('p', { className: 'gr-meta' }, T('work.ready')),
+          !draft.summary ? h('button', { type: 'button', className: 'gr-btn gr-btn-ghost', disabled: busy,
+            onClick: function () { run('summary', { language: T('work.send') === ZH['work.send'] ? 'zh' : 'en' }) }
+          }, T('work.makeSummary')) : null)
         return null
       }
       return h('section', { className: 'gr-work-composer gr-stack' },
         h('div', { className: 'gr-row gr-work-header' },
           h('button', { className: 'gr-btn gr-origin-link', onClick: function () { props.onNavigate('works') } }, '← ', T('work.back')),
-          h('h1', { className: 'gr-preview-title' }, draft?.topic.title || T('asset.newWork')),
-          draft ? h('span', { className: 'gr-meta' }, phase) : null),
+          h('h1', { className: 'gr-preview-title' }, topic?.title || T('asset.newWork')),
+          draft ? h('span', { className: 'gr-meta' }, phase) : null,
+          props.modelConfig?.workModelName ? h('span', { className: 'gr-meta' }, props.modelConfig.workModelName) : null),
         props.seed?.returnTo ? h('button', { className: 'gr-btn gr-origin-link', onClick: function () {
           props.onNavigate(props.seed.returnTo.page, props.seed.returnTo.seed)
         } }, T(props.seed.returnTo.label)) : null,
@@ -2255,8 +2420,9 @@ window.__ModuleLoader__.load({
                   var region = event.currentTarget
                   following.current = region.scrollHeight - region.clientHeight - region.scrollTop < 48
                 } },
-              !draft.turns.length ? h('p', { className: 'gr-body' }, T('work.startHint')) : null,
-              draft.turns.map(function (turn, index) {
+              draft.legacyTurns?.length ? h('details', null, h('summary', null, T('work.legacyTurns')), draft.legacyTurns.map(function (turn, index) { return h('p', { key: index }, turn.body) })) : null,
+              !turns.length && !writing ? h('p', { className: 'gr-body' }, T('work.startHint')) : null,
+              turns.map(function (turn, index) {
                 return h('div', { key: index, className: turn.role === 'user' ? 'gr-conversation-user' : 'gr-conversation-response' },
                   turn.role === 'user' ? h('p', { className: 'gr-prompt' }, turn.body) : h(ReportMarkdown, { body: turn.body }))
               }),
@@ -2264,11 +2430,26 @@ window.__ModuleLoader__.load({
                 h('p', { className: 'gr-prompt' }, activity.message)) : null,
               !activity ? nextStep() : null,
               tools === 'sources' ? h(WorkMaterials, { draft: draft, run: run, busy: busy, section: section }, function () { return null }) : null,
-              writing && tools === 'images' ? h('form', { className: 'gr-work-upload gr-stack', onSubmit: upload },
+              writing && tools === 'images' ? h('div', { className: 'gr-stack' },
+                h('button', { type: 'button', className: 'gr-btn', disabled: busy, onClick: function () {
+                  run('plan-illustrations', { language: T('work.send') === ZH['work.send'] ? 'zh' : 'en' })
+                } }, T('work.planImages')),
+                h('div', { className: 'gr-row' }, ['chart', 'illustration'].map(function (kind) {
+                  return h('button', { type: 'button', key: kind, className: 'gr-btn gr-btn-ghost',
+                    disabled: busy || (draft.imagePlan?.length ?? 0) >= 6, onClick: function () {
+                      run('plan-add', { section: part.id, kind: kind, alt: part.heading, prompt: part.point })
+                    } }, T(kind === 'chart' ? 'work.addChartPlan' : 'work.addIllustrationPlan'))
+                })),
+                draft.imagePlan?.map(function (item) { return h(WorkImagePlanItem, { key: item.id, item: item, sections: draft.sections,
+                  run: run, busy: busy, configured: !!props.modelConfig?.imageWriting }) }),
+                h('form', { className: 'gr-work-upload gr-stack', onSubmit: upload },
               h('h3', { className: 'gr-h2' }, T('work.addImage')),
               h('label', null, T('work.imagePlacement'), h('select', { value: slot, disabled: busy,
                 onChange: function (event) { setSlot(event.target.value) } },
-                h('option', { value: 'section' }, part?.heading), h('option', { value: 'cover' }, T('work.cover')))),
+                h('option', { value: 'section' }, part?.heading), h('option', { value: 'cover' }, T('work.cover')),
+                draft.imagePlan?.map(function (item) {
+                  return h('option', { value: 'plan:' + item.id, key: item.id }, item.alt)
+                }))),
               h('label', null, T('work.imageFile'), h('input', { ref: imageInput, type: 'file',
                 accept: 'image/png,image/jpeg,image/webp', disabled: busy,
                 onChange: function (event) { setFile(event.target.files[0] || null) } })),
@@ -2278,12 +2459,12 @@ window.__ModuleLoader__.load({
                 disabled: busy, onChange: function (event) { setCaption(event.target.value) } })),
               h('div', { className: 'gr-row' },
                 h('button', { type: 'button', className: 'gr-btn gr-btn-ghost', disabled: busy, onClick: function () {
-                  run('visual', { section: slot === 'cover' ? null : section, language: T('work.send') === ZH['work.send'] ? 'zh' : 'en' })
+                  run('visual', { section: slot === 'cover' ? null : part?.id, language: T('work.send') === ZH['work.send'] ? 'zh' : 'en' })
                 } }, T('work.suggestImage')),
                 h('button', { className: 'gr-btn gr-btn-ghost', disabled: busy || !file || !alt.trim() }, T('work.addImage')),
                 currentImage ? h('button', { type: 'button', className: 'gr-btn gr-btn-ghost', disabled: busy,
-                  onClick: function () { run('remove-image', { section: slot === 'cover' ? null : section }) }
-                }, T('work.removeImage')) : null)) : null),
+                  onClick: function () { run('remove-image', { section: slot === 'cover' ? null : part?.id }) }
+                }, T('work.removeImage')) : null))) : null),
 
             activity && progress ? h('div', { className: 'gr-work-progress' },
               h('span', { className: 'gr-run-spinner', 'aria-hidden': true }),
@@ -2298,7 +2479,14 @@ window.__ModuleLoader__.load({
                 h('button', { type: 'button', className: 'gr-btn gr-btn-ghost', 'aria-pressed': tools === 'sources',
                   onClick: function () { setTools(tools === 'sources' ? '' : 'sources') } }, T('work.sources')),
                 writing ? h('button', { type: 'button', className: 'gr-btn gr-btn-ghost', 'aria-pressed': tools === 'images',
-                  onClick: function () { setTools(tools === 'images' ? '' : 'images') } }, T('work.addImage')) : null),
+                  onClick: function () { setTools(tools === 'images' ? '' : 'images') } }, T('work.illustrationsMenu')) : null),
+              writing && part ? h('div', { className: 'gr-row' },
+                h('button', { type: 'button', className: 'gr-btn gr-btn-ghost', disabled: busy || editingText !== null,
+                  onClick: function () { run('ask', { section: part.id, message: T(part.body ? 'work.reviseSection' : 'work.draftSection'), language: T('work.send') === ZH['work.send'] ? 'zh' : 'en' }) }
+                }, T(part.body ? 'work.reviseSection' : 'work.draftSection')),
+                h('button', { type: 'button', className: 'gr-btn gr-btn-ghost', disabled: busy, onClick: function () {
+                  props.onNavigate('research', { title: part.heading + ' — ' + part.point })
+                } }, T('work.researchSection'))) : null,
               h('textarea', { className: 'gr-textarea', value: message, maxLength: 6000, disabled: busy || editingText !== null,
                 placeholder: T('work.prompt.' + draft.stage), 'aria-label': T('work.direction'),
                 onChange: function (event) { setMessage(event.target.value) } }),
@@ -2310,7 +2498,7 @@ window.__ModuleLoader__.load({
                   onClick: function () { run('finish') } }, T('work.finish')) : null)),
             writing && part ? h('form', { className: 'gr-stack', onSubmit: function (event) {
               event.preventDefault()
-              run('section', { section: section, body: editingText }).then(function (saved) { if (saved) setEditingText(null) })
+              run('section', { section: part?.id, body: editingText }).then(function (saved) { if (saved) setEditingText(null) })
             } }, editingText === null ?
               h('button', { type: 'button', className: 'gr-btn gr-btn-ghost', disabled: busy,
                 onClick: function () { setEditingText(part.body) } }, T('work.editSection')) :
@@ -2324,19 +2512,28 @@ window.__ModuleLoader__.load({
           h('section', { className: 'gr-card gr-work-preview', 'aria-label': T('work.preview') },
             h('h2', { className: 'gr-h2 gr-work-preview-title' }, T('work.preview')),
             h('div', { className: 'gr-work-preview-scroll gr-stack', tabIndex: 0 },
-              draft.topic.title ? h('h3', null, draft.topic.title) : null,
+              topic.title ? h('h3', null, topic.title) : null,
               draft.cover ? h(WorkImage, draft.cover) : null,
-              draft.sections.map(function (entry, index) {
+              draft.summary ? h('p', null, draft.summary) : null,
+              draft.illustrations?.filter(function (image) { return image.section === null }).map(function (image) {
+                return h(WorkImage, { ...image, key: image.id })
+              }),
+              (draft.stage === 'outline' ? draft.outlineCandidate ?? draft.sections : draft.sections).map(function (entry, index) {
                 return h('section', { key: entry.id || entry.heading, className: 'gr-work-section gr-stack',
                   'data-current': writing && index === section },
                   h('h3', null, entry.heading),
                   entry.body ? h(ReportMarkdown, { body: entry.body, workImages: true }) : h('p', { className: 'gr-meta' }, entry.point),
-                  entry.image ? h(WorkImage, entry.image) : null)
+                  entry.image ? h(WorkImage, entry.image) : null,
+                  draft.illustrations?.filter(function (image) { return image.section === entry.id }).map(function (image) {
+                    return h(WorkImage, { ...image, key: image.id })
+                  }))
               })))))
     }
 
     function WorkPage(props) {
       var [items, setItems] = useState([])
+      var [tag, setTag] = useState('')
+      var [kept, setKept] = useState(null)
       var [selected, setSelected] = useState(null)
       var [drafts, setDrafts] = useState([])
       var [draft, setDraft] = useState(null)
@@ -2365,6 +2562,7 @@ window.__ModuleLoader__.load({
       async function read(id, version) {
         var entry = await api(WORKS, { action: 'read', id: id, version: version })
         setSelected(entry)
+        setKept(null)
         setDraft(null)
         setBody(entry.body)
         setBasis(null)
@@ -2387,6 +2585,8 @@ window.__ModuleLoader__.load({
         })
       }
 
+      var availableTags = [...new Set(items.flatMap(function (item) { return item.tags || [] }))].sort()
+      var visibleItems = tag ? items.filter(function (item) { return item.tags?.includes(tag) }) : items
       var returnTo = props.seed?.returnTo || (props.seed?.idea ?
         { page: 'idea', seed: props.seed.idea, label: 'idea.back' } : null)
       return h(React.Fragment, null,
@@ -2407,9 +2607,19 @@ window.__ModuleLoader__.load({
           })) : null,
         !selected ? h('section', { className: 'gr-stack' },
           drafts.length ? h('h2', { className: 'gr-h2' }, T('work.savedWorks')) : null,
-          items.length ? items.map(function (entry) {
-            return h('button', { key: entry.meta.id, className: 'gr-btn gr-btn-ghost gr-work-list-item', disabled: busy,
-              onClick: function () { run(function () { return read(entry.meta.id, entry.meta.version) }) } }, entry.meta.title)
+          availableTags.length ? h('select', { value: tag, 'aria-label': T('asset.allTags'),
+            onChange: function (event) { setTag(event.target.value) } },
+            h('option', { value: '' }, T('asset.allTags')),
+            availableTags.map(function (value) { return h('option', { key: value, value: value }, value) })) : null,
+          visibleItems.length ? visibleItems.map(function (entry) {
+            return h('article', { key: entry.meta.id, className: 'gr-card' },
+              h('button', { className: 'gr-btn gr-btn-ghost gr-work-list-item', disabled: busy,
+                onClick: function () { run(function () { return read(entry.meta.id, entry.meta.version) }) } }, entry.meta.title),
+              h('time', { className: 'gr-meta', dateTime: entry.meta.created }, new Date(entry.meta.created).toLocaleString()),
+              entry.summary ? h('p', null, entry.summary) : null,
+              entry.tags?.length ? h('div', { className: 'gr-knowledge-tags gr-row' }, entry.tags.map(function (value) {
+                return h('button', { key: value, className: 'gr-btn gr-btn-ghost', onClick: function () { setTag(value) } }, value)
+              })) : null)
           }) : h('p', { className: 'gr-meta' }, T('work.empty'))) :
           h('button', { className: 'gr-btn gr-origin-link', disabled: busy, onClick: function () {
             setSelected(null)
@@ -2443,6 +2653,14 @@ window.__ModuleLoader__.load({
           h('h2', { className: 'gr-h2' }, T('work.savedSources')),
           h(WorkSourceList, { sources: selected.sources, onRead: readBasis })) : null,
         selected ? h('div', { className: 'gr-row' },
+          h('button', { className: 'gr-btn', disabled: busy, onClick: function () {
+            if (kept) return props.onNavigate('knowledge', { read: kept })
+            run(async function () {
+              var note = await api(KNOWLEDGE, { action: 'keep-work', work: { id: selected.meta.id, version: selected.meta.version } })
+              setKept({ id: note.meta.id, version: note.meta.version })
+              setMessage(T('research.saved'))
+            })
+          } }, T(kept ? 'asset.knowledge' : 'work.keepKnowledge')),
           h('button', { className: 'gr-btn', onClick: function () {
             run(async function () { await navigator.clipboard.writeText(selected.body); setMessage(T('asset.copied')) })
           } }, T('asset.copy'))) : null,

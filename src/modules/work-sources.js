@@ -26,7 +26,7 @@ export async function readWorkSource(vault, ref) {
 }
 
 export async function findWorkKnowledge(vault, query) {
-  if (query) return searchVault(vault, query, { knowledgeOnly: true })
+  if (query) return searchVault(vault, query, { knowledgeOnly: true, includeReports: true })
   return (await listKnowledge(vault)).sort((a, b) =>
     (b.meta.modified ?? b.meta.created).localeCompare(a.meta.modified ?? a.meta.created))
     .slice(0, 12).map(sourceRef)

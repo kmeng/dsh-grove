@@ -70,7 +70,7 @@ function rank(note) {
   return [...candidates.values()].sort((a, b) => b.score - a.score || a.key.localeCompare(b.key, 'zh'))
 }
 
-function selectTags(note) {
+export function selectTags(note) {
   const tags = []
   const keys = []
   for (const { key, labels } of rank(note)) {

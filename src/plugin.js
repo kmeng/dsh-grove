@@ -46,6 +46,7 @@ export function apply(ctx, config = {}) {
       return provider
     },
     model: (settings, role, modelConfig) => {
+      if (role === 'work') return httpModel({ ...settings, credential: process.env.GROVE_WORK_MODEL_KEY })
       if (role === 'report') {
         const credential = process.env.GROVE_REPORT_MODEL_KEY
           || (settings.endpoint === modelConfig?.deepResearch?.endpoint ? process.env.GROVE_RESEARCH_MODEL_KEY : undefined)

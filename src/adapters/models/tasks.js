@@ -27,7 +27,9 @@ export function modelTasks(name, complete) {
     compose(input) {
       const output = {
         topic: 'Return JSON with reply, title, audience, and thesis. Ask a focused question in reply if the direction is unclear. Use empty strings for fields you cannot suggest yet.',
-        outline: 'Return JSON with reply and sections (1–8 objects with heading, point, sourceNumbers (array of supplied source numbers planned for this section), and optional visual). Give each section one central point and note which supplied evidence or example could explain it. Suggest a visual only where it would help the reader.',
+        outline: 'Return JSON with reply and sections (1–8 objects with id (echo the existing section ID when renaming or reordering a section), heading, point, sourceNumbers (array of supplied source numbers planned for this section), and optional visual). Give each section one central point and note which supplied evidence or example could explain it. Suggest a visual only where it would help the reader.',
+        illustrations: 'Return JSON with images, at most six objects (section: a supplied section ID or null for cover, kind: chart or illustration, prompt, alt, caption). Use chart only for explicit numeric data. Recommend only useful placements and avoid duplicating ideas.',
+        summary: 'Return JSON with reply containing a concise summary of the confirmed article. Preserve limitations and rely only on the provided sections.',
         visual: 'Return JSON with reply containing a concise image prompt and why the image belongs at the selected placement. Describe the subject, composition, and style. Do not generate a URL or claim an image was created.',
         writing: 'Return JSON with reply and body (Markdown prose for the selected section only, without its heading), and sourceNumbers (only the supplied numbers actually relied on, or an empty array). Keep established claims and references grounded in the supplied material. A visual suggestion may go in reply.',
       }[input.stage]
