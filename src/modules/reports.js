@@ -32,6 +32,16 @@ export async function confirmReport(store, input) {
   return store.create({ type: 'report', title: research.meta.title, body: input.body, links })
 }
 
+export async function reportWorkOrigin(store, note) {
+  const ref = note.meta.links?.find(link => link.kind === 'related')
+  if (!ref) return undefined
+  const research = await store.get(ref.id, ref.version).catch(error => {
+    if (error.code !== 'ENOENT') throw error
+    return null
+  })
+  return research?.meta.type === 'research' ? research.meta.workOrigin : undefined
+}
+
 export async function readReport(store, id, version) {
   if (!Number.isSafeInteger(version) || version < 1) throw new Error('Choose an exact report version')
   const note = await store.get(id, version)
@@ -45,7 +55,7 @@ export async function readReport(store, id, version) {
       return { missing: true, reference: link }
     }
   }))
-  return { ...note, evidence, versions: await store.versions(id) }
+  return { ...note, evidence, versions: await store.versions(id), workOrigin: await reportWorkOrigin(store, note) }
 }
 
 export async function draftFromFinding(store, research, id, version) {

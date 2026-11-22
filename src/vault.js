@@ -130,6 +130,13 @@ export class Vault {
       meta.question = question.meta.id
       meta.questionVersion = question.meta.version
       meta.stage = stages[0]
+      if (input.workOrigin) {
+        const { draftId, sectionId } = input.workOrigin
+        if (!validId.test(draftId) || typeof sectionId !== 'string' || !(validId.test(sectionId) || /^[a-f0-9]{32}$/.test(sectionId))) {
+          throw new Error('Invalid work section origin')
+        }
+        meta.workOrigin = { draftId, sectionId }
+      }
     }
     if (type === 'evidence') {
       meta.source = required(input.source, 'source')

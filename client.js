@@ -246,6 +246,11 @@ window.__ModuleLoader__.load({
       'work.draftSection': '起草本节',
       'work.reviseSection': '修订本节',
       'work.researchSection': '为本节补资料',
+      'work.confirmReturn': '确认报告并带回小节',
+      'work.adoptReturn': '加入报告并返回小节',
+      'work.returnSection': '返回原小节',
+      'work.reportAdded': '研究报告已加入本节素材。',
+      'work.sectionMissing': '原小节已不存在，请从草稿中选择其他小节。',
       'work.ready': '文章已准备好，可保存为作品。',
       'work.outlineImpact': '此提纲会改变已有章节的核心观点或移除章节。确认后应用变更。',
       'work.outlineReview': '确认前请查看提纲变更。',
@@ -622,6 +627,11 @@ window.__ModuleLoader__.load({
       'work.draftSection': 'Draft this section',
       'work.reviseSection': 'Revise this section',
       'work.researchSection': 'Research for this section',
+      'work.confirmReturn': 'Confirm report and return to section',
+      'work.adoptReturn': 'Add report and return to section',
+      'work.returnSection': 'Back to the source section',
+      'work.reportAdded': 'The research report was added to this section.',
+      'work.sectionMissing': 'The original section no longer exists. Select another section in the draft.',
       'work.ready': 'The article is ready to save.',
       'work.outlineImpact': 'This outline changes or removes written sections. Confirm to apply those changes.',
       'work.outlineReview': 'Review the outline changes before confirming.',
@@ -1891,17 +1901,24 @@ window.__ModuleLoader__.load({
         setKept(null)
         setEditing(false)
         content.current?.scrollTo(0, 0)
+        return result
       }
 
       function save(event) {
-        event.preventDefault()
+        event?.preventDefault()
         run(async function () {
           var input = { action: 'confirm', research: studyId, body: body, evidence: references }
           if (report) { input.id = report.meta.id; input.version = report.meta.version }
           var result = await api(REPORTS, input)
-          await read(result.meta.id, result.meta.version)
+          var confirmed = await read(result.meta.id, result.meta.version)
           props.onSaved()
+          if (confirmed.workOrigin) await adopt(confirmed)
         })
+      }
+
+      async function adopt(entry) {
+        var target = await api(REPORTS, { action: 'adopt-work', id: entry.meta.id, version: entry.meta.version })
+        props.onNavigate('compose', { ...target, addedReport: true })
       }
 
       function cite(item) {
@@ -1963,7 +1980,7 @@ window.__ModuleLoader__.load({
             })) : null),
         h('div', { className: 'gr-preview-actions gr-row' },
           editing ? h(React.Fragment, null,
-            h('button', { className: 'gr-btn', type: 'submit', form: 'gr-preview-edit', disabled: busy }, T('report.save')),
+            h('button', { className: 'gr-btn', type: 'submit', form: 'gr-preview-edit', disabled: busy }, T(report?.workOrigin ? 'work.confirmReturn' : 'report.save')),
             h('button', { className: 'gr-btn gr-btn-ghost', disabled: busy, onClick: function () {
               if (!report) { props.onClose(); return }
               resetEditor(report)
@@ -1972,7 +1989,12 @@ window.__ModuleLoader__.load({
           report && !editing && latest ? h('button', { className: 'gr-btn gr-btn-ghost', disabled: busy,
             onClick: function () { setEditing(true) } }, T('report.edit')) : null,
           report && !editing && latest && studyId && report.meta.review === 'draft' ?
-            h('button', { className: 'gr-btn', disabled: busy, onClick: save }, T('report.save')) : null,
+            h('button', { className: 'gr-btn', disabled: busy, onClick: save }, T(report?.workOrigin ? 'work.confirmReturn' : 'report.save')) : null,
+          report && !editing && report.meta.review !== 'draft' && report.workOrigin ?
+            h('button', { className: 'gr-btn', disabled: busy, onClick: function () { run(function () { return adopt(report) }) } },
+              T('work.adoptReturn')) : null,
+          report?.workOrigin && !editing && error ? h('button', { className: 'gr-btn gr-btn-ghost', disabled: busy,
+            onClick: function () { props.onNavigate('compose', report.workOrigin) } }, T('work.returnSection')) : null,
           report && !editing && report.meta.review !== 'draft' ? h(React.Fragment, null,
             h('button', { className: 'gr-btn', disabled: busy || !!kept, onClick: function () {
               run(async function () {
@@ -2248,7 +2270,7 @@ window.__ModuleLoader__.load({
       var [progress, setProgress] = useState(null)
       var [elapsed, setElapsed] = useState(0)
       var [pane, setPane] = useState('conversation')
-      var [tools, setTools] = useState('')
+      var [tools, setTools] = useState(props.seed?.sectionId ? 'sources' : '')
       var [error, setError] = useState(null)
       var [file, setFile] = useState(null)
       var [alt, setAlt] = useState('')
@@ -2265,11 +2287,20 @@ window.__ModuleLoader__.load({
           : { action: 'draft-start', title: seed?.title, basis: seed?.basis })
       }
 
+      function selectDraft(result) {
+        setDraft(result)
+        if (props.seed?.sectionId) {
+          var index = result.sections.findIndex(function (part) { return part.id === props.seed.sectionId })
+          if (index >= 0) setSection(index)
+          else setError(new Error(T('work.sectionMissing')))
+        }
+      }
+
       useEffect(function () {
         var active = true
         initial.current ??= load()
         initial.current.then(function (result) {
-          if (active) { setDraft(result); setBusy(false) }
+          if (active) { selectDraft(result); setBusy(false) }
         }, function (problem) {
           if (active) { setError(problem); setBusy(false) }
         })
@@ -2310,7 +2341,8 @@ window.__ModuleLoader__.load({
         try {
           var extra = typeof fields === 'function' ? await fields() : fields
           var result = await api(WORKS, { action: 'draft-' + action, id: current.id, revision: current.revision, ...extra })
-          if (result.work) props.onNavigate('works', { read: result.work })
+          if (result.study) props.onNavigate('research', { resume: result.study, direction: result.direction })
+          else if (result.work) props.onNavigate('works', { read: result.work })
           else {
             setDraft(result)
             setSection(action === 'confirm-section' ? Math.min(section + 1, result.sections.length - 1) : action === 'confirm-outline' ? 0 : Math.min(section, Math.max(0, result.sections.length - 1)))
@@ -2403,6 +2435,7 @@ window.__ModuleLoader__.load({
           props.onNavigate(props.seed.returnTo.page, props.seed.returnTo.seed)
         } }, T(props.seed.returnTo.label)) : null,
         error ? h('p', { role: 'alert' }, messageOf(error)) : null,
+        props.seed?.addedReport && draft && !error ? h('p', { className: 'gr-meta', role: 'status' }, T('work.reportAdded')) : null,
         draft ? h('div', { className: 'gr-row gr-work-tabs', 'aria-label': T('asset.works') },
           ['conversation', 'preview'].map(function (tab) {
             return h('button', { key: tab, className: 'gr-btn gr-btn-ghost', 'aria-pressed': pane === tab,
@@ -2412,7 +2445,7 @@ window.__ModuleLoader__.load({
           h('button', { className: 'gr-btn', onClick: async function () {
             setBusy(true)
             setError(null)
-            try { setDraft(await load()) } catch (problem) { setError(problem) } finally { setBusy(false) }
+            try { selectDraft(await load()) } catch (problem) { setError(problem) } finally { setBusy(false) }
           } }, T('err.retry'))) : h('div', { className: 'gr-work-layout', 'data-pane': pane },
           h('section', { className: 'gr-work-chat', 'aria-label': T('work.conversation') },
             h('div', { className: 'gr-work-flow gr-stack', role: 'log', ref: flow, tabIndex: 0, 'aria-label': T('work.conversation'),
@@ -2484,9 +2517,8 @@ window.__ModuleLoader__.load({
                 h('button', { type: 'button', className: 'gr-btn gr-btn-ghost', disabled: busy || editingText !== null,
                   onClick: function () { run('ask', { section: part.id, message: T(part.body ? 'work.reviseSection' : 'work.draftSection'), language: T('work.send') === ZH['work.send'] ? 'zh' : 'en' }) }
                 }, T(part.body ? 'work.reviseSection' : 'work.draftSection')),
-                h('button', { type: 'button', className: 'gr-btn gr-btn-ghost', disabled: busy, onClick: function () {
-                  props.onNavigate('research', { title: part.heading + ' — ' + part.point })
-                } }, T('work.researchSection'))) : null,
+                h('button', { type: 'button', className: 'gr-btn gr-btn-ghost', disabled: busy || editingText !== null,
+                  onClick: function () { run('research', { section: part.id }) } }, T('work.researchSection'))) : null,
               h('textarea', { className: 'gr-textarea', value: message, maxLength: 6000, disabled: busy || editingText !== null,
                 placeholder: T('work.prompt.' + draft.stage), 'aria-label': T('work.direction'),
                 onChange: function (event) { setMessage(event.target.value) } }),
@@ -2699,7 +2731,7 @@ window.__ModuleLoader__.load({
           if (props.seed?.resume) {
             var study = data.studies.find(function (item) { return item.meta.id === props.seed.resume })
             if (study) {
-              select(study)
+              select(study, props.seed.direction)
               if (props.seed.report) props.onNavigate('report', Object.assign({ studyId: study.meta.id }, props.seed.report))
             }
             else setError(new Error(T('research.topicMissing')))
@@ -2719,11 +2751,11 @@ window.__ModuleLoader__.load({
         if (element && follow.current) element.scrollTop = element.scrollHeight
       }, [newest?.id, newest?.status, newest?.written, newest?.collected?.length, newest?.verified?.length])
 
-      function select(study) {
+      function select(study, initialDirection) {
         follow.current = true
         visit.current++
         setSourceSeed(null)
-        setDirection('')
+        setDirection(initialDirection || '')
         setRuns([])
         setSelected(study)
         setCreating(false)
@@ -2805,7 +2837,10 @@ window.__ModuleLoader__.load({
             if (fromIdea) props.onBack()
             else select(null)
           } }, '← ', T(fromIdea ? 'idea.back' : 'research.overview')),
-          h('h1', null, selected?.meta.title || T('research.newConversation'))),
+          h('h1', null, selected?.meta.title || T('research.newConversation')),
+          selected?.meta.workOrigin ? h('button', { className: 'gr-btn gr-btn-ghost',
+            onClick: function () { props.onNavigate('compose', selected.meta.workOrigin) }
+          }, T('work.returnSection')) : null),
         originalBody ? h('aside', { className: 'gr-conversation-context' },
           h('h2', { className: 'gr-h2' }, T('research.originText')), h('p', { className: 'gr-prose' }, originalBody)) : null,
         h('div', { className: 'gr-conversation-flow', ref: flow, onScroll: function (event) {
