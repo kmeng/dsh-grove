@@ -875,3 +875,35 @@ test('desktop research uses the host search without a Tavily configuration', asy
   assert.match(modelInput.today, /^\d{4}-\d{2}-\d{2}$/)
   assert.match((await new Vault(root).get(turn.report.id)).body, /<https:\/\/example\.org\/release>/)
 })
+
+test('the UCD report retains concept and acronym tags and rebuilds a same-day legacy index', async t => {
+  const root = await fixture(t)
+  const store = new Vault(root)
+  const { ctx, registered } = host()
+  registerRoutes(ctx, { current: () => ({ path: root }) })
+  const title = '2023–2026 年 AI 时代以用户为中心的设计：原则、方法、评估与治理维度的可验证新发展'
+  const body = '在 2023 年初至 2026 年 11 月的窗口内，以用户为中心的设计（UCD）在生成式 AI 语境下出现了若干可辨识的新发展，但证据基础尚不成熟。主要发现包括：第一，LLM 模拟用户与模拟对话已被提出为 UX 研究的前置方法。'
+  const note = await store.create({ type: 'concept', title, body })
+  const acronymOnly = await store.create({ type: 'method', title: 'UCD', body: '方法。' })
+  const explicit = await store.create({ type: 'theory', title: '以证据为基础的分析', body: '以证据为基础的分析（EBA）明确证据与判断的关系。' })
+  const legacy = { schema: 1, day: '2026-11-22', entries: {
+    [note.meta.id]: { version: 1, tags: ['问题', '合成', '模拟', '发展', '方法'], related: [acronymOnly.meta.id] },
+  } }
+  const path = join(await store.folder(), '.knowledge-index.json')
+  await writeFile(path, JSON.stringify(legacy))
+
+  const today = new Date(2026, 10, 22, 12)
+  assert.equal(await organizeKnowledge(store, today), true)
+  assert.equal(await organizeKnowledge(store, today), false)
+  const response = await registered.get(routes.knowledge).fetch(request(routes.knowledge, { action: 'browse' }))
+  assert.equal(response.status, 200)
+  const { items } = await response.json()
+  const updated = items.find(item => item.meta.id === note.meta.id)
+  assert.deepEqual(updated.tags.slice(0, 2), ['以用户为中心的设计', 'UCD'])
+  assert.ok(updated.tags.length <= 5)
+  assert.ok(!updated.tags.some(tag => legacy.entries[note.meta.id].tags.includes(tag)))
+  assert.ok(!updated.related.some(meta => meta.id === acronymOnly.meta.id), 'two spellings of one concept count once')
+  const abbreviation = items.find(item => item.meta.id === acronymOnly.meta.id)
+  assert.deepEqual(abbreviation.tags, ['以用户为中心的设计', 'UCD'])
+  assert.deepEqual(items.find(item => item.meta.id === explicit.meta.id).tags.slice(0, 2), ['以证据为基础的分析', 'EBA'])
+})
