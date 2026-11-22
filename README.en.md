@@ -1,6 +1,6 @@
 # Grove
 
-![Grove. Start with an idea, form a judgment with evidence, and carry what you learn into the next inquiry.](brand/exports/readme-header-1600x480.en.png)
+![Grove. Start with an idea, form a judgment with evidence, and carry what you learn into the next inquiry.](https://raw.githubusercontent.com/kmeng/dsh-grove/main/brand/exports/readme-header-1600x480.en.png)
 
 [简体中文](README.md) · [English](README.en.md)
 
@@ -8,26 +8,29 @@
 [![DeepSeek Harness >=0.2.2-rc.1 <0.3.0](https://img.shields.io/badge/dsh-%3E%3D0.2.2--rc.1_%3C0.3.0-1B3A2E?style=flat-square)](package.json)
 [![Node.js >=22.13.0](https://img.shields.io/badge/Node.js-22.13%2B-2F7D5B?style=flat-square&logo=nodedotjs&logoColor=white)](package.json)
 
-## Why Grove exists
+## Turn a passing idea into knowledge you can use
 
-Grove started with a question. How can an idea, a conversation, or a round of research become knowledge you can find, verify, and revise later? Grove connects DeepSeek Harness to your own Obsidian vault so that work stays with you as Markdown.
+Grove connects DeepSeek Harness to your Obsidian vault so you can turn a passing idea into a judgment you can explain in your own words, check against evidence, and revise in practice. Ideas, sources, reports, and drafts stay with you as Markdown, so you can return to the evidence behind a decision.
 
-The Personal Knowledge & Growth System (PKGS) connects exploration, learning, research, creation, and reflection. You can jot down a sentence or revise a judgment after trying it in practice, then carry that understanding into your next study. AI can compare explanations, ask questions, and draft. You decide what to believe, keep, and share. [PKGS guide](docs/PKGS.en.md)
+**Creating something from what you learn is how you make it your own.** Saving a report preserves someone’s explanation or your understanding at the time. Writing for someone else, explaining it aloud, or applying the method to a different question shows what you can explain and where you still need evidence. A few lines written for yourself can be enough. Putting the idea into your own words and investigating the gaps is how understanding sticks.
 
-## Core features
+This process comes from the Personal Knowledge & Growth System (PKGS), which connects exploration, research, creation, and reflection. AI can help you ask follow-up questions, compare explanations, and draft. You decide whether the evidence supports the judgment. [PKGS guide](docs/PKGS.en.md)
 
-The features below describe this repository. Installations from npm use the version published in the registry. [npm package](https://www.npmjs.com/package/dsh-grove)
+## Why do the two sides of this street feel so different?
 
-- **Capture ideas.** Jot down a thought, find it by keyword, and reopen an earlier version.
-- **Research with evidence.** Start an independent study or configure a model to analyze selected excerpts. Import Markdown or PDFs with a text layer, save passages with paragraph or page locations, and confirm a report after review.
-- **Build knowledge and create works.** Turn findings into concepts or methods, and use your knowledge to draft a work. Record why your understanding changed while keeping earlier references readable.
-- **Keep your data locally.** Notes and versions live in the vault’s `Grove/` folder. The CLI can verify a backup and restore it to a separate directory.
+1. **Capture the observation.** On a walk, you notice that you linger on one side of a street and hurry through the other. Save that contrast as an idea in Grove. Next time you’re there, you can find the note with a natural-language query.
+2. **Turn it into a question you can investigate.** Start research from the idea and ask whether shade, sidewalk width, or crossing wait times explain the difference. Add observations from different times, public street records, or a PDF with a text layer. Keep the sources and page references with the excerpts. Ask follow-up questions to compare explanations, then confirm a report that spells out what the evidence supports and what still needs checking.
+3. **Save a judgment you can return to.** Save the confirmed report to Knowledge. Expand the entry any time to read the full report and references from the version you saved. While Grove runs, it organizes tags and related knowledge locally each day. Use the tags to filter entries or follow a related entry back to earlier research.
+4. **Create something, then return to the street.** Use the knowledge entry to draft a short explanation for a neighbor and make a checklist for your next walk. If you write “shade makes this side more comfortable” and realize your observations cluster at one time of day, continue the original study and compare other times. Rewrite the explanation and try the checklist on another street to see what you’ve learned.
+
+Notes and their versions live in the vault’s `Grove/` folder. The CLI can verify a backup and restore it to a separate directory. Features depend on the release you install. [npm package](https://www.npmjs.com/package/dsh-grove)
 
 ## Install and use
 
 Have an Obsidian vault ready. Check [`engines` in package.json](package.json) for the supported Node.js and DeepSeek Harness versions.
 
 - **Install from npm.** Run `dsh plugin --profile <profile> add dsh-grove`.
+- **Update in Desktop.** Open **Plugins → Grove** and check again for a newer version, then follow the update prompt.
 - **Try the source in Desktop.** Open **Plugins → Add plugin** and select this repository directory. Restart the host after editing the source. Desktop manages its own profile.
 - **Try the source in a separate profile.** From the repository root, run the following commands.
 

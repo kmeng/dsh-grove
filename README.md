@@ -1,6 +1,6 @@
 # Grove（知林）
 
-![Grove 知林。从灵感出发，用证据形成判断，带着反思进入下一轮探索。](brand/exports/readme-header-1600x480.zh.png)
+![Grove 知林。从灵感出发，用证据形成判断，带着反思进入下一轮探索。](https://raw.githubusercontent.com/kmeng/dsh-grove/main/brand/exports/readme-header-1600x480.zh.png)
 
 [简体中文](README.md) · [English](README.en.md)
 
@@ -8,26 +8,29 @@
 [![DeepSeek Harness >=0.2.2-rc.1 <0.3.0](https://img.shields.io/badge/dsh-%3E%3D0.2.2--rc.1_%3C0.3.0-1B3A2E?style=flat-square)](package.json)
 [![Node.js >=22.13.0](https://img.shields.io/badge/Node.js-22.13%2B-2F7D5B?style=flat-square&logo=nodedotjs&logoColor=white)](package.json)
 
-## 缘起
+## 让灵感长成自己的知识
 
-知林源于一个问题：怎样让一次对话、一条灵感或一轮研究，成为以后还能找回、核对和修正的知识？Grove 把 DeepSeek Harness 与你自己的 Obsidian vault 连起来，让这些内容以 Markdown 留在手边。
+知林把 DeepSeek Harness 和你的 Obsidian vault 连起来，帮你把一句灵感变成能用自己的话解释、用证据检验、在实践中修正的判断。灵感、资料、报告和作品都能以 Markdown 留在手边，方便以后回看当时的依据。
 
-背后的 PKGS（Personal Knowledge & Growth System）把思想探索、学习、研究、创作和反思连在一起。你可以只记一句话，也可以在实践后修正自己的判断，把更新后的理解带进下一轮研究。AI 可以帮你比较解释、追问和起草，你决定相信什么、留下什么以及分享什么。 [PKGS 方法指南](docs/PKGS.zh.md)
+**输出让知识从笔记走进脑子。** 收藏一份报告，留住的是别人或当时的自己怎样理解它。试着写给别人看、讲给人听，或把方法用在另一个问题上，你才会发现哪些地方自己能解释，哪些地方还需要证据。输出可以只是一段写给自己的话。用自己的话说清楚，再带着暴露出来的问题回去研究，才是内化的过程。
 
-## 核心功能
+这个过程来自 PKGS（Personal Knowledge & Growth System），把探索、研究、创作和反思连起来。AI 可以帮助追问、比较解释和起草，证据够不够、判断能不能成立，仍由你决定。 [PKGS 方法指南](docs/PKGS.zh.md)
 
-以下功能以本仓库源码为准。通过 npm 安装时，以注册表已发布的版本为准。 [npm 包](https://www.npmjs.com/package/dsh-grove)
+## 同一条街，为什么两边走起来差这么多？
 
-- **叮一下**。记下一句灵感，之后按关键词找回，也能打开历史版本。
-- **研究与证据**。直接发起独立研究，或配置模型分析选定的摘录。导入 Markdown 和有文本层的 PDF，给摘录留下段落或页码，核对后保存报告。
-- **知识与作品**。从报告提炼概念或方法，用已有知识起草作品。修订知识时记录原因，旧作品仍可回查当时使用的版本。
-- **本地数据**。笔记和历史版本保存在 vault 的 `Grove/` 目录。CLI 可创建校验过的备份并恢复到独立目录。
+1. **记下灵感。** 散步时发现，一侧总想多走一会儿，另一侧只想快点通过。打开知林，点「叮」记下这个反差。下次再走到这里，可以用一句话找回当时的观察。
+2. **把观察变成可核查的问题。** 从这条灵感发起研究，问「是树荫、人行道宽度，还是过街等待时间在起作用？」把不同时段的观察、公开道路资料或有文本层的 PDF 加进来，给摘录保留来源和页码。通过追问比较几种解释，再确认报告，把有证据的判断和仍待验证的猜测分别写清楚。
+3. **把判断沉淀为可回查的知识。** 点「提炼为知识」。以后在知识库展开条目，就能读到当时收藏的完整报告和参考资料。知林运行时每天在本地整理标签和相关知识。用标签筛选，可以找回一组笔记，也可以顺着关联回看之前的研究。
+4. **输出，再回到现场。** 点「写成作品」，试着写一段给邻居看的解释，并做一张下次散步可用的观察清单。写到「树荫让这边更好走」时，如果发现比较集中在同一个时段，就点「继续研究」回到原课题，补做其他时段的观察。再修正解释、拿到另一条街试一遍，才知道自己掌握了什么。
+
+笔记及历史版本保存在 vault 的 `Grove/` 目录。CLI 可校验备份，并恢复到独立目录。功能随发布版本更新。 [npm 包](https://www.npmjs.com/package/dsh-grove)
 
 ## 安装与使用
 
 准备一个 Obsidian vault。Node.js 与 DeepSeek Harness 的兼容要求见 [package.json 的 `engines`](package.json)。
 
 - **从 npm 安装**。运行 `dsh plugin --profile <profile> add dsh-grove`。
+- **在 Desktop 更新**。打开「插件 → Grove（知林）」，点「重新检查」，有新版本时按提示更新。
 - **在 Desktop 试用源码**。在 **Plugins → Add plugin** 选择本仓库目录。修改源码后重启宿主。Desktop 使用自己管理的 profile。
 - **用独立 profile 试用源码**。在仓库根目录执行以下命令。
 
