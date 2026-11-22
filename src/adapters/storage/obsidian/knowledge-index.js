@@ -12,7 +12,7 @@ export async function readKnowledgeIndex(vault) {
     try {
       if (!(await handle.stat()).isFile()) throw new Error('Invalid knowledge index file')
       const index = JSON.parse(await handle.readFile('utf8'))
-      return index.schema === 1 && typeof index.day === 'string' && index.entries ? index : null
+      return (index.schema === 1 || index.schema === 2) && typeof index.day === 'string' && index.entries ? index : null
     } finally {
       await handle.close()
     }

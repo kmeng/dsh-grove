@@ -901,6 +901,8 @@ test('the UCD report retains concept and acronym tags and rebuilds a same-day le
   const updated = items.find(item => item.meta.id === note.meta.id)
   assert.deepEqual(updated.tags.slice(0, 2), ['以用户为中心的设计', 'UCD'])
   assert.ok(updated.tags.length <= 5)
+  assert.ok(updated.tags.includes('生成式 AI'))
+  assert.ok(updated.tags.includes('UX 研究'))
   assert.ok(!updated.tags.some(tag => legacy.entries[note.meta.id].tags.includes(tag)))
   assert.ok(!updated.related.some(meta => meta.id === acronymOnly.meta.id), 'two spellings of one concept count once')
   const abbreviation = items.find(item => item.meta.id === acronymOnly.meta.id)
