@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, readFile, realpath, rm, symlink } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { capture, inspectVault, registerRoutes, routes, saveVault, vaultStatus } from '../src/server.js'
+import { organizeKnowledge } from '../src/modules/knowledge-index.js'
 import { Vault } from '../src/vault.js'
 import { researchRunStore } from '../src/adapters/storage/obsidian/research-runs.js'
 
@@ -695,6 +696,73 @@ test('a confirmed report can be kept once in knowledge and found by a natural-la
     action: 'search', query: '帮我找一下关于智能体 UX 设计的笔记',
   }))
   assert.deepEqual(new Set((await result.json()).notes.map(note => note.id)), new Set([first.meta.id, draft.meta.id]))
+})
+
+test('knowledge detail shows the saved report version and links to its original study', async t => {
+  const root = await fixture(t)
+  const store = new Vault(root)
+  const { ctx, registered } = host()
+  registerRoutes(ctx, { current: () => ({ path: root }) })
+  const question = await store.create({ type: 'question', body: 'How is battery storage sized?' })
+  const study = await store.create({ type: 'research', question: question.meta.id, title: question.meta.title, body: '' })
+  const report = await store.create({ type: 'report', body: '## Conclusion\nBattery storage.\n\n## References\nDetailed evidence.',
+    links: [{ kind: 'related', id: study.meta.id, version: 1 }] })
+  const call = async input => {
+    const response = await registered.get(routes.knowledge).fetch(request(routes.knowledge, input))
+    assert.equal(response.status, 200)
+    return response.json()
+  }
+  const note = await call({ action: 'keep-report', report: report.meta })
+  await store.update(report.meta.id, 1, { body: 'Later version.' })
+  const detail = await call({ action: 'detail', ...note.meta })
+  assert.equal(detail.report.meta.version, 1)
+  assert.match(detail.report.body, /Detailed evidence/)
+  assert.doesNotMatch(detail.body, /Detailed evidence/)
+  assert.equal(detail.studyId, study.meta.id)
+  const legacy = await store.create({ type: 'concept', body: 'Legacy knowledge.' })
+  assert.equal((await call({ action: 'detail', ...legacy.meta })).body, 'Legacy knowledge.')
+  await rm(join(await store.folder(), report.meta.id + '.v1.md'))
+  const missing = await call({ action: 'detail', ...note.meta })
+  assert.equal(missing.reportMissing, true)
+  assert.equal(missing.body, note.body)
+})
+
+test('daily knowledge organization catches up, deduplicates and retains the last successful index', async t => {
+  const root = await fixture(t)
+  const store = new Vault(root)
+  const { ctx, registered } = host()
+  registerRoutes(ctx, { current: () => ({ path: root }) })
+  const note = await store.create({ type: 'concept', title: 'Battery storage', body: 'Battery storage balances supply.' })
+  const match = await store.create({ type: 'method', title: 'Battery storage sizing', body: 'Battery storage depends on demand.' })
+  const chinese = await store.create({ type: 'concept', title: '电池储能与负荷', body: '电池储能用于平衡负荷。' })
+  const day = new Date(2026, 10, 21, 12)
+  const results = await Promise.all([organizeKnowledge(store, day), organizeKnowledge(new Vault(root), day)])
+  assert.deepEqual(results, [true, true])
+  assert.equal(await organizeKnowledge(new Vault(root), day), false)
+  const browse = async () => {
+    const result = await registered.get(routes.knowledge).fetch(request(routes.knowledge, { action: 'browse' }))
+    assert.equal(result.status, 200)
+    const { items } = await result.json()
+    return new Map(items.map(item => [item.meta.id, item]))
+  }
+  const items = await browse()
+  assert.deepEqual(items.get(note.meta.id).tags, ['battery', 'storage'])
+  assert.equal(items.get(note.meta.id).summary, note.body)
+  assert.deepEqual(items.get(note.meta.id).related.map(meta => meta.id), [match.meta.id])
+  assert.ok(items.get(chinese.meta.id).tags.includes('电池'))
+  const folder = await store.folder()
+  const index = join(folder, '.knowledge-index.json')
+  const previous = await readFile(index, 'utf8')
+  const invalid = join(folder, note.meta.id + '.v2.md')
+  await writeFile(invalid, 'invalid Markdown')
+  const next = new Date(2026, 10, 23, 12)
+  await assert.rejects(organizeKnowledge(store, next), /frontmatter/)
+  assert.equal(await readFile(index, 'utf8'), previous)
+  await rm(invalid)
+  assert.deepEqual((await browse()).get(note.meta.id).tags, ['battery', 'storage'])
+  assert.equal(await organizeKnowledge(store, next), true)
+  assert.notEqual(await readFile(index, 'utf8'), previous)
+  assert.equal((await store.get(note.meta.id)).meta.version, 1)
 })
 
 test('research conversation keeps follow-up history and origin when using local evidence only', async t => {

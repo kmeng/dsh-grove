@@ -207,19 +207,20 @@ window.__ModuleLoader__.load({
       'asset.works': '作品',
       'asset.title': '标题',
       'asset.body': '正文',
-      'asset.newKnowledge': '新建知识',
       'asset.newWork': '新建作品',
       'asset.backKnowledge': '返回知识笔记',
       'asset.save': '保存',
       'asset.basis': '查看依据',
       'asset.derive': '提炼为知识',
       'asset.compose': '写成作品',
-      'asset.research': '带着这条知识深挖',
-      'asset.reason': '实践反思 · 什么改变了你的理解？',
       'asset.copy': '复制正文',
       'asset.copied': '已复制',
-      'asset.type': '知识类型',
       'asset.missing': '来源不可用。',
+      'asset.filterTags': '筛选标签',
+      'asset.allTags': '全部标签',
+      'asset.related': '相关知识',
+      'asset.noMatches': '没有符合条件的知识。',
+      'asset.emptyKnowledge': '还没有收藏的知识。',
       'report.review': '审核为报告草稿',
       'report.discard': '丢弃未保存草稿',
       'model.enabled': '启用 AI 深挖',
@@ -486,19 +487,20 @@ window.__ModuleLoader__.load({
       'asset.works': 'Works',
       'asset.title': 'Title',
       'asset.body': 'Body',
-      'asset.newKnowledge': 'New knowledge',
       'asset.newWork': 'New work',
       'asset.backKnowledge': 'Back to knowledge note',
       'asset.save': 'Save',
       'asset.basis': 'View basis',
       'asset.derive': 'Save as knowledge',
       'asset.compose': 'Create a work',
-      'asset.research': 'Research from this knowledge',
-      'asset.reason': 'Reflection · What changed your understanding?',
       'asset.copy': 'Copy body',
       'asset.copied': 'Copied',
-      'asset.type': 'Knowledge type',
       'asset.missing': 'The source is unavailable.',
+      'asset.filterTags': 'Filter by tag',
+      'asset.allTags': 'All tags',
+      'asset.related': 'Related knowledge',
+      'asset.noMatches': 'No knowledge matches this tag.',
+      'asset.emptyKnowledge': 'No saved knowledge yet.',
       'report.review': 'Review as report draft',
       'report.discard': 'Discard unsaved draft',
       'model.enabled': 'Enable AI research',
@@ -901,7 +903,7 @@ window.__ModuleLoader__.load({
                   : page === 'idea'
                     ? h(InspirationPage, { key: vault + ':' + seed.id + ':' + seed.version, reference: seed, onNavigate: navigate, reportRevision: reportRevision, modelConfig: modelConfig, onSettings: openSettings })
                   : page === 'knowledge' || page === 'works'
-                    ? h(AssetPage, { key: page, kind: page, seed: seed, onNavigate: navigate })
+                    ? h(page === 'knowledge' ? KnowledgePage : WorkPage, { key: page, seed: seed, onNavigate: navigate })
                     : h(InspirationHome, {
                     history: page === 'ideas',
                     draft: draft, busy: busy, saved: saved, onSave: saveIdea,
@@ -1775,29 +1777,125 @@ window.__ModuleLoader__.load({
     function PageHeading(props) {
       return h('div', { className: 'gr-page-heading', ref: props.top },
         h('h1', null, T(props.title)),
-        h('button', { className: 'gr-btn', disabled: props.busy, onClick: props.onAction }, T(props.action)))
+        props.action ? h('button', { className: 'gr-btn', disabled: props.busy, onClick: props.onAction }, T(props.action)) : null)
     }
 
-    function AssetPage(props) {
-      var isKnowledge = props.kind === 'knowledge'
-      var endpoint = isKnowledge ? KNOWLEDGE : WORKS
+    function KnowledgePage(props) {
+      var [items, setItems] = useState(null)
+      var [tag, setTag] = useState('')
+      var [detail, setDetail] = useState(null)
+      var [loading, setLoading] = useState(null)
+      var [error, setError] = useState(null)
+      var returnTo = props.seed?.returnTo || (props.seed?.idea ?
+        { page: 'idea', seed: props.seed.idea, label: 'idea.back' } : null)
+
+      async function open(ref) {
+        setLoading(ref.id)
+        setError(null)
+        try {
+          var entry = await api(KNOWLEDGE, { action: 'detail', id: ref.id, version: ref.version })
+          setDetail(entry)
+        } catch (problem) {
+          setError(problem)
+        } finally {
+          setLoading(null)
+        }
+      }
+
+      useEffect(function () {
+        setTag('')
+        api(KNOWLEDGE, { action: 'browse' }).then(function (result) { setItems(result.items) }, setError)
+        if (props.seed?.read) open(props.seed.read)
+      }, [props.seed])
+
+      var entries = items || []
+      var tags = Array.from(new Set(entries.flatMap(function (entry) { return entry.tags }))).sort(function (a, b) {
+        return a.localeCompare(b)
+      })
+      var visible = tag ? entries.filter(function (entry) { return entry.tags.includes(tag) }) : entries
+
+      function filterBy(value) {
+        setTag(value)
+        if (value && !entries.some(function (entry) {
+          return entry.meta.id === detail?.meta.id && entry.tags.includes(value)
+        })) setDetail(null)
+      }
+
+      function renderDetail(entry) {
+        var ref = { id: detail.meta.id, version: detail.meta.version }
+        return h('div', { className: 'gr-stack gr-knowledge-detail' },
+          detail.report ? h('p', { className: 'gr-meta' }, T('report.title'), ' · v', detail.report.meta.version) : null,
+          detail.reportMissing ? h('p', { role: 'status' }, T('asset.missing')) : null,
+          h(ReportMarkdown, { body: detail.report?.body ?? detail.body }),
+          h('div', { className: 'gr-row' },
+            detail.versions?.length > 1 ? h('label', null, T('report.history'), ' ',
+              h('select', { value: ref.version, disabled: !!loading, onChange: function (event) {
+                open({ id: ref.id, version: Number(event.target.value) })
+              } }, detail.versions.map(function (version) {
+                return h('option', { key: version, value: version }, 'v' + version)
+              }))) : null,
+            detail.studyId ? h('button', { className: 'gr-btn', onClick: function () {
+              props.onNavigate('research', { resume: detail.studyId })
+            } }, T('idea.continueStudy')) : null,
+            h('button', { className: 'gr-btn gr-btn-ghost', onClick: function () {
+              props.onNavigate('works', { title: detail.meta.title, body: detail.body, basis: ref,
+                returnTo: { page: 'knowledge', seed: { read: ref, returnTo: returnTo }, label: 'asset.backKnowledge' } })
+            } }, T('asset.compose'))),
+          detail.meta.version === entry.meta.version && entry.related.length ? h('section', { className: 'gr-stack' },
+            h('h3', { className: 'gr-h2' }, T('asset.related')),
+            h('div', { className: 'gr-row' }, entry.related.map(function (related) {
+              return h('button', { key: related.id, className: 'gr-btn gr-btn-ghost', disabled: !!loading,
+                onClick: function () { setTag(''); open(related) }
+              }, related.title)
+            }))) : null)
+      }
+
+      return h(React.Fragment, null,
+        returnTo ? h('div', { className: 'gr-page-back' },
+          h('button', { className: 'gr-btn gr-origin-link', onClick: function () {
+            props.onNavigate(returnTo.page, returnTo.seed)
+          } }, '← ', T(returnTo.label))) : null,
+        h(PageHeading, { title: 'asset.knowledge' }),
+        error ? h('p', { role: 'alert' }, messageOf(error)) : null,
+        tags.length ? h('label', { className: 'gr-row' }, T('asset.filterTags'),
+          h('select', { value: tag, disabled: !!loading, onChange: function (event) { filterBy(event.target.value) } },
+            h('option', { value: '' }, T('asset.allTags')),
+            tags.map(function (value) { return h('option', { key: value, value: value }, value) }))) : null,
+        items && !visible.length ? h('p', { className: 'gr-meta' }, T(tag ? 'asset.noMatches' : 'asset.emptyKnowledge')) : null,
+        h('div', { className: 'gr-stack' }, visible.map(function (entry) {
+          var expanded = detail?.meta.id === entry.meta.id
+          var pending = loading === entry.meta.id
+          return h('article', { key: entry.meta.id, className: 'gr-card' },
+            h('h2', { className: 'gr-h2' },
+              h('button', { className: 'gr-btn gr-btn-ghost gr-knowledge-toggle',
+                'aria-expanded': expanded, 'aria-busy': pending, disabled: !!loading,
+                onClick: function () { if (expanded) setDetail(null); else open(entry.meta) }
+              }, entry.meta.title, h('span', { 'aria-hidden': true }, expanded ? '−' : '+'))),
+            !expanded && entry.summary ? h('p', { className: 'gr-knowledge-summary' }, entry.summary) : null,
+            entry.tags.length ? h('div', { className: 'gr-row gr-knowledge-tags' }, entry.tags.map(function (value) {
+              return h('button', { key: value, className: 'gr-btn gr-btn-ghost', 'aria-pressed': value === tag,
+                disabled: !!loading, onClick: function () { filterBy(value === tag ? '' : value) } }, value)
+            })) : null,
+            expanded ? renderDetail(entry) : null)
+        })))
+    }
+
+    function WorkPage(props) {
       var [items, setItems] = useState([])
       var [selected, setSelected] = useState(null)
       var [draft, setDraft] = useState(props.seed)
       var [title, setTitle] = useState(props.seed?.title || '')
       var [body, setBody] = useState(props.seed?.body || '')
-      var [kind, setKind] = useState('concept')
-      var [reason, setReason] = useState('')
       var [basis, setBasis] = useState(null)
       var [busy, setBusy] = useState(false)
       var [error, setError] = useState(null)
       var [message, setMessage] = useState('')
 
-      function list() { return api(endpoint, { action: 'list' }).then(function (result) { setItems(result.items) }) }
+      function list() { return api(WORKS, { action: 'list' }).then(function (result) { setItems(result.items) }) }
       useEffect(function () {
         list().catch(setError)
         if (props.seed?.read) run(function () { return read(props.seed.read.id, props.seed.read.version) })
-      }, [endpoint])
+      }, [])
 
       async function run(operation) {
         setBusy(true)
@@ -1809,13 +1907,12 @@ window.__ModuleLoader__.load({
       }
 
       async function read(id, version) {
-        var entry = await api(endpoint, { action: 'read', id: id, version: version })
+        var entry = await api(WORKS, { action: 'read', id: id, version: version })
         setSelected(entry)
         setDraft(null)
         setTitle(entry.meta.title)
         setBody(entry.body)
         setBasis(null)
-        setReason('')
       }
 
       function start() {
@@ -1824,16 +1921,14 @@ window.__ModuleLoader__.load({
         setTitle('')
         setBody('')
         setBasis(null)
-        setReason('')
       }
 
       function save(event) {
         event.preventDefault()
         run(async function () {
-          var input = { action: 'save', body: body, title: title, type: kind, reason: reason,
-            basis: draft?.basis, report: draft?.report }
+          var input = { action: 'save', body: body, title: title, basis: draft?.basis }
           if (selected) { input.id = selected.meta.id; input.version = selected.meta.version }
-          var entry = await api(endpoint, input)
+          var entry = await api(WORKS, input)
           await read(entry.meta.id, entry.meta.version)
           await list()
           setMessage(T('research.saved'))
@@ -1844,13 +1939,11 @@ window.__ModuleLoader__.load({
         run(async function () {
           var ref = selected.meta.links.find(function (link) { return link.kind === 'derived' })
           var input = { action: 'read', id: ref.id, version: ref.version }
-          var entry = await api(isKnowledge ? REPORTS : KNOWLEDGE, input)
-            .catch(function () { return isKnowledge ? null : api(REPORTS, input).catch(function () { return null }) })
+          var entry = await api(KNOWLEDGE, input)
+            .catch(function () { return api(REPORTS, input).catch(function () { return null }) })
           setBasis(entry || { body: T('asset.missing') })
         })
       }
-
-      function reference() { return { id: selected.meta.id, version: selected.meta.version } }
 
       var returnTo = props.seed?.returnTo || (props.seed?.idea ?
         { page: 'idea', seed: props.seed.idea, label: 'idea.back' } : null)
@@ -1859,8 +1952,8 @@ window.__ModuleLoader__.load({
           h('button', { className: 'gr-btn gr-origin-link', onClick: function () {
             props.onNavigate(returnTo.page, returnTo.seed)
           } }, '← ', T(returnTo.label))) : null,
-        h(PageHeading, { title: 'asset.' + props.kind, busy: busy, onAction: start,
-          action: isKnowledge ? 'asset.newKnowledge' : 'asset.newWork' }),
+        h(PageHeading, { title: 'asset.works', busy: busy, onAction: start,
+          action: 'asset.newWork' }),
         error ? h('p', { role: 'alert' }, messageOf(error)) : null,
         message ? h('p', { role: 'status' }, message) : null,
         items.length ? h('div', { className: 'gr-stack' }, items.map(function (entry) {
@@ -1882,9 +1975,6 @@ window.__ModuleLoader__.load({
         draft ? h('form', { className: 'gr-card', onSubmit: save },
           selected ? h('h3', null, selected.meta.title) : h('label', null, T('asset.title'),
             h('input', { className: 'gr-input', value: title, maxLength: 300, required: true, onChange: function (event) { setTitle(event.target.value) } })),
-          isKnowledge && !selected ? h('label', null, T('asset.type'),
-            h('select', { value: kind, onChange: function (event) { setKind(event.target.value) } },
-              ['concept', 'theory', 'claim', 'method'].map(function (type) { return h('option', { key: type, value: type }, T('type.' + type)) }))) : null,
           selected ? h('label', null, T('report.history'),
             h('select', { value: selected.meta.version, disabled: busy, onChange: function (event) {
               var version = Number(event.target.value)
@@ -1893,22 +1983,13 @@ window.__ModuleLoader__.load({
           h('label', null, T('asset.body'), h('textarea', { className: 'gr-textarea', value: body, required: true,
             onChange: function (event) { setBody(event.target.value) } })),
           selected?.meta.revisionReason ? h('p', { className: 'gr-meta' }, selected.meta.revisionReason) : null,
-          isKnowledge && selected ? h('label', null, T('asset.reason'),
-            h('textarea', { className: 'gr-textarea', value: reason, required: true, onChange: function (event) { setReason(event.target.value) } })) : null,
           h('button', { className: 'gr-btn', disabled: busy || (selected && selected.meta.version !== selected.versions[0]) }, T('asset.save'))) : null,
         selected ? h('div', { className: 'gr-row' },
           selected.meta.links?.some(function (link) { return link.kind === 'derived' })
             ? h('button', { className: 'gr-btn', disabled: busy, onClick: readBasis }, T('asset.basis')) : null,
-          isKnowledge ? h('button', { className: 'gr-btn', onClick: function () {
-            props.onNavigate('research', { title: selected.meta.title, origin: reference() })
-          } }, T('asset.research')) : null,
-          isKnowledge ? h('button', { className: 'gr-btn', onClick: function () {
-            props.onNavigate('works', { title: selected.meta.title, body: selected.body, basis: reference(),
-              returnTo: { page: 'knowledge', seed: { read: reference(), returnTo: returnTo }, label: 'asset.backKnowledge' } })
-          } }, T('asset.compose')) : null,
-          !isKnowledge ? h('button', { className: 'gr-btn', onClick: function () {
+          h('button', { className: 'gr-btn', onClick: function () {
             run(async function () { await navigator.clipboard.writeText(selected.body); setMessage(T('asset.copied')) })
-          } }, T('asset.copy')) : null) : null,
+          } }, T('asset.copy'))) : null,
         basis ? h('article', { className: 'gr-card' },
           basis.meta ? h('h3', null, basis.meta.title, ' · v', basis.meta.version) : null,
           h(ReportMarkdown, { body: basis.body }),
@@ -2155,6 +2236,12 @@ window.__ModuleLoader__.load({
       '.gr-root:has(>.gr-nav){flex-direction:row}.gr-scroll{min-width:0}',
       '@media(max-width:580px){.gr-root:has(>.gr-nav){flex-direction:column}.gr-nav{width:auto;flex-direction:row;flex-wrap:wrap;padding:6px;border-right:0;border-bottom:1px solid var(--gr-line)}.gr-nav-item{width:auto;text-align:center;flex:1;white-space:nowrap}}',
       '.gr-scroll{flex:1 1 auto;min-height:0;overflow:auto;container-type:inline-size}',
+      '.gr-knowledge-toggle{display:flex;width:100%;justify-content:space-between;gap:12px;text-align:start}',
+      '.gr-knowledge-summary{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;margin:6px 0;font-size:13px;line-height:1.5;overflow-wrap:anywhere}',
+      '.gr-knowledge-tags{margin-top:6px}',
+      '.gr-knowledge-tags>.gr-btn{border:1px solid currentColor;border-radius:999px;font-size:12px;min-height:26px;padding:2px 8px}',
+      '.gr-knowledge-tags>.gr-btn[aria-pressed=true]{font-weight:700}',
+      '.gr-knowledge-detail{margin-top:12px}',
       '.gr-page-heading{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px 16px}',
       '.gr-page-heading h1{margin:0;font-size:24px;font-weight:650;line-height:1.25;overflow-wrap:anywhere}',
       '.gr-page-heading>.gr-btn{justify-self:start;align-self:center;min-height:36px}',

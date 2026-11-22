@@ -244,3 +244,48 @@ test('resuming a topic opens a scoped detail view without repeating the deep res
   const keys = detail.children.map(child => child?.props?.key).filter(key => key != null)
   assert.equal(new Set(keys).size, keys.length)
 })
+
+test('knowledge expands the report inline, filters by tag, and resumes the original study', t => {
+  const { ctx, registrations } = mount()
+  const original = React.useState
+  t.after(() => { React.useState = original })
+  const pageState = { 0: { configured: true, usable: true, vault: '/fixture' }, 12: 'knowledge' }
+  let slot = 0
+  let useState = value => [pageState[slot++] ?? value, () => {}]
+  React.useState = value => useState(value)
+  loadModule().factory(requireStub).apply(ctx)
+  const page = registrations.find(item => item.name === 'main').component
+  const knowledge = activeView(page()).children[0]
+  const note = { id: 'note', version: 1, title: '储能方案' }
+  const other = { id: 'other', version: 1, title: '市场分析' }
+  const detail = { meta: note, body: '摘录', studyId: 'original-study',
+    report: { meta: { version: 2 }, body: '含参考资料的完整报告' } }
+  const state = [[{ meta: note, tags: ['储能'], related: [other], summary: '储能摘要' },
+    { meta: other, tags: ['市场'], related: [], summary: '市场摘要' }], '', detail]
+  let navigation
+  const props = { ...knowledge.props, onNavigate: (...args) => { navigation = args } }
+  function render() {
+    slot = 0
+    useState = value => {
+      const key = slot++
+      return [state[key] ?? value, next => { state[key] = next }]
+    }
+    return knowledge.type(props)
+  }
+  function collect(node) {
+    return Array.isArray(node) ? node.flatMap(collect) : [node, ...(node?.children ?? []).flatMap(collect)]
+  }
+  const tree = collect(render())
+  assert.ok(tree.some(node => node?.props?.body === detail.report.body))
+  assert.ok(!tree.some(node => node?.props?.body === detail.body))
+  const buttons = tree.filter(node => node?.type === 'button')
+  assert.ok(buttons.some(node => node.props['aria-expanded'] === true && node.children.includes(note.title)))
+  assert.ok(buttons.some(node => node.children.includes(other.title)))
+  assert.ok(!buttons.some(node => ['新建知识', '编辑', '查看依据', '带着这条知识深挖'].some(label => node.children.includes(label))))
+  buttons.find(node => node.children.includes('继续研究')).props.onClick()
+  assert.deepEqual(navigation, ['research', { resume: 'original-study' }])
+  tree.find(node => node?.type === 'select').props.onChange({ target: { value: '市场' } })
+  const filtered = collect(render())
+  assert.ok(filtered.includes(other.title))
+  assert.ok(!filtered.includes(note.title))
+})
