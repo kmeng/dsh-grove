@@ -5,22 +5,26 @@ import { join } from 'node:path'
 
 const file = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}\.json$/
 
-export function researchRunStore(vault) {
+export function researchRunStore(vault) { return vaultRecordStore(vault, '.research-runs') }
+
+export function workDraftStore(vault) { return vaultRecordStore(vault, '.work-drafts') }
+
+function vaultRecordStore(vault, directory) {
   async function folder(create = false) {
-    const path = join(await vault.folder(create), '.research-runs')
+    const path = join(await vault.folder(create), directory)
     if (create) await mkdir(path, { mode: 0o700 }).catch(error => { if (error.code !== 'EEXIST') throw error })
-    if (!(await lstat(path)).isDirectory() || await realpath(path) !== path) throw new Error('Invalid research run directory')
+    if (!(await lstat(path)).isDirectory() || await realpath(path) !== path) throw new Error('Invalid vault record directory')
     return path
   }
 
   async function read(id) {
-    if (typeof id !== 'string' || !file.test(id + '.json')) throw new Error('Invalid research run ID')
+    if (typeof id !== 'string' || !file.test(id + '.json')) throw new Error('Invalid vault record ID')
     const handle = await open(join(await folder(), id + '.json'), constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
     try {
       const info = await handle.stat()
-      if (!info.isFile() || info.size > 2 * 1024 * 1024) throw new Error('Invalid research run file')
+      if (!info.isFile() || info.size > 2 * 1024 * 1024) throw new Error('Invalid vault record file')
       const run = JSON.parse(await handle.readFile('utf8'))
-      if (run.id !== id || run.schema !== 1) throw new Error('Invalid research run format')
+      if (run.id !== id || run.schema !== 1) throw new Error('Invalid vault record format')
       return run
     } finally {
       await handle.close()
@@ -37,7 +41,7 @@ export function researchRunStore(vault) {
       return Promise.all((await readdir(path)).filter(name => file.test(name)).map(name => read(name.slice(0, -5))))
     },
     async write(run) {
-      if (!file.test(run.id + '.json')) throw new Error('Invalid research run ID')
+      if (!file.test(run.id + '.json')) throw new Error('Invalid vault record ID')
       const path = await folder(true)
       const temporary = join(path, '.' + randomUUID() + '.tmp')
       const handle = await open(temporary, 'wx', 0o600)

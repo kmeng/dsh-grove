@@ -116,7 +116,7 @@ test('routes answer status, validate paths, and save after responding', async t 
   const editor = { edit: (_entry, change) => { saved = change({}, {}); return Promise.resolve() } }
   const { ctx, registered } = host(editor)
   registerRoutes(ctx, { current: () => ({ path: root, source: 'config' }), saveDelay: 1 })
-  assert.deepEqual([...registered.keys()].sort(), [routes.capture, routes.config, routes.connection, routes.deepResearch, routes.findings, routes.inspirations, routes.knowledge, routes.model, routes.modelUpdate, routes.parsers, routes.parsersUpdate, routes.reports, routes.research, routes.researchUpdate, routes.sources, routes.status, routes.works].sort())
+  assert.deepEqual([...registered.keys()].sort(), [routes.capture, routes.config, routes.connection, routes.deepResearch, routes.findings, routes.inspirations, routes.knowledge, routes.model, routes.modelUpdate, routes.parsers, routes.parsersUpdate, routes.reports, routes.research, routes.researchUpdate, routes.sources, routes.status, routes.workImage, routes.works].sort())
 
   const status = await registered.get(routes.status).fetch(request(routes.status))
   assert.equal(status.status, 200)
@@ -908,4 +908,81 @@ test('the UCD report retains concept and acronym tags and rebuilds a same-day le
   const abbreviation = items.find(item => item.meta.id === acronymOnly.meta.id)
   assert.deepEqual(abbreviation.tags, ['以用户为中心的设计', 'UCD'])
   assert.deepEqual(items.find(item => item.meta.id === explicit.meta.id).tags.slice(0, 2), ['以证据为基础的分析', 'EBA'])
+})
+
+test('a work resumes after closing and saves a versioned illustrated article from an exact source', async t => {
+  const path = await fixture(t)
+  const vault = new Vault(path)
+  const basis = await vault.create({ type: 'concept', title: '树荫与步行', body: '早晨的树荫与步行体验观察。' })
+  await vault.update(basis.meta.id, 1, { body: '另一版素材。' })
+  const { ctx, registered } = host()
+  let failModel = false
+  const stages = []
+  registerRoutes(ctx, {
+    current: () => ({ path }), modelConfig: { enabled: true },
+    model: () => ({ async compose(input) {
+      assert.equal(input.language, 'zh')
+      stages.push(input.stage)
+      if (input.stage === 'visual') {
+        assert.equal(input.placement, 'section')
+        return { reply: '平视照片，把有树荫和无遮阴的人行道并列。' }
+      }
+      assert.equal(input.source.body, basis.body)
+      if (failModel) throw Object.assign(new Error('Offline'), { code: 'model-network' })
+      if (input.stage === 'topic') return { reply: '建议从现场观察入手。', title: '同一条街，两种走法', audience: '街坊', thesis: '对照时段再判断树荫的影响。' }
+      if (input.stage === 'outline') return { reply: '先写观察，再解释原因。', sections: [
+        { heading: '走过同一条街', point: '描述两侧的区别', visual: '用街景照片对照' },
+        { heading: '比较不同时段', point: '补做两次走访' },
+      ] }
+      return { reply: '这一节已经整理。', body: '逐节正文：' + input.selected.heading }
+    } }),
+  })
+  const post = (action, data = {}) => registered.get(routes.works).fetch(request(routes.works, { action, ...data }))
+  let draft = await (await post('draft-start', { basis: { id: basis.meta.id, version: 1 }, title: basis.meta.title })).json()
+  const change = async (action, extra, status = 200) => {
+    const response = await post('draft-' + action, { id: draft.id, revision: draft.revision, ...extra })
+    assert.equal(response.status, status)
+    const result = await response.json()
+    if (status === 200 && result.id) draft = result
+    return result
+  }
+  await change('confirm-topic', {}, 400)
+  await change('ask', { message: '写给街坊，讲讲树荫', language: 'zh' })
+  await change('confirm-topic')
+  await change('ask', { message: '先写观察，再谈解释', language: 'zh' })
+  await change('confirm-outline')
+  await change('finish', {}, 400)
+  await change('ask', { message: '写第一节', section: 0, language: 'zh' })
+  const original = draft.sections[0].body
+  failModel = true
+  await change('ask', { message: '写第二节', section: 1, language: 'zh' }, 502)
+  const restored = await (await post('draft-read', { id: draft.id })).json()
+  assert.equal(restored.revision, draft.revision)
+  assert.equal(restored.sections[0].body, original)
+  assert.equal(restored.sections[1].body, '')
+  assert.equal(restored.turns.length, 6)
+  failModel = false
+  await change('section', { section: 1, body: '自己写的第二节，下午再走一次。' })
+  assert.equal(draft.sections[0].body, original)
+  await change('visual', { section: 0, language: 'zh' })
+  assert.match(draft.sections[0].visual, /平视照片/)
+  assert.equal(draft.sections[0].body, original)
+  await change('section', { section: 0, body: '过期修改', revision: draft.revision - 1 }, 409)
+  const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jD5sAAAAASUVORK5CYII='
+  await change('image', { section: 0, bytes: png, alt: '有树荫的人行道', caption: '图一，早晨的现场' })
+  const uri = draft.sections[0].image.path
+  const photo = await registered.get(routes.workImage).fetch(request(routes.workImage + '?file=' + uri.split('/')[1]))
+  assert.equal(photo.headers.get('content-type'), 'image/png')
+  assert.deepEqual(Buffer.from(await photo.arrayBuffer()), Buffer.from(png, 'base64'))
+  const rejected = await registered.get(routes.workImage).fetch(request(routes.workImage + '?file=..%2Fsecret.png'))
+  assert.equal(rejected.status, 404)
+  const saved = await change('finish')
+  assert.deepEqual(await change('finish'), saved)
+  const work = await (await post('read', saved.work)).json()
+  assert.match(work.body, /自己写的第二节/)
+  assert.ok(work.body.includes('![有树荫的人行道](' + uri + ')\n图一，早晨的现场'))
+  assert.deepEqual(work.meta.links, [{ kind: 'derived', id: basis.meta.id, version: 1 }])
+  assert.deepEqual((await (await post('draft-list')).json()).drafts, [])
+  assert.equal((await (await post('list')).json()).items[0].meta.id, work.meta.id)
+  assert.deepEqual(stages, ['topic', 'outline', 'writing', 'writing', 'visual'])
 })

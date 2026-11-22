@@ -2,7 +2,7 @@ import { exactVersion } from './version-reference.js'
 
 const basisTypes = new Set(['concept', 'theory', 'claim', 'method', 'report'])
 
-export async function saveWork(store, input) {
+export async function saveWork(store, input, newId) {
   if (input.id) {
     const entry = await readWork(store, input.id, input.version)
     return store.update(entry.meta.id, entry.meta.version, { body: input.body })
@@ -13,7 +13,7 @@ export async function saveWork(store, input) {
     if (!basisTypes.has(basis.meta.type) || basis.meta.review === 'draft') throw new Error('Choose a report or knowledge entry')
     links.push({ kind: 'derived', id: basis.meta.id, version: basis.meta.version })
   }
-  return store.create({ type: 'output', title: input.title, body: input.body, links })
+  return store.create({ type: 'output', title: input.title, body: input.body, links }, newId)
 }
 
 export async function readWork(store, id, version) {

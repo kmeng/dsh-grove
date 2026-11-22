@@ -12,6 +12,8 @@ import { parseModelSettings, readModelSettings, selectModel, testModel, verifyMo
 import { runResearchModel } from './modules/model-research.js'
 import { listKnowledge, readKnowledge, knowledgeDetail, saveKnowledge, keepReportAsKnowledge } from './modules/knowledge.js'
 import { browseKnowledge, scheduleKnowledge } from './modules/knowledge-index.js'
+import { workDrafts } from './modules/work-drafts.js'
+import { readWorkImage, workImageLimit } from './adapters/storage/obsidian/work-images.js'
 import { listWorks, readWork, saveWork } from './modules/works.js'
 import { stagedResearch } from './modules/deep-research.js'
 import { researchRuns, isUnsupportedDraft } from './modules/research-runs.js'
@@ -28,6 +30,7 @@ export const routes = {
   findings: '/api/grove/findings',
   knowledge: '/api/grove/knowledge',
   works: '/api/grove/works',
+  workImage: '/api/grove/work-image',
   reports: '/api/grove/reports',
   parsers: '/api/grove/parsers',
   parsersUpdate: '/api/grove/parsers/settings',
@@ -90,6 +93,7 @@ function statusOf(error) {
     case 'model-research-key':
     case 'model-key':
     case 'model-disabled':
+    case 'work-conflict':
     case 'not-configured':
       return 409
     case 'unsupported-media':
@@ -197,10 +201,10 @@ export function saveVault(ctx, path) {
   return editor.edit(entry, current => ({ ...current, vault: path }))
 }
 
-async function readJson(request) {
+async function readJson(request, limit = maxJsonBytes) {
   const contentType = request.headers.get('content-type')?.split(';', 1)[0].trim().toLowerCase() ?? ''
   const jsonType = /^application\/(?:[a-z0-9!#$&^_.+-]+\+)?json$/.test(contentType)
-  if (Number(request.headers.get('content-length')) > maxJsonBytes) {
+  if (Number(request.headers.get('content-length')) > limit) {
     throw coded('request-too-large', 'The request is too large')
   }
   if (!request.body) throw coded('invalid-body', 'Expected a JSON body')
@@ -212,7 +216,7 @@ async function readJson(request) {
       const chunk = await reader.read()
       if (chunk.done) break
       size += chunk.value.byteLength
-      if (size > maxJsonBytes) throw coded('request-too-large', 'The request is too large')
+      if (size > limit) throw coded('request-too-large', 'The request is too large')
       if (jsonType) chunks.push(chunk.value)
     }
     if (!jsonType) throw coded('unsupported-media', 'Expected application/json')
@@ -322,6 +326,19 @@ export function registerRoutes(ctx, options) {
         return failure(error)
       }
     })
+    route(routes.workImage, ['GET'], async request => {
+      try {
+        const { path } = options.current()
+        if (!path) throw coded('not-configured', 'Grove has no vault yet')
+        const name = new URL(request.url).searchParams.get('file')
+        const image = await readWorkImage(new Vault(path), name)
+        return new Response(image.bytes, { headers: {
+          'content-type': image.mime, 'x-content-type-options': 'nosniff', 'cache-control': 'private, no-store',
+        } })
+      } catch (error) {
+        return failure(error)
+      }
+    })
     for (const [assetRoute, list, read, save] of [
       [routes.knowledge, listKnowledge, readKnowledge, saveKnowledge],
       [routes.works, listWorks, readWork, saveWork],
@@ -331,7 +348,17 @@ export function registerRoutes(ctx, options) {
           const { path } = options.current()
           if (!path) throw coded('not-configured', 'Grove has no vault yet')
           const store = new Vault(path)
-          const input = await readJson(request)
+          const input = await readJson(request, assetRoute === routes.works ? Math.ceil(workImageLimit * 4 / 3) + 4096 : maxJsonBytes)
+          if (assetRoute === routes.works && typeof input?.action === 'string' && input.action.startsWith('draft-')) {
+            return json(await workDrafts(store, input, () => {
+              const config = options.modelConfig
+              const settings = selectModel(config, 'default', dsh)
+              if (!settings) throw coded('model-disabled', 'Configure and enable a writing model')
+              const model = modelFor(settings, 'default', config)
+              if (typeof model?.compose !== 'function') throw coded('model-disabled', 'The selected model cannot draft articles')
+              return model
+            }))
+          }
           if (assetRoute === routes.knowledge && input?.action === 'keep-report') return json(await keepReportAsKnowledge(store, input.report))
           if (assetRoute === routes.knowledge && input?.action === 'detail') return json(await knowledgeDetail(store, input.id, input.version))
           if (assetRoute === routes.knowledge && input?.action === 'browse') {
