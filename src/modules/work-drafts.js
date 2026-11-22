@@ -1,10 +1,9 @@
 import { randomUUID } from 'node:crypto'
 import { workDraftStore } from '../adapters/storage/obsidian/research-runs.js'
 import { saveWorkImage } from '../adapters/storage/obsidian/work-images.js'
-import { exactVersion } from './version-reference.js'
+import { findWorkKnowledge, readWorkSource, sameSource, sourceRef, suggestWorkSources, workSourceLimit, workSources } from './work-sources.js'
 import { readWork, saveWork } from './works.js'
 
-const basisTypes = new Set(['concept', 'theory', 'claim', 'method', 'report'])
 const pending = new Map()
 
 function invalid(message, code = 'invalid-body') {
@@ -21,11 +20,19 @@ function sectionAt(draft, index) {
   return section
 }
 
-async function source(vault, basis) {
-  if (!basis) return null
-  const note = await vault.get(basis.id, exactVersion(basis.version))
-  if (!basisTypes.has(note.meta.type) || note.meta.review === 'draft') invalid('Choose a confirmed report or knowledge entry')
-  return note
+function sourceNumbers(value, references) {
+  if (!Array.isArray(value)) return []
+  return [...new Set(value)].filter(n => Number.isInteger(n) && n >= 1 && n <= references.length)
+    .map(n => references[n - 1])
+}
+
+function articleSources(draft) {
+  const refs = []
+  for (const section of draft.sections) {
+    const used = section.usedSources ?? (draft.basis ? [draft.basis] : [])
+    for (const ref of used) if (!refs.some(existing => sameSource(existing, ref))) refs.push(ref)
+  }
+  return refs
 }
 
 function imageMarkdown(image) {
@@ -49,14 +56,25 @@ async function ask(vault, draft, input, resolveModel, progress) {
   const direction = text(input.message, 6000)
   if (!direction) invalid('Enter a writing direction')
   const selected = draft.stage === 'writing' ? sectionAt(draft, input.section) : null
-  const original = await source(vault, draft.basis)
+  if (draft.sources === undefined) {
+    progress.phase = 'sources'
+    draft.sources = await suggestWorkSources(vault, draft, direction)
+  }
+  const ordered = [...workSources(draft)].sort((a, b) => {
+    const planned = selected?.plannedSources ?? []
+    return Number(planned.some(ref => sameSource(ref, b))) - Number(planned.some(ref => sameSource(ref, a)))
+  })
+  const sources = await Promise.all(ordered.map(async (ref, index) => {
+    const note = await readWorkSource(vault, ref)
+    return { number: index + 1, title: note.meta.title, body: note.body.slice(0, 8000) }
+  }))
   const model = resolveModel()
   progress.phase = draft.stage
   const result = await model.compose({
     stage: draft.stage, language: input.language === 'en' ? 'en' : 'zh', direction,
     topic: draft.topic, selected: selected && { heading: selected.heading, point: selected.point, body: selected.body },
     sections: draft.sections.map(({ heading, point, visual, body }) => ({ heading, point, visual, excerpt: body.slice(0, 600) })),
-    source: original && { title: original.meta.title, body: original.body.slice(0, 24000) },
+    sources,
     history: draft.turns.slice(-8),
   })
   const reply = text(result?.reply, 4000)
@@ -74,7 +92,8 @@ async function ask(vault, draft, input, resolveModel, progress) {
       const point = text(part?.point, 2000)
       if (!heading || !point) invalid('Each section needs a heading and a central point', 'model-response')
       const prior = draft.sections.find(section => section.heading === heading && section.point === point)
-      return { ...prior, heading, point, visual: text(part.visual, 500), body: prior?.body ?? '' }
+      return { ...prior, heading, point, visual: text(part.visual, 500), body: prior?.body ?? '',
+        plannedSources: sourceNumbers(part.sourceNumbers, ordered) }
     })
     if (new Set(draft.sections.map(section => section.heading)).size !== draft.sections.length) {
       invalid('Outline headings must be distinct', 'model-response')
@@ -83,6 +102,7 @@ async function ask(vault, draft, input, resolveModel, progress) {
     const body = text(result.body, 12000)
     if (!body) invalid('The model did not return a usable section', 'model-response')
     selected.body = body
+    selected.usedSources = sourceNumbers(result.sourceNumbers, ordered)
   }
   draft.turns = [...draft.turns, { role: 'user', body: direction }, { role: 'assistant', body: reply }].slice(-60)
 }
@@ -96,10 +116,14 @@ export async function workDrafts(vault, input, resolveModel) {
         .map(({ id, topic, stage, modified }) => ({ id, topic, stage, modified })) }
     case 'draft-read':
       return records.read(input.id)
+    case 'draft-source-read':
+      return readWorkSource(vault, input.ref)
+    case 'draft-source-search':
+      return { items: await findWorkKnowledge(vault, text(input.query, 300)) }
     case 'draft-start': {
-      const original = await source(vault, input.basis)
+      const original = input.basis && await readWorkSource(vault, input.basis)
       const draft = { schema: 1, id: randomUUID(), revision: 0, stage: 'topic',
-        basis: original && { id: original.meta.id, version: original.meta.version, title: original.meta.title },
+        basis: original && sourceRef(original),
         topic: { title: text(input.title, 300), audience: '', thesis: '' }, sections: [], turns: [],
         modified: new Date().toISOString() }
       await records.write(draft)
@@ -123,8 +147,29 @@ export async function workDrafts(vault, input, resolveModel) {
       case 'draft-ask':
         await ask(vault, draft, input, resolveModel, progress)
         break
+      case 'draft-source-suggest':
+        progress.phase = 'sources'
+        draft.sources = await suggestWorkSources(vault, draft, text(input.query, 300))
+        draft.sourcesAdjusted = true
+        break
+      case 'draft-source-add': {
+        const picked = sourceRef(await readWorkSource(vault, input.ref))
+        const refs = workSources(draft).filter(ref => ref.id !== picked.id)
+        if (refs.length >= workSourceLimit) invalid('Choose up to five sources')
+        draft.sources = [...refs, picked]
+        draft.sourcesAdjusted = true
+        break
+      }
+      case 'draft-source-remove':
+        draft.sources = workSources(draft).filter(ref => !sameSource(ref, input.ref ?? {}))
+        draft.sourcesAdjusted = true
+        break
       case 'draft-confirm-topic':
         if (draft.stage !== 'topic' || !draft.topic.title || !draft.topic.thesis) invalid('Confirm a title and central idea first')
+        if (!draft.sourcesAdjusted) {
+          progress.phase = 'sources'
+          draft.sources = await suggestWorkSources(vault, { ...draft, sources: undefined })
+        }
         draft.stage = 'outline'
         break
       case 'draft-confirm-outline':
@@ -154,7 +199,9 @@ export async function workDrafts(vault, input, resolveModel) {
         if (draft.stage !== 'writing') invalid('Confirm the outline before writing')
         const body = text(input.body, 12000)
         if (!body) invalid('Write something for this section')
-        sectionAt(draft, input.section).body = body
+        const section = sectionAt(draft, input.section)
+        if (!section.body) section.usedSources = []
+        section.body = body
         break
       }
       case 'draft-image':
@@ -175,7 +222,7 @@ export async function workDrafts(vault, input, resolveModel) {
           invalid('Finish each section before saving the article')
         }
         const body = articleBody(draft)
-        const entry = await saveWork(vault, { title: draft.topic.title, body, basis: draft.basis }, draft.id)
+        const entry = await saveWork(vault, { title: draft.topic.title, body, sources: articleSources(draft) }, draft.id)
           .catch(async error => {
             if (error.code !== 'EEXIST') throw error
             const existing = await readWork(vault, draft.id, 1)

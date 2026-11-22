@@ -237,6 +237,21 @@ window.__ModuleLoader__.load({
       'work.topicNext': '主题和核心判断合适时，进入提纲讨论。也可以继续发消息调整。',
       'work.outlineNext': '各节的顺序与核心观点合适时，开始写第一节。之后仍可修改提纲。',
       'work.previewTab': '预览',
+      'work.progress.sources': '正在查找相关知识',
+      'work.sources': '本篇素材',
+      'work.noSources': '目前没有选入相关知识，可以按主题补选或手动查找。',
+      'work.findAfterTopic': '发送写作主题后，会从知识库查找相关条目。',
+      'work.searchKnowledge': '查找知识',
+      'work.suggestSources': '按主题补选相关知识',
+      'work.noMatches': '没有匹配的知识。',
+      'work.removeSource': '移除',
+      'work.removeSourceNamed': '移除素材 {title}',
+      'work.addSource': '采用',
+      'work.addSourceNamed': '采用素材 {title}',
+      'work.sourceAdded': '已采用',
+      'work.plannedSources': '计划参考',
+      'work.usedSources': '本节采用',
+      'work.savedSources': '成稿来源',
       'work.conversationTab': '对话',
       'work.reviseOutline': '修改提纲',
       'work.finish': '保存为作品',
@@ -563,6 +578,21 @@ window.__ModuleLoader__.load({
       'work.topicNext': 'If the topic and central idea look right, move on to the outline. You can also send another message to refine them.',
       'work.outlineNext': 'If the order and main points look right, start with the first section. You can revise the outline later.',
       'work.previewTab': 'Preview',
+      'work.progress.sources': 'Finding related knowledge',
+      'work.sources': 'Article materials',
+      'work.noSources': 'No knowledge selected yet. Add related entries by topic or search for a specific note.',
+      'work.findAfterTopic': 'Send a topic to find related entries in your knowledge library.',
+      'work.searchKnowledge': 'Search knowledge',
+      'work.suggestSources': 'Add related knowledge',
+      'work.noMatches': 'No matching entries.',
+      'work.removeSource': 'Remove',
+      'work.removeSourceNamed': 'Remove {title}',
+      'work.addSource': 'Use',
+      'work.addSourceNamed': 'Use {title}',
+      'work.sourceAdded': 'Selected',
+      'work.plannedSources': 'Planned references',
+      'work.usedSources': 'Used in this section',
+      'work.savedSources': 'Article sources',
       'work.conversationTab': 'Conversation',
       'work.reviseOutline': 'Revise outline',
       'work.finish': 'Save as work',
@@ -1985,6 +2015,90 @@ window.__ModuleLoader__.load({
         props.caption ? h('figcaption', null, props.caption) : null)
     }
 
+    function workRefKey(ref) { return ref.id + ':' + ref.version }
+
+    function WorkSourceList(props) {
+      return h('ul', { className: 'gr-work-sources gr-stack' }, props.sources.map(function (ref) {
+        var label = (ref.title || T('asset.missing')) + ' · v' + ref.version
+        return h('li', { key: workRefKey(ref), className: 'gr-row' },
+          h('button', { type: 'button', className: 'gr-btn gr-btn-ghost', disabled: !!ref.missing,
+            onClick: function () { props.onRead(ref) } }, label), props.action ? props.action(ref) : null)
+      }))
+    }
+
+    function WorkMaterials(props) {
+      var [query, setQuery] = useState('')
+      var [results, setResults] = useState(null)
+      var [finding, setFinding] = useState(false)
+      var [viewing, setViewing] = useState(null)
+      var [error, setError] = useState(null)
+      var review = useRef(0)
+      var opened = useRef(null)
+      var draft = props.draft
+      var sources = draft.sources ?? (draft.basis ? [draft.basis] : [])
+      var indexed = new Set(sources.map(workRefKey))
+      var canSuggest = !!(draft.topic.title || draft.topic.thesis || query.trim())
+
+      useEffect(function () {
+        var entry = opened.current
+        var panel = entry?.closest('.gr-work-preview')
+        if (!panel) return
+        entry.open = true
+        var delta = entry.getBoundingClientRect().top - panel.getBoundingClientRect().top
+        if (delta < 0 || delta > panel.clientHeight - 60) panel.scrollTop += delta - 12
+      }, [viewing])
+
+      async function search(event) {
+        event.preventDefault()
+        setFinding(true)
+        setError(null)
+        try { setResults((await api(WORKS, { action: 'draft-source-search', query: query.trim() })).items) }
+        catch (problem) { setError(problem) }
+        finally { setFinding(false) }
+      }
+
+      async function view(ref) {
+        var serial = ++review.current
+        setError(null)
+        try {
+          var note = await api(WORKS, { action: 'draft-source-read', ref: ref })
+          if (serial === review.current) setViewing(note)
+        } catch (problem) {
+          if (serial === review.current) setError(problem)
+        }
+      }
+
+      return h(React.Fragment, null,
+        h('section', { className: 'gr-work-materials gr-stack', 'aria-label': T('work.sources') },
+          h('h3', { className: 'gr-h2' }, T('work.sources'), ' · ', sources.length),
+          sources.length ? h(WorkSourceList, { sources: sources, onRead: view, action: function (ref) {
+            return h('button', { type: 'button', className: 'gr-btn gr-btn-ghost', disabled: props.busy,
+              'aria-label': T('work.removeSourceNamed', { title: ref.title }),
+              onClick: function () { props.run('source-remove', { ref: ref }) } }, T('work.removeSource'))
+          } }) : h('p', { className: 'gr-meta' }, T(draft.sources ? 'work.noSources' : 'work.findAfterTopic')),
+          h('form', { className: 'gr-stack', onSubmit: search },
+            h('input', { className: 'gr-input', value: query, maxLength: 300, 'aria-label': T('work.searchKnowledge'),
+              placeholder: T('work.searchKnowledge'), onChange: function (event) { setQuery(event.target.value) } }),
+            h('div', { className: 'gr-row' },
+              h('button', { className: 'gr-btn gr-btn-ghost', disabled: finding }, T('work.searchKnowledge')),
+              h('button', { type: 'button', className: 'gr-btn gr-btn-ghost', disabled: props.busy || !canSuggest || sources.length >= 5,
+                onClick: function () { props.run('source-suggest', { query: query.trim() }) } }, T('work.suggestSources')))),
+          results && !results.length ? h('p', { className: 'gr-meta' }, T('work.noMatches')) : null,
+          results?.length ? h(WorkSourceList, { sources: results, onRead: view, action: function (ref) {
+            var picked = indexed.has(workRefKey(ref))
+            var atLimit = sources.length >= 5 && !sources.some(function (item) { return item.id === ref.id })
+            return h('button', { type: 'button', className: 'gr-btn gr-btn-ghost', disabled: props.busy || picked || atLimit,
+              'aria-label': T('work.addSourceNamed', { title: ref.title }),
+              onClick: function () { props.run('source-add', { ref: ref }) }
+            }, T(picked ? 'work.sourceAdded' : 'work.addSource'))
+          } }) : null,
+          error ? h('p', { role: 'alert' }, messageOf(error)) : null,
+          viewing ? h('details', { open: true, ref: opened, className: 'gr-work-source-preview' },
+            h('summary', null, viewing.meta.title, ' · v', viewing.meta.version),
+            h(ReportMarkdown, { body: viewing.body })) : null),
+        props.children(view))
+    }
+
     function WorkComposer(props) {
       var [draft, setDraft] = useState(null)
       var [message, setMessage] = useState('')
@@ -2050,7 +2164,7 @@ window.__ModuleLoader__.load({
         setBusy(true)
         setError(null)
         setElapsed(0)
-        setProgress(action === 'ask' || action === 'visual' ? 'preparing' : 'saving')
+        setProgress(action === 'source-suggest' ? 'sources' : action === 'ask' || action === 'visual' ? 'preparing' : 'saving')
         setActivity({ action: action, message: action === 'ask' ? fields.message : '',
           heading: action === 'ask' ? draft.sections[section]?.heading : '', started: Date.now() })
         try {
@@ -2073,7 +2187,7 @@ window.__ModuleLoader__.load({
 
       function send(event) {
         event.preventDefault()
-        if (!message.trim()) return
+        if (!message.trim() || busy || editingText !== null) return
         var language = /\p{Script=Han}/u.test(message) || T('work.send') === ZH['work.send'] ? 'zh' : 'en'
         run('ask', { message: message, section: section, language: language })
           .then(function (saved) { if (saved) setMessage('') })
@@ -2179,20 +2293,25 @@ window.__ModuleLoader__.load({
                     onClick: function () { setEditingText(null) } }, T('work.cancelEdit'))))) : null)),
           h('section', { className: 'gr-card gr-stack gr-work-preview', tabIndex: 0, 'aria-label': T('work.preview') },
             h('h2', { className: 'gr-h2' }, T('work.preview')),
-            draft.basis?.title ? h('p', { className: 'gr-meta' }, T('asset.basis'), ' · ', draft.basis.title, ' · v', draft.basis.version) : null,
             draft.topic.audience ? h('p', { className: 'gr-meta' }, T('work.audience'), ' ', draft.topic.audience) : null,
             draft.topic.thesis ? h('p', { className: 'gr-body' }, draft.topic.thesis) : null,
             draft.coverVisual ? h('p', { className: 'gr-meta' }, T('work.visual'), ' ', draft.coverVisual) : null,
             draft.cover ? h(WorkImage, draft.cover) : null,
-            draft.sections.map(function (entry, index) {
-              return h('section', { key: entry.heading, className: 'gr-work-section gr-stack' },
+            h(WorkMaterials, { draft: draft, run: run, busy: busy }, function (view) {
+              return draft.sections.map(function (entry, index) {
+                var refs = entry.body ? entry.usedSources : entry.plannedSources
+                return h('section', { key: entry.heading, className: 'gr-work-section gr-stack' },
                 writing ? h('button', { className: 'gr-btn gr-btn-ghost gr-work-section-button', type: 'button',
                   disabled: busy || editingText !== null, 'aria-pressed': index === section, onClick: function () { setSection(index) }
                 }, entry.heading) : h('h3', null, entry.heading),
                 h('p', { className: 'gr-meta' }, entry.point),
                 entry.visual ? h('p', { className: 'gr-meta' }, T('work.visual'), ' ', entry.visual) : null,
                 entry.body ? h(ReportMarkdown, { body: entry.body, workImages: true }) : null,
+                refs?.length ? h(React.Fragment, null,
+                  h('p', { className: 'gr-meta' }, T(entry.body ? 'work.usedSources' : 'work.plannedSources')),
+                  h(WorkSourceList, { sources: refs, onRead: view })) : null,
                 entry.image ? h(WorkImage, entry.image) : null)
+              })
             }),
             writing ? h('form', { className: 'gr-work-upload gr-stack', onSubmit: upload },
               h('h3', { className: 'gr-h2' }, T('work.addImage')),
@@ -2262,13 +2381,9 @@ window.__ModuleLoader__.load({
         })
       }
 
-      function readBasis() {
+      function readBasis(ref) {
         run(async function () {
-          var ref = selected.meta.links.find(function (link) { return link.kind === 'derived' })
-          var input = { action: 'read', id: ref.id, version: ref.version }
-          var entry = await api(KNOWLEDGE, input)
-            .catch(function () { return api(REPORTS, input).catch(function () { return null }) })
-          setBasis(entry || { body: T('asset.missing') })
+          setBasis(await api(WORKS, { action: 'draft-source-read', ref: ref }))
         })
       }
 
@@ -2324,9 +2439,10 @@ window.__ModuleLoader__.load({
             onChange: function (event) { setBody(event.target.value) } })),
           selected?.meta.revisionReason ? h('p', { className: 'gr-meta' }, selected.meta.revisionReason) : null,
           h('button', { className: 'gr-btn', disabled: busy || (selected && selected.meta.version !== selected.versions[0]) }, T('asset.save'))) : null,
+        selected?.sources?.length ? h('section', { className: 'gr-stack' },
+          h('h2', { className: 'gr-h2' }, T('work.savedSources')),
+          h(WorkSourceList, { sources: selected.sources, onRead: readBasis })) : null,
         selected ? h('div', { className: 'gr-row' },
-          selected.meta.links?.some(function (link) { return link.kind === 'derived' })
-            ? h('button', { className: 'gr-btn', disabled: busy, onClick: readBasis }, T('asset.basis')) : null,
           h('button', { className: 'gr-btn', onClick: function () {
             run(async function () { await navigator.clipboard.writeText(selected.body); setMessage(T('asset.copied')) })
           } }, T('asset.copy'))) : null,
@@ -2569,19 +2685,22 @@ window.__ModuleLoader__.load({
       '.gr-scroll:has(.gr-view:not([hidden])>.gr-work-composer) :is(.gr-head,.gr-foot){display:none}',
       '.gr-view:not([hidden]):has(>.gr-work-composer),.gr-work-composer{min-height:0;flex:1 1 auto}',
       '.gr-work-header{gap:12px}.gr-work-header h1{overflow-wrap:anywhere}',
-      '.gr-work-tabs{display:none}.gr-work-tabs [aria-pressed=true]{background:var(--gr-line)}',
+      '.gr-work-composer>.gr-work-tabs{display:none}.gr-work-tabs [aria-pressed=true]{background:var(--gr-line)}',
       '.gr-work-layout{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);grid-template-rows:minmax(0,1fr);gap:16px}',
       '.gr-work-chat{display:flex;flex-direction:column;min-width:0;min-height:0;gap:8px}',
       '.gr-work-flow,.gr-work-preview{min-height:0;overflow:auto;overscroll-behavior:contain}',
       '.gr-work-flow{flex:1 1 auto;padding:14px;border:1px solid var(--gr-line);border-radius:10px}',
-      '.gr-work-preview{display:block}',
-      '.gr-work-preview>*+*{margin-block-start:12px!important}',
+      '.gr-work-layout>.gr-work-preview{display:block}',
+      '.gr-work-layout>.gr-work-preview>*+*{margin-block-start:12px}',
       '.gr-work-controls{flex:none;max-height:45%;overflow:auto;overscroll-behavior:contain}',
       '.gr-work-controls .gr-textarea{min-height:64px;max-height:120px}',
       '.gr-work-progress{display:flex;flex:none;align-items:center;gap:8px;padding-inline:6px}',
       '.gr-work-next ol{margin:0;padding-inline-start:24px}',
-      '@container (max-width:780px){.gr-work-tabs{display:flex}.gr-work-layout{grid-template-columns:minmax(0,1fr)}.gr-work-layout[data-pane=conversation]>.gr-work-preview,.gr-work-layout[data-pane=preview]>.gr-work-chat{display:none}}',
+      '@container (max-width:780px){.gr-work-composer>.gr-work-tabs{display:flex}.gr-work-layout{grid-template-columns:minmax(0,1fr)}.gr-work-layout[data-pane=conversation]>.gr-work-preview,.gr-work-layout[data-pane=preview]>.gr-work-chat{display:none}}',
       '@media(prefers-reduced-motion:reduce){.gr-work-progress .gr-run-spinner{animation:none}}',
+      '.gr-work-materials{padding:12px;border:1px solid var(--gr-line);border-radius:8px}',
+      '.gr-work-sources{padding:0;margin:0;list-style:none;gap:4px}',
+      '.gr-work-sources>li{justify-content:space-between}.gr-work-source-preview{overflow-wrap:anywhere}',
       '.gr-work-section{border-top:1px solid var(--gr-line);padding-top:10px;overflow-wrap:anywhere}',
       '.gr-work-section-button[aria-pressed=true]{background:var(--gr-wash);font-weight:650}',
       '.gr-work-section-button,.gr-work-list-item{text-align:start;overflow-wrap:anywhere}.gr-work-list-item{display:flex;align-items:center;justify-content:space-between;gap:12px}',

@@ -929,7 +929,7 @@ test('a work resumes after closing and saves a versioned illustrated article fro
         assert.equal(input.placement, 'section')
         return { reply: '平视照片，把有树荫和无遮阴的人行道并列。' }
       }
-      assert.equal(input.source.body, basis.body)
+      assert.equal(input.sources[0].body, basis.body)
       if (failModel) throw Object.assign(new Error('Offline'), { code: 'model-network' })
       if (input.stage === 'topic') {
         topicEntered.resolve()
@@ -940,7 +940,7 @@ test('a work resumes after closing and saves a versioned illustrated article fro
         { heading: '走过同一条街', point: '描述两侧的区别', visual: '用街景照片对照' },
         { heading: '比较不同时段', point: '补做两次走访' },
       ] }
-      return { reply: '这一节已经整理。', body: '逐节正文：' + input.selected.heading }
+      return { reply: '这一节已经整理。', body: '逐节正文：' + input.selected.heading, sourceNumbers: [1] }
     } }),
   })
   const post = (action, data = {}) => registered.get(routes.works).fetch(request(routes.works, { action, ...data }))
@@ -1000,4 +1000,76 @@ test('a work resumes after closing and saves a versioned illustrated article fro
   assert.deepEqual((await (await post('draft-list')).json()).drafts, [])
   assert.equal((await (await post('list')).json()).items[0].meta.id, work.meta.id)
   assert.deepEqual(stages, ['topic', 'outline', 'writing', 'writing', 'visual'])
+})
+
+test('work drafts find related knowledge, allow changes, and trace the exact used sources after saving', async t => {
+  const path = await fixture(t)
+  const store = new Vault(path)
+  const morning = await store.create({ type: 'concept', title: '树荫步行早晨观察', body: '一号素材：上午有遮阴。' })
+  const evening = await store.create({ type: 'method', title: '树荫步行傍晚观察', body: '二号素材：傍晚现场记录。' })
+  const extra = await store.create({ type: 'concept', title: '红灯等待时间', body: '补充素材：比较不同路口。' })
+  await store.create({ type: 'concept', title: '果树修剪', body: '示例：园艺剪刀。' })
+  await store.create({ type: 'report', title: '树荫步行报告', body: '报告搜索时不进入知识推荐。' })
+
+  const { ctx, registered } = host()
+  const prompts = []
+  registerRoutes(ctx, {
+    current: () => ({ path }), modelConfig: { enabled: true },
+    model: () => ({ async compose(input) {
+      prompts.push(input)
+      if (input.stage === 'topic') return { reply: '讨论树荫步行。', title: '树荫步行', thesis: '对照早晚的记录。' }
+      if (input.stage === 'outline') return { reply: '比较两条记录。', sections: [
+        { heading: '早晚记录', point: '先比较两个时段', sourceNumbers: [1, 2, 999] },
+        { heading: '补充观察', point: '记录其他因素' },
+      ] }
+      return { reply: '已补充。', body: '这是一段写好的正文。', sourceNumbers: [1, 2, 999] }
+    } }),
+  })
+  const post = (action, extra = {}) => registered.get(routes.works).fetch(request(routes.works, { action, ...extra }))
+  let draft = await (await post('draft-start')).json()
+  async function change(action, extra = {}) {
+    const response = await post('draft-' + action, { id: draft.id, revision: draft.revision, ...extra })
+    assert.equal(response.status, 200)
+    const result = await response.json()
+    if (result.id) draft = result
+    return result
+  }
+  await change('ask', { message: '树荫步行', language: 'zh' })
+  assert.deepEqual(new Set(draft.sources.map(ref => ref.id)), new Set([morning.meta.id, evening.meta.id]))
+  assert.deepEqual(new Set(prompts[0].sources.map(s => s.body)), new Set([morning.body, evening.body]))
+  await change('confirm-topic')
+  await change('ask', { message: '拟一个提纲', language: 'zh' })
+  assert.equal(draft.sections[0].plannedSources.length, 2)
+  await change('confirm-outline')
+  await change('ask', { message: '写第一节', language: 'zh', section: 0 })
+  const written = draft.sections[0].body
+  const selectedVersions = draft.sources
+  await store.update(morning.meta.id, 1, { body: '更新后的素材，不能替换已引用的版本。' })
+  await change('source-remove', { ref: selectedVersions.find(ref => ref.id === morning.meta.id) })
+  const found = await (await post('draft-source-search', { query: '红灯等待时间' })).json()
+  assert.deepEqual(found.items.map(ref => ref.id), [extra.meta.id])
+  const preview = await (await post('draft-source-read', { ref: found.items[0] })).json()
+  assert.equal(preview.body, extra.body)
+  await change('source-add', { ref: found.items[0] })
+  assert.equal(draft.sections[0].body, written)
+  assert.ok(!draft.sources.some(ref => ref.id === morning.meta.id))
+  await change('ask', { message: '写第二节', language: 'zh', section: 1 })
+  assert.ok(!prompts.at(-1).sources.some(note => note.title === morning.meta.title))
+  await change('section', { section: 1, body: '补写后的第二节。' })
+  const result = await change('finish')
+  const exported = await (await post('read', result.work)).json()
+  assert.equal(exported.sources.find(ref => ref.id === morning.meta.id).version, 1)
+  assert.deepEqual(new Set(exported.sources.map(ref => ref.id)), new Set([morning.meta.id, evening.meta.id, extra.meta.id]))
+
+  // Simulate a v0.7.3 draft that has body text but no selected-sources field.
+  const legacy = await (await post('draft-start', { title: '树荫步行' })).json()
+  const directory = join(await store.folder(), '.work-drafts')
+  await writeFile(join(directory, legacy.id + '.json'), JSON.stringify({ ...legacy, stage: 'writing', sections: [
+    { heading: '存量章节', point: '保留手写内容', body: '已写好的小节。' },
+  ] }))
+  draft = await (await post('draft-read', { id: legacy.id })).json()
+  assert.equal(draft.sources, undefined)
+  await change('source-suggest')
+  assert.equal(draft.sources.length, 2)
+  assert.equal(draft.sections[0].body, '已写好的小节。')
 })
