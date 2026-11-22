@@ -16,7 +16,7 @@ const grove = entries.find(entry => entry.id === 'grove' && entry.name === manif
 if (!grove) throw new Error('Expected the Grove bundle insertion in the package patch')
 
 manifest.name = '@kmeng/dsh-grove'
-manifest.repository = { type: 'git', url: 'https://github.com/kmeng/dsh-grove.git' }
+manifest.repository = { type: 'git', url: 'git+https://github.com/kmeng/dsh-grove.git' }
 grove.name = manifest.name
 
 await writeFile(patchPath, stringify(patch))
