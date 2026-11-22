@@ -1,3 +1,4 @@
+import { selectTags } from './knowledge-index.js'
 import { exactVersion } from './version-reference.js'
 import { readWorkSource, sameSource, sourceRef } from './work-sources.js'
 
@@ -27,4 +28,8 @@ export async function readWork(store, id, version) {
 
 export async function listWorks(store, query) {
   return (await store.list(query)).filter(({ meta }) => meta.type === 'output' && meta.status !== 'archived')
+    .map(note => ({ ...note, tags: selectTags(note).tags,
+      summary: (note.body.match(/^## (?:摘要|Summary)\n\n([^\n]+)/m)?.[1] ??
+        note.body.split('\n').find(line => line.trim() && !/^(#|!\[)/.test(line)) ?? '').trim().slice(0, 200) }))
+    .sort((a, b) => b.meta.created.localeCompare(a.meta.created) || a.meta.id.localeCompare(b.meta.id))
 }

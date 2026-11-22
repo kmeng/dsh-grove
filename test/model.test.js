@@ -126,3 +126,28 @@ test('Ollama research calls get a longer deadline than hosted calls', async t =>
   await models.model({ provider: 'hosted', model: 'cloud' }).plan({})
   assert.deepEqual(timeout.mock.calls.map(call => call.arguments[0]), [600_000, 60_000])
 })
+
+test('the image adapter accepts base64 from a configured HTTPS provider', async () => {
+  const { generateWorkImage } = await import('../src/adapters/models/work-image-model.js')
+  const result = await generateWorkImage({ endpoint: 'https://images.example.test/generations', name: 'illustrator' }, 'fixture', 'A shaded street',
+    async (endpoint, options) => {
+      assert.equal(endpoint.hostname, 'images.example.test')
+      assert.equal(options.redirect, 'error')
+      assert.equal(JSON.parse(options.body).prompt, 'A shaded street')
+      return new Response(JSON.stringify({ data: [{ b64_json: 'aW1hZ2U=' }] }))
+    })
+  assert.equal(result, 'aW1hZ2U=')
+  assert.equal(await generateWorkImage(null, undefined, 'A shaded street'), null)
+})
+
+test('article writing can choose a local DSH model without changing the research model', async () => {
+  const { parseModelSettings, selectModel } = await import('../src/modules/model-settings.js')
+  const dsh = { defaultSelection: () => ({ provider: 'host', model: 'default' }) }
+  const config = parseModelSettings({
+    source: 'dsh', workWriting: { source: 'dsh', provider: 'ollama', model: 'qwen3.8-27b-mlx-32k:latest' },
+    imageWriting: { endpoint: 'https://images.example.test/generations', name: 'illustrator' },
+  }, undefined, dsh)
+  assert.equal(selectModel(config, 'work', dsh).model, 'qwen3.8-27b-mlx-32k:latest')
+  assert.equal(selectModel(config, 'research', dsh).model, 'default')
+  assert.equal(config.imageWriting.name, 'illustrator')
+})

@@ -4,10 +4,11 @@ import { link, lstat, mkdir, open, realpath, unlink, writeFile } from 'node:fs/p
 import { join } from 'node:path'
 
 export const workImageLimit = 4 * 1024 * 1024
-const filePattern = /^[a-f0-9]{64}\.(png|jpg|webp)$/
+const filePattern = /^[a-f0-9]{64}\.(png|jpg|webp|svg)$/
 const formats = {
   png: { mime: 'image/png', match: b => b.subarray(0, 8).toString('hex') === '89504e470d0a1a0a' },
   jpg: { mime: 'image/jpeg', match: b => b.subarray(0, 3).toString('hex') === 'ffd8ff' },
+  svg: { mime: 'image/svg+xml', match: b => b.toString('utf8', 0, 64).startsWith('<svg xmlns=') },
   webp: { mime: 'image/webp', match: b => b.toString('ascii', 0, 4) === 'RIFF' && b.toString('ascii', 8, 12) === 'WEBP' },
 }
 
@@ -39,8 +40,12 @@ export async function saveWorkImage(vault, encoded) {
   }
   const bytes = Buffer.from(encoded, 'base64')
   if (bytes.length > workImageLimit) throw Object.assign(new Error('The image is too large'), { code: 'too-large' })
-  const extension = Object.keys(formats).find(key => formats[key].match(bytes))
+  const extension = ['png', 'jpg', 'webp'].find(key => formats[key].match(bytes))
   if (!extension) throw Object.assign(new Error('Choose a PNG, JPEG or WebP image'), { code: 'unsupported-media' })
+  return publishImage(vault, bytes, extension)
+}
+
+async function publishImage(vault, bytes, extension) {
   const name = createHash('sha256').update(bytes).digest('hex') + '.' + extension
   const directory = await folder(vault, true)
   const temporary = join(directory, '.' + randomUUID() + '.tmp')
@@ -57,4 +62,17 @@ export async function saveWorkImage(vault, encoded) {
     await unlink(temporary).catch(error => { if (error.code !== 'ENOENT') throw error })
   }
   return 'work-media/' + name
+}
+
+export function saveWorkChart(vault, { rows, unit, citation }) {
+  const escape = value => String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]))
+  const max = Math.max(...rows.map(row => row.value))
+  const height = 82 + rows.length * 36
+  const bars = rows.map((row, index) => {
+    const y = 32 + index * 36
+    const width = Math.floor(row.value / max * 440)
+    return `<text x="16" y="${y + 16}" fill="#1b3a2e">${escape(row.label)}</text><rect x="260" y="${y}" width="${width}" height="24" rx="4" fill="#2f7d5b"/><text x="${268 + width}" y="${y + 16}" fill="#1b3a2e">${escape(row.value)}</text>`
+  }).join('')
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="860" height="${height}" viewBox="0 0 860 ${height}"><rect width="860" height="${height}" fill="#f7f4ec"/><g font-family="sans-serif" font-size="14"><text x="16" y="21" fill="#1b3a2e">${escape(unit)}</text>${bars}<text x="16" y="${height - 16}" fill="#40514a">${escape(citation)}</text></g></svg>`
+  return publishImage(vault, Buffer.from(svg), 'svg')
 }

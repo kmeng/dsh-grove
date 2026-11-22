@@ -10,8 +10,9 @@ import { importSource, parseSource, saveEvidence, openSource } from './modules/e
 import { listReports, confirmReport, readReport, draftFromFinding } from './modules/reports.js'
 import { parseModelSettings, readModelSettings, selectModel, testModel, verifyModelSettings } from './modules/model-settings.js'
 import { runResearchModel } from './modules/model-research.js'
-import { listKnowledge, readKnowledge, knowledgeDetail, saveKnowledge, keepReportAsKnowledge } from './modules/knowledge.js'
+import { listKnowledge, readKnowledge, knowledgeDetail, saveKnowledge, keepReportAsKnowledge, keepWorkAsKnowledge } from './modules/knowledge.js'
 import { browseKnowledge, scheduleKnowledge } from './modules/knowledge-index.js'
+import { generateWorkImage } from './adapters/models/work-image-model.js'
 import { workDrafts } from './modules/work-drafts.js'
 import { readWorkImage, workImageLimit } from './adapters/storage/obsidian/work-images.js'
 import { listWorks, readWork, saveWork } from './modules/works.js'
@@ -333,7 +334,7 @@ export function registerRoutes(ctx, options) {
         const name = new URL(request.url).searchParams.get('file')
         const image = await readWorkImage(new Vault(path), name)
         return new Response(image.bytes, { headers: {
-          'content-type': image.mime, 'x-content-type-options': 'nosniff', 'cache-control': 'private, no-store',
+          'content-type': image.mime, 'content-security-policy': "sandbox; default-src 'none'", 'x-content-type-options': 'nosniff', 'cache-control': 'private, no-store',
         } })
       } catch (error) {
         return failure(error)
@@ -352,13 +353,14 @@ export function registerRoutes(ctx, options) {
           if (assetRoute === routes.works && typeof input?.action === 'string' && input.action.startsWith('draft-')) {
             return json(await workDrafts(store, input, () => {
               const config = options.modelConfig
-              const settings = selectModel(config, 'default', dsh)
+              const settings = selectModel(config, 'work', dsh)
               if (!settings) throw coded('model-disabled', 'Configure and enable a writing model')
-              const model = modelFor(settings, 'default', config)
+              const model = modelFor(settings, config?.workWriting ? 'work' : 'default', config)
               if (typeof model?.compose !== 'function') throw coded('model-disabled', 'The selected model cannot draft articles')
               return model
-            }))
+            }, prompt => generateWorkImage(options.modelConfig?.imageWriting, process.env.GROVE_IMAGE_MODEL_KEY, prompt)))
           }
+          if (assetRoute === routes.knowledge && input?.action === 'keep-work') return json(await keepWorkAsKnowledge(store, input.work))
           if (assetRoute === routes.knowledge && input?.action === 'keep-report') return json(await keepReportAsKnowledge(store, input.report))
           if (assetRoute === routes.knowledge && input?.action === 'detail') return json(await knowledgeDetail(store, input.id, input.version))
           if (assetRoute === routes.knowledge && input?.action === 'browse') {

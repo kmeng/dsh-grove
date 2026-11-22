@@ -27,6 +27,7 @@ function usesModel(config, dsh) {
 
 export function selectModel(config, role, dsh) {
   if (!usesModel(config, dsh)) return null
+  if (role === 'work' && config?.workWriting) return config.workWriting
   if (role === 'report') return config?.reportWriting ?? selectModel(config, 'research', dsh)
   if (role === 'research' && config?.deepResearch) return config.deepResearch
   if (source(config, dsh) !== 'dsh') return config
@@ -73,6 +74,9 @@ export function readModelSettings(config, provider, dsh) {
     inspirationLinks: config?.inspirationLinks === true, webSearch: config?.webSearch === true,
     dshDefault: selected, deepResearch, customResearch: config?.customResearch ?? (deepResearch?.source === 'dsh' ? null : deepResearch), connection: main,
     researchConnection: deepResearch ? connection('research') : main,
+    workWriting: config?.workWriting ?? null, workConnection: config?.workWriting ? connection('work') : main,
+    workModelName: selectModel(config, 'work', dsh)?.model ?? selectModel(config, 'work', dsh)?.name,
+    imageWriting: config?.imageWriting ?? null,
     reportWriting: config?.reportWriting ?? null,
     reportConnection: config?.reportWriting ? connection('report') : deepResearch ? connection('research') : main, changeId: config?.changeId }
 }
@@ -109,6 +113,18 @@ export function parseModelSettings(input, previous, dsh) {
       reportWriting = { source: 'dsh', provider: value.provider, model: value.model }
     } else reportWriting = modelFields(value)
   }
+  let workWriting = previous?.workWriting ?? null
+  if (input?.workWriting !== undefined) {
+    const value = input.workWriting
+    if (!value) workWriting = null
+    else if (value.source === 'dsh') {
+      if (![value.provider, value.model].every(field => typeof field === 'string' && field.trim() && field.length <= 200)) {
+        throw invalid('model-dsh-route', 'Choose a dsh model for writing')
+      }
+      workWriting = { source: 'dsh', provider: value.provider, model: value.model }
+    } else workWriting = modelFields(value)
+  }
+  const imageWriting = input?.imageWriting === undefined ? previous?.imageWriting ?? null : input.imageWriting && modelFields(input.imageWriting)
   const custom = enabled && modelSource === 'custom' ? modelFields(input) : {
     ...(typeof previous?.name === 'string' ? { name: previous.name } : {}),
     ...(typeof previous?.endpoint === 'string' ? { endpoint: previous.endpoint } : {}),
@@ -117,7 +133,7 @@ export function parseModelSettings(input, previous, dsh) {
     enabled, source: modelSource, ...custom,
     inspirationLinks: (input?.inspirationLinks ?? previous?.inspirationLinks) === true,
     webSearch: (input?.webSearch ?? previous?.webSearch) === true,
-    deepResearch, customResearch, reportWriting,
+    deepResearch, customResearch, reportWriting, workWriting, imageWriting,
   }
 }
 
@@ -139,6 +155,7 @@ export async function verifyModelSettings(config, previous, verify, factory, dsh
   const roles = ['default']
   if (config.deepResearch) roles.push('research')
   if (config.reportWriting) roles.push('report')
+  if (config.workWriting) roles.push('work')
   const connections = await Promise.all(roles.map(async role => {
     const model = selectModel(config, role, dsh)
     if (!model) return [role, null]
