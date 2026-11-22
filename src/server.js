@@ -10,7 +10,7 @@ import { importSource, parseSource, saveEvidence, openSource } from './modules/e
 import { listReports, confirmReport, readReport, draftFromFinding } from './modules/reports.js'
 import { parseModelSettings, readModelSettings, selectModel, testModel, verifyModelSettings } from './modules/model-settings.js'
 import { runResearchModel } from './modules/model-research.js'
-import { listKnowledge, readKnowledge, saveKnowledge, keepReportAsKnowledge } from './modules/knowledge.js'
+import { listKnowledge, readKnowledge, knowledgeDetail, saveKnowledge, keepReportAsKnowledge } from './modules/knowledge.js'
 import { listWorks, readWork, saveWork } from './modules/works.js'
 import { stagedResearch } from './modules/deep-research.js'
 import { researchRuns, isUnsupportedDraft } from './modules/research-runs.js'
@@ -331,6 +331,7 @@ export function registerRoutes(ctx, options) {
           const store = new Vault(path)
           const input = await readJson(request)
           if (assetRoute === routes.knowledge && input?.action === 'keep-report') return json(await keepReportAsKnowledge(store, input.report))
+          if (assetRoute === routes.knowledge && input?.action === 'detail') return json(await knowledgeDetail(store, input.id, input.version))
           if (input?.action === 'list') return json({ items: await list(store, typeof input.query === 'string' ? input.query : '') })
           if (input?.action === 'read') return json(await read(store, input.id, input.version))
           if (input?.action === 'save' && typeof input.body === 'string' && input.body.trim()) return json(await save(store, input))

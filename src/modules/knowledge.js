@@ -25,6 +25,19 @@ export async function readKnowledge(store, id, version) {
   return { ...note, versions: await store.versions(id) }
 }
 
+export async function knowledgeDetail(store, id, version) {
+  const note = await readKnowledge(store, id, version)
+  const source = note.meta.links?.find(link => link.kind === 'derived')
+  if (!source) return note
+  const report = await store.get(source.id, source.version).catch(error => {
+    if (error.code !== 'ENOENT') throw error
+    return null
+  })
+  if (report?.meta.type !== 'report') return { ...note, reportMissing: true }
+  const study = report.meta.links?.find(link => link.kind === 'related')
+  return { ...note, report, studyId: study?.id }
+}
+
 export async function listKnowledge(store, query) {
   return (await store.list(query)).filter(({ meta }) => knowledgeTypes.has(meta.type) && meta.status !== 'archived')
 }
