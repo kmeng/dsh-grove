@@ -7,13 +7,13 @@ import { captureInspiration, findInspirations, readInspiration } from './modules
 import { inspirationHistory, discoverInspirations } from './modules/inspiration-discovery.js'
 import { startResearch, listResearch, saveResearch } from './modules/research.js'
 import { importSource, parseSource, saveEvidence, openSource } from './modules/evidence.js'
-import { listReports, confirmReport, readReport, reportWorkOrigin, draftFromFinding } from './modules/reports.js'
+import { listReports, confirmReport, readReport, draftFromFinding } from './modules/reports.js'
 import { parseModelSettings, readModelSettings, selectModel, testModel, verifyModelSettings } from './modules/model-settings.js'
 import { runResearchModel } from './modules/model-research.js'
 import { listKnowledge, readKnowledge, knowledgeDetail, saveKnowledge, keepReportAsKnowledge, keepWorkAsKnowledge } from './modules/knowledge.js'
 import { browseKnowledge, scheduleKnowledge } from './modules/knowledge-index.js'
 import { generateWorkImage } from './adapters/models/work-image-model.js'
-import { exactVersion } from './modules/version-reference.js'
+import { adoptConfirmedReport, confirmAndReturnReport } from './modules/work-research-return.js'
 import { workDrafts } from './modules/work-drafts.js'
 import { readWorkImage, workImageLimit } from './adapters/storage/obsidian/work-images.js'
 import { listWorks, readWork, saveWork } from './modules/works.js'
@@ -95,6 +95,7 @@ function statusOf(error) {
     case 'model-research-key':
     case 'model-key':
     case 'model-disabled':
+    case 'work-candidate-review':
     case 'work-source-limit':
     case 'work-conflict':
     case 'not-configured':
@@ -485,19 +486,8 @@ export function registerRoutes(ctx, options) {
           return json(await draftFromFinding(store, input.research, input.id, input.version))
         }
         if (input?.action === 'read') return json(await readReport(store, input.id, input.version))
-        if (input?.action === 'adopt-work') {
-          const report = await store.get(input.id, exactVersion(input.version))
-          if (report.meta.type !== 'report' || report.meta.review === 'draft') {
-            throw coded('invalid-body', 'Confirm the report before adding it as a source')
-          }
-          const origin = await reportWorkOrigin(store, report)
-          if (!origin) throw coded('invalid-body', 'This report has no originating work section')
-          const draft = await workDrafts(store, { action: 'draft-read', id: origin.draftId })
-          await workDrafts(store, { action: 'draft-source-add', id: draft.id, revision: draft.revision,
-            section: origin.sectionId, ref: { id: report.meta.id, version: report.meta.version } })
-          return json(origin)
-        }
-        if (input?.action === 'confirm' && typeof input.body === 'string' && input.body.trim() &&
+        if (input?.action === 'adopt-work') return json(await adoptConfirmedReport(store, input))
+        if (['confirm', 'confirm-return'].includes(input?.action) && typeof input.body === 'string' && input.body.trim() &&
           (input.evidence === undefined || Array.isArray(input.evidence))) {
           if (input.id) {
             const job = await researchRunStore(store).read(input.id)
@@ -506,7 +496,7 @@ export function registerRoutes(ctx, options) {
               throw coded('research-no-evidence', 'No citable evidence was found')
             }
           }
-          return json(await confirmReport(store, input))
+          return json(await (input.action === 'confirm-return' ? confirmAndReturnReport(store, input) : confirmReport(store, input)))
         }
         throw coded('invalid-body', 'Choose a report action and nonempty report body')
       } catch (error) {

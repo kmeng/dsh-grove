@@ -35,7 +35,7 @@ export function confirmOutline(draft, allowChanges) {
       confirmed: !!existing?.confirmed && existing.point === part.point }
   })
   draft.sectionCandidates = Object.fromEntries(Object.entries(draft.sectionCandidates ?? {}).filter(([id]) =>
-    !affected.some(section => section.id === id) && draft.sections.some(section => section.id === id)))
+    draft.sections.some(section => section.id === id)))
   delete draft.outlineCandidate
   return true
 }

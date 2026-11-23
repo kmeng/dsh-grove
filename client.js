@@ -248,6 +248,12 @@ window.__ModuleLoader__.load({
       'work.researchSection': '为本节补资料',
       'work.returnFailed': '报告已确认。返回原小节处理素材后，可以重试加入该版本。',
       'work.returnFull': '报告已确认。本节已有五篇素材，移除一篇后可重试。',
+      'work.candidateBasis': '生成时的素材',
+      'work.candidateReview': '小节、素材或正文已调整。请复核候选稿和引用，再确认采用。',
+      'work.discardCandidate': '舍弃候选稿',
+      'work.confirmReviewed': '已复核，采用本节',
+      'work.distill': '提炼要沉淀的观点、方法或适用边界',
+      'work.distillConfirm': '确认收录到知识库',
       'work.confirmReturn': '确认报告并带回小节',
       'work.adoptReturn': '加入报告并返回小节',
       'work.returnSection': '返回原小节',
@@ -631,6 +637,12 @@ window.__ModuleLoader__.load({
       'work.researchSection': 'Research for this section',
       'work.returnFailed': 'Report confirmed. Return to the original section to manage materials and retry adding this version.',
       'work.returnFull': 'Report confirmed. Remove one of the five section materials, then retry.',
+      'work.candidateBasis': 'Materials at generation',
+      'work.candidateReview': 'The section, materials, or prose changed. Review the candidate and citations before adopting it.',
+      'work.discardCandidate': 'Discard candidate',
+      'work.confirmReviewed': 'Reviewed, adopt this section',
+      'work.distill': 'Distill an insight, method, or condition for use',
+      'work.distillConfirm': 'Confirm and keep in knowledge',
       'work.confirmReturn': 'Confirm report and return to section',
       'work.adoptReturn': 'Add report and return to section',
       'work.returnSection': 'Back to the source section',
@@ -1911,13 +1923,23 @@ window.__ModuleLoader__.load({
       function save(event) {
         event?.preventDefault()
         run(async function () {
-          var input = { action: 'confirm', research: studyId, body: body, evidence: references }
+          var input = { action: report?.workOrigin ? 'confirm-return' : 'confirm', research: studyId, body: body, evidence: references }
           if (report) { input.id = report.meta.id; input.version = report.meta.version }
           var result = await api(REPORTS, input)
-          var confirmed = await read(result.meta.id, result.meta.version)
+          var confirmed = result.report ?? result
+          if (result.target) {
+            props.onSaved()
+            props.onNavigate('compose', { ...result.target, addedReport: true })
+            return
+          }
+          await read(confirmed.meta.id, confirmed.meta.version)
           props.onSaved()
-          if (confirmed.workOrigin) await adopt(confirmed)
+          if (result.adoptionError) showAdoptionError(result.adoptionError)
         })
+      }
+
+      function showAdoptionError(problem) {
+        setError(new Error(T(problem.code === 'work-source-limit' ? 'work.returnFull' : 'work.returnFailed') + ' ' + messageOf(problem)))
       }
 
       async function adopt(entry) {
@@ -1925,7 +1947,7 @@ window.__ModuleLoader__.load({
           var target = await api(REPORTS, { action: 'adopt-work', id: entry.meta.id, version: entry.meta.version })
           props.onNavigate('compose', { ...target, addedReport: true })
         } catch (problem) {
-          setError(new Error(T(problem.code === 'work-source-limit' ? 'work.returnFull' : 'work.returnFailed') + ' ' + messageOf(problem)))
+          showAdoptionError(problem)
         }
       }
 
@@ -2267,6 +2289,50 @@ window.__ModuleLoader__.load({
             onClick: function () { call('plan-remove') } }, T('work.deletePlan'))))
     }
 
+    function WorkSectionCandidate(props) {
+      var candidate = props.candidate
+      return h('section', { className: 'gr-card gr-stack gr-work-next' },
+        h('h3', null, T('work.candidate')), h(ReportMarkdown, { body: candidate.body }),
+        candidate.basis ? h('div', { className: 'gr-stack' },
+          h('p', { className: 'gr-meta' }, T('work.candidateBasis'), candidate.basis.model ? ' · ' + candidate.basis.model : ''),
+          candidate.basis.materials.map(function (ref) {
+            return h('p', { className: 'gr-meta', key: workRefKey(ref) }, ref.title, ' · v', ref.version)
+          })) : null,
+        candidate.usedSources?.length ? h('p', { className: 'gr-meta' }, T('work.usedSources'), ' · ',
+          candidate.usedSources.map(function (ref) { return ref.title + ' · v' + ref.version }).join(', ')) : null,
+        candidate.needsReview ? h('p', { role: 'status' }, T('work.candidateReview')) : null,
+        h('button', { className: 'gr-btn', disabled: props.busy, onClick: props.onConfirm },
+          T(candidate.needsReview ? 'work.confirmReviewed' : 'work.confirmSection')),
+        candidate.needsReview ? h('button', { className: 'gr-btn gr-btn-ghost', disabled: props.busy,
+          onClick: props.onDiscard }, T('work.discardCandidate')) : null)
+    }
+
+    function WorkArticlePreview(props) {
+      var draft = props.draft
+      var topic = draft.topicCandidate ?? draft.topic
+      var writing = draft.stage === 'writing'
+      var section = props.section
+      return h('section', { className: 'gr-card gr-work-preview', 'aria-label': T('work.preview') },
+        h('h2', { className: 'gr-h2 gr-work-preview-title' }, T('work.preview')),
+        h('div', { className: 'gr-work-preview-scroll gr-stack', tabIndex: 0 },
+          topic.title ? h('h3', null, topic.title) : null,
+          draft.cover ? h(WorkImage, draft.cover) : null,
+          draft.summary ? h('p', null, draft.summary) : null,
+          draft.illustrations?.filter(function (image) { return image.section === null }).map(function (image) {
+            return h(WorkImage, { ...image, key: image.id })
+          }),
+          (draft.stage === 'outline' ? draft.outlineCandidate ?? draft.sections : draft.sections).map(function (entry, index) {
+            return h('section', { key: entry.id || entry.heading, className: 'gr-work-section gr-stack',
+              'data-current': writing && index === section },
+              h('h3', null, entry.heading),
+              entry.body ? h(ReportMarkdown, { body: entry.body, workImages: true }) : h('p', { className: 'gr-meta' }, entry.point),
+              entry.image ? h(WorkImage, entry.image) : null,
+              draft.illustrations?.filter(function (image) { return image.section === entry.id }).map(function (image) {
+                return h(WorkImage, { ...image, key: image.id })
+              }))
+          })))
+    }
+
     function WorkComposer(props) {
       var [draft, setDraft] = useState(null)
       var [inputs, setInputs] = useState({})
@@ -2444,11 +2510,9 @@ window.__ModuleLoader__.load({
               }) })
               if (!affected || window.confirm(T('work.outlineImpact'))) run('confirm-outline', { allowChanges: affected })
             } }, T('work.confirmOutline')))
-        if (candidate) return h('section', { className: 'gr-card gr-stack gr-work-next' },
-          h('h3', null, T('work.candidate')), h(ReportMarkdown, { body: candidate.body }),
-          h('button', { className: 'gr-btn', disabled: busy, onClick: function () {
-            run('confirm-section', { section: part.id })
-          } }, T('work.confirmSection')))
+        if (candidate) return h(WorkSectionCandidate, { candidate: candidate, busy: busy,
+          onConfirm: function () { run('confirm-section', { section: part.id, reviewed: candidate.needsReview }) },
+          onDiscard: function () { run('discard-section-candidate', { section: part.id }) } })
         if (draft?.summaryCandidate) return h('section', { className: 'gr-card gr-stack' },
           h('h3', null, T('work.summaryCandidate')), h('p', null, draft.summaryCandidate),
           h('button', { type: 'button', className: 'gr-btn', disabled: busy,
@@ -2579,31 +2643,14 @@ window.__ModuleLoader__.load({
                   h('button', { className: 'gr-btn', disabled: busy || !editingText.trim() }, T('work.saveSection')),
                   h('button', { type: 'button', className: 'gr-btn gr-btn-ghost', disabled: busy,
                     onClick: function () { setEditingText(null) } }, T('work.cancelEdit'))))) : null)),
-          h('section', { className: 'gr-card gr-work-preview', 'aria-label': T('work.preview') },
-            h('h2', { className: 'gr-h2 gr-work-preview-title' }, T('work.preview')),
-            h('div', { className: 'gr-work-preview-scroll gr-stack', tabIndex: 0 },
-              topic.title ? h('h3', null, topic.title) : null,
-              draft.cover ? h(WorkImage, draft.cover) : null,
-              draft.summary ? h('p', null, draft.summary) : null,
-              draft.illustrations?.filter(function (image) { return image.section === null }).map(function (image) {
-                return h(WorkImage, { ...image, key: image.id })
-              }),
-              (draft.stage === 'outline' ? draft.outlineCandidate ?? draft.sections : draft.sections).map(function (entry, index) {
-                return h('section', { key: entry.id || entry.heading, className: 'gr-work-section gr-stack',
-                  'data-current': writing && index === section },
-                  h('h3', null, entry.heading),
-                  entry.body ? h(ReportMarkdown, { body: entry.body, workImages: true }) : h('p', { className: 'gr-meta' }, entry.point),
-                  entry.image ? h(WorkImage, entry.image) : null,
-                  draft.illustrations?.filter(function (image) { return image.section === entry.id }).map(function (image) {
-                    return h(WorkImage, { ...image, key: image.id })
-                  }))
-              })))))
+          h(WorkArticlePreview, { draft: draft, section: section })))
     }
 
     function WorkPage(props) {
       var [items, setItems] = useState([])
       var [tag, setTag] = useState('')
       var [kept, setKept] = useState(null)
+      var [distillation, setDistillation] = useState(null)
       var [selected, setSelected] = useState(null)
       var [drafts, setDrafts] = useState([])
       var [draft, setDraft] = useState(null)
@@ -2633,6 +2680,7 @@ window.__ModuleLoader__.load({
         var entry = await api(WORKS, { action: 'read', id: id, version: version })
         setSelected(entry)
         setKept(null)
+        setDistillation(null)
         setDraft(null)
         setBody(entry.body)
         setBasis(null)
@@ -2725,15 +2773,26 @@ window.__ModuleLoader__.load({
         selected ? h('div', { className: 'gr-row' },
           h('button', { className: 'gr-btn', disabled: busy, onClick: function () {
             if (kept) return props.onNavigate('knowledge', { read: kept })
-            run(async function () {
-              var note = await api(KNOWLEDGE, { action: 'keep-work', work: { id: selected.meta.id, version: selected.meta.version } })
-              setKept({ id: note.meta.id, version: note.meta.version })
-              setMessage(T('research.saved'))
-            })
+            setDistillation('')
           } }, T(kept ? 'asset.knowledge' : 'work.keepKnowledge')),
           h('button', { className: 'gr-btn', onClick: function () {
             run(async function () { await navigator.clipboard.writeText(selected.body); setMessage(T('asset.copied')) })
           } }, T('asset.copy'))) : null,
+        selected && distillation !== null ? h('form', { className: 'gr-stack', onSubmit: function (event) {
+          event.preventDefault()
+          run(async function () {
+            var note = await api(KNOWLEDGE, { action: 'keep-work', work: { id: selected.meta.id,
+              version: selected.meta.version, distillation: distillation } })
+            setKept({ id: note.meta.id, version: note.meta.version })
+            setDistillation(null)
+            setMessage(T('research.saved'))
+          })
+        } }, h('label', { className: 'gr-stack' }, T('work.distill'),
+          h('textarea', { className: 'gr-textarea', value: distillation, maxLength: 12000, required: true, disabled: busy,
+            onChange: function (event) { setDistillation(event.target.value) } })),
+          h('button', { className: 'gr-btn', disabled: busy || !distillation.trim() }, T('work.distillConfirm')),
+          h('button', { className: 'gr-btn gr-btn-ghost', type: 'button', disabled: busy,
+            onClick: function () { setDistillation(null) } }, T('work.cancelEdit'))) : null,
         basis ? h('article', { className: 'gr-card' },
           basis.meta ? h('h3', null, basis.meta.title, ' · v', basis.meta.version) : null,
           h(ReportMarkdown, { body: basis.body }),
