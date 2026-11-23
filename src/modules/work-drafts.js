@@ -1,11 +1,12 @@
+import { finalizeWork } from './work-finalization.js'
+import { candidateBasis, candidateNeedsReview, generateCandidate, presentDraft } from './work-generation.js'
 import { updateIllustrations } from './work-illustrations.js'
-import { activeScope, confirmOutline, conversation, prepareConversation } from './work-conversation.js'
+import { confirmOutline, prepareConversation } from './work-conversation.js'
 import { randomUUID } from 'node:crypto'
-import { workDraftStore } from '../adapters/storage/obsidian/research-runs.js'
+import { workDraftStore } from '../adapters/storage/obsidian/work-drafts.js'
 import { saveWorkImage } from '../adapters/storage/obsidian/work-images.js'
 import { findWorkKnowledge, readWorkSource, sameSource, sourceRef, suggestWorkSources, workSourceLimit, workSources } from './work-sources.js'
 import { startResearch } from './research.js'
-import { readWork, saveWork } from './works.js'
 
 const pending = new Map()
 
@@ -23,105 +24,6 @@ function sectionAt(draft, id) {
   return section
 }
 
-function sourceNumbers(value, references) {
-  if (!Array.isArray(value)) return []
-  return [...new Set(value)].filter(n => Number.isInteger(n) && n >= 1 && n <= references.length)
-    .map(n => references[n - 1])
-}
-
-function articleSources(draft) {
-  const refs = []
-  for (const section of draft.sections) {
-    const used = section.usedSources ?? (draft.basis ? [draft.basis] : [])
-    for (const ref of used) if (!refs.some(existing => sameSource(existing, ref))) refs.push(ref)
-  }
-  return refs
-}
-
-function imageMarkdown(image) {
-  const alt = image.alt.replace(/[\[\]\\\r\n]/g, ' ')
-  const caption = image.caption.replace(/[\r\n]+/g, ' ')
-  return '![' + alt + '](' + image.path + ')' + (caption ? '\n' + caption : '')
-}
-
-function articleBody(draft) {
-  return [
-    draft.cover && imageMarkdown(draft.cover),
-    ...(draft.illustrations ?? []).filter(image => image.section === null).map(imageMarkdown),
-    draft.summary && ('## ' + (draft.language === 'en' ? 'Summary' : '摘要') + '\n\n' + draft.summary),
-    ...draft.sections.flatMap(section => [
-      '## ' + section.heading.replace(/[\r\n]+/g, ' '),
-      section.body,
-      section.image && imageMarkdown(section.image),
-      ...(draft.illustrations ?? []).filter(image => image.section === section.id).map(imageMarkdown),
-    ]),
-  ].filter(Boolean).join('\n\n')
-}
-
-async function ask(vault, draft, input, resolveModel, progress) {
-  const direction = text(input.message, 6000)
-  if (!direction) invalid('Enter a writing direction')
-  const selected = draft.stage === 'writing' ? sectionAt(draft, input.section) : null
-  const scope = activeScope(draft, selected)
-  const turns = conversation(draft, scope)
-  if (draft.sources === undefined) {
-    progress.phase = 'sources'
-    draft.sources = await suggestWorkSources(vault, draft, direction)
-  }
-  const ordered = [...(selected?.sources ?? workSources(draft))].sort((a, b) => {
-    const planned = selected?.plannedSources ?? []
-    return Number(planned.some(ref => sameSource(ref, b))) - Number(planned.some(ref => sameSource(ref, a)))
-  })
-  const sources = await Promise.all(ordered.map(async (ref, index) => {
-    const note = await readWorkSource(vault, ref)
-    return { number: index + 1, title: note.meta.title, body: note.body.slice(0, 8000) }
-  }))
-  const model = resolveModel()
-  progress.phase = draft.stage
-  const result = await model.compose({
-    stage: draft.stage, language: input.language === 'en' ? 'en' : 'zh', direction,
-    topic: draft.stage === 'topic' ? draft.topicCandidate ?? draft.topic : draft.topic, selected: selected && { heading: selected.heading, point: selected.point, body: draft.sectionCandidates?.[selected.id]?.body ?? selected.body },
-    sections: draft.stage === 'outline'
-      ? (draft.outlineCandidate ?? draft.sections).map(({ id, heading, point }) => ({ id, heading, point }))
-      : draft.stage === 'writing' ? draft.sections.filter(part => part.id !== selected.id).map(({ heading, point }) => ({ heading, point })) : [],
-    sources,
-    history: turns.slice(-8),
-  })
-  const reply = text(result?.reply, 4000)
-  if (!reply) invalid('The model did not return a usable reply', 'model-response')
-  if (draft.stage === 'topic') {
-    const proposal = { ...draft.topic, ...draft.topicCandidate }
-    for (const [field, limit] of Object.entries({ title: 300, audience: 1000, thesis: 2000 })) {
-      proposal[field] = text(result[field], limit) || proposal[field]
-    }
-    draft.topicCandidate = proposal
-  } else if (draft.stage === 'outline') {
-    if (!Array.isArray(result.sections) || !result.sections.length || result.sections.length > 8) {
-      invalid('The model did not return a usable outline', 'model-response')
-    }
-    const current = draft.outlineCandidate ?? draft.sections
-    const candidate = result.sections.map(part => {
-      const heading = text(part?.heading, 300)
-      const point = text(part?.point, 2000)
-      if (!heading || !point) invalid('Each section needs a heading and a central point', 'model-response')
-      const prior = current.find(section => section.id === part.id) ?? current.find(section => section.heading === heading)
-      return { id: prior?.id ?? randomUUID(), heading, point, visual: text(part.visual, 500),
-        plannedSources: sourceNumbers(part.sourceNumbers, ordered) }
-    })
-    if (new Set(candidate.map(section => section.heading)).size !== candidate.length || new Set(candidate.map(section => section.id)).size !== candidate.length) {
-      invalid('Outline headings must be distinct', 'model-response')
-    }
-    draft.outlineCandidate = candidate
-  } else {
-    const body = text(result.body, 12000)
-    if (!body) invalid('The model did not return a usable section', 'model-response')
-    draft.sectionCandidates ??= {}
-    draft.sectionCandidates[selected.id] = { body, usedSources: sourceNumbers(result.sourceNumbers, ordered) }
-  }
-  draft.language = input.language === 'en' ? 'en' : 'zh'
-  turns.push({ role: 'user', body: direction }, { role: 'assistant', body: reply, model: model.name ?? '' })
-}
-
 export async function workDrafts(vault, input, resolveModel, generateImage = async () => null) {
   const records = workDraftStore(vault)
   switch (input.action) {
@@ -130,7 +32,7 @@ export async function workDrafts(vault, input, resolveModel, generateImage = asy
         .sort((a, b) => b.modified.localeCompare(a.modified))
         .map(({ id, topic, stage, modified }) => ({ id, topic, stage, modified })) }
     case 'draft-read':
-      return prepareConversation(await records.read(input.id))
+      return presentDraft(prepareConversation(await records.read(input.id)))
     case 'draft-source-read':
       return readWorkSource(vault, input.ref)
     case 'draft-source-search':
@@ -168,7 +70,8 @@ export async function workDrafts(vault, input, resolveModel, generateImage = asy
         return { study: study.meta.id, direction }
       }
       case 'draft-ask':
-        await ask(vault, draft, input, resolveModel, progress)
+        await generateCandidate(vault, draft, input, resolveModel, progress,
+          draft.stage === 'writing' ? sectionAt(draft, input.section) : null)
         break
       case 'draft-source-suggest': {
         progress.phase = 'sources'
@@ -184,7 +87,7 @@ export async function workDrafts(vault, input, resolveModel, generateImage = asy
         const picked = sourceRef(await readWorkSource(vault, input.ref))
         const section = input.section ? sectionAt(draft, input.section) : null
         const selected = section?.sources ?? workSources(draft)
-        if ((!section || section.sources) && selected.some(ref => sameSource(ref, picked))) return draft
+        if ((!section || section.sources) && selected.some(ref => sameSource(ref, picked))) return presentDraft(draft)
         const refs = selected.filter(ref => ref.id !== picked.id)
         if (refs.length >= workSourceLimit) invalid('Choose up to five sources', 'work-source-limit')
         if (section) section.sources = [...refs, picked]
@@ -241,7 +144,15 @@ export async function workDrafts(vault, input, resolveModel, generateImage = asy
         if (!body) invalid('Write something for this section')
         const section = sectionAt(draft, input.section)
         draft.sectionCandidates ??= {}
-        draft.sectionCandidates[section.id] = { body, usedSources: draft.sectionCandidates[section.id]?.usedSources ?? section.usedSources ?? [] }
+        const previous = draft.sectionCandidates[section.id]
+        draft.sectionCandidates[section.id] = { body, usedSources: previous?.usedSources ?? section.usedSources ?? [],
+          basis: previous?.basis ?? candidateBasis(draft, section), manual: true }
+        break
+      }
+      case 'draft-discard-section-candidate': {
+        const section = sectionAt(draft, input.section)
+        if (draft.stage !== 'writing' || !draft.sectionCandidates?.[section.id]) invalid('Choose a section candidate')
+        delete draft.sectionCandidates[section.id]
         break
       }
       case 'draft-confirm-section': {
@@ -249,7 +160,10 @@ export async function workDrafts(vault, input, resolveModel, generateImage = asy
         const section = sectionAt(draft, input.section)
         const candidate = draft.sectionCandidates?.[section.id]
         if (!candidate) invalid('Draft the section first')
-        Object.assign(section, candidate, { confirmed: true })
+        if (candidateNeedsReview(draft, section, candidate) && input.reviewed !== true) {
+          invalid('Review the candidate and its references before confirming', 'work-candidate-review')
+        }
+        Object.assign(section, { body: candidate.body, usedSources: candidate.usedSources, confirmed: true })
         delete draft.summary
         delete draft.summaryCandidate
         delete draft.sectionCandidates[section.id]
@@ -304,27 +218,7 @@ export async function workDrafts(vault, input, resolveModel, generateImage = asy
         delete draft.summaryCandidate
         break
       case 'draft-finish': {
-        if (draft.stage !== 'writing' || !draft.sections.length || draft.sections.some(section => !section.confirmed || !section.body) || Object.keys(draft.sectionCandidates ?? {}).length) {
-          invalid('Finish each section before saving the article')
-        }
-        if (draft.summaryCandidate || draft.imagePlan?.some(item => !item.accepted && !item.skipped)) {
-          invalid('Confirm the summary and open image choices before saving')
-        }
-        const body = articleBody(draft)
-        if (!draft.finalizing) {
-          draft.finalizing = true
-          draft.revision += 1
-          await records.write(draft, input.revision)
-        }
-        const entry = await saveWork(vault, { title: draft.topic.title, body, sources: articleSources(draft) }, draft.id)
-          .catch(async error => {
-            if (error.code !== 'EEXIST') throw error
-            const existing = await readWork(vault, draft.id, 1)
-            if (existing.meta.title !== draft.topic.title || existing.body !== body) throw error
-            return existing
-          })
-        draft.published = { id: entry.meta.id, version: entry.meta.version }
-        delete draft.finalizing
+        await finalizeWork(vault, records, draft, input.revision)
         break
       }
       default:
@@ -335,7 +229,7 @@ export async function workDrafts(vault, input, resolveModel, generateImage = asy
     draft.modified = new Date().toISOString()
     progress.phase = 'saving'
     await records.write(draft, expected)
-    return draft.published ? { work: draft.published } : draft
+    return draft.published ? { work: draft.published } : presentDraft(draft)
   } finally {
     pending.delete(key)
   }

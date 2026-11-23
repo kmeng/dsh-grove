@@ -1022,17 +1022,28 @@ test('a work resumes after closing and saves a versioned illustrated article fro
   assert.deepEqual(work.meta.links, [{ kind: 'derived', id: basis.meta.id, version: 1 }])
   assert.deepEqual((await (await post('draft-list')).json()).drafts, [])
   assert.equal((await (await post('list')).json()).items[0].meta.id, work.meta.id)
-  const keep = async () => {
-    const response = await registered.get(routes.knowledge).fetch(request(routes.knowledge, { action: 'keep-work', work: saved.work }))
+  const keep = async distillation => {
+    const response = await registered.get(routes.knowledge).fetch(request(routes.knowledge, {
+      action: 'keep-work', work: { ...saved.work, distillation },
+    }))
     assert.equal(response.status, 200)
     return response.json()
   }
-  const kept = await keep()
-  assert.equal((await keep()).meta.id, kept.meta.id)
+  const originalKnowledge = await keep()
+  assert.equal(originalKnowledge.body, work.body)
+  const distillation = '步行观察法：在相同位置记录等待时间。'
+  const kept = await keep(distillation)
+  assert.equal(kept.body, distillation)
+  assert.equal(kept.meta.id, originalKnowledge.meta.id)
+  assert.equal(kept.meta.version, 2)
+  assert.equal((await keep(distillation)).meta.version, 2)
   const detail = await (await registered.get(routes.knowledge).fetch(request(routes.knowledge, {
     action: 'detail', id: kept.meta.id, version: 1,
   }))).json()
   assert.deepEqual({ id: detail.work.meta.id, version: detail.work.meta.version }, saved.work)
+  const browse = await (await registered.get(routes.knowledge).fetch(request(routes.knowledge, { action: 'browse' }))).json()
+  assert.ok(browse.items.find(note => note.meta.id === kept.meta.id).tags.length)
+
   assert.deepEqual(stages, ['topic', 'outline', 'writing', 'writing', 'visual'])
 })
 
@@ -1091,8 +1102,16 @@ test('work drafts find related knowledge, allow changes, and trace the exact use
   await change('ask', { message: '写第二节', language: 'zh', section: draft.sections[1].id })
   assert.ok(!prompts.at(-1).sources.some(note => note.title === morning.meta.title))
   await change('confirm-section', { section: draft.sections[1].id })
-  await change('section', { section: draft.sections[1].id, body: '补写后的第二节。' })
-  await change('confirm-section', { section: draft.sections[1].id })
+  const section = draft.sections[1].id
+  await change('ask', { section, message: '先生成候选' })
+  assert.equal(draft.sectionCandidates[section].needsReview, false)
+  await change('source-remove', { section, ref: found.items[0] })
+  assert.equal(draft.sectionCandidates[section].needsReview, true)
+  const rejected = await post('draft-confirm-section', { id: draft.id, revision: draft.revision, section })
+  assert.equal(rejected.status, 409)
+  assert.equal((await rejected.json()).error.code, 'work-candidate-review')
+  await change('section', { section, body: '补写后的第二节。' })
+  await change('confirm-section', { section, reviewed: true })
   const result = await change('finish')
   const exported = await (await post('read', result.work)).json()
   assert.equal(exported.sources.find(ref => ref.id === morning.meta.id).version, 1)
@@ -1113,7 +1132,7 @@ test('work drafts find related knowledge, allow changes, and trace the exact use
 
 test('a confirmed report returns to its persisted work section and adds only its exact version', async t => {
   const path = await fixture(t)
-  const { workDraftStore } = await import('../src/adapters/storage/obsidian/research-runs.js')
+  const { workDraftStore } = await import('../src/adapters/storage/obsidian/work-drafts.js')
   const { randomUUID } = await import('node:crypto')
   const vault = new Vault(path)
   const records = workDraftStore(vault)
@@ -1156,8 +1175,11 @@ test('a confirmed report returns to its persisted work section and adds only its
   for (const { meta } of sources) {
     draft = await json(routes.works, { action: 'draft-source-add', id, section: sectionId, revision: draft.revision, ref: meta })
   }
-  const blocked = await json(routes.reports, adopt, 409)
-  assert.equal(blocked.error.code, 'work-source-limit')
+  const blocked = await json(routes.reports, { action: 'confirm-return', research: start.study,
+    id: report.meta.id, version: 3, body: '素材满额时确认报告' })
+  assert.equal(blocked.adoptionError.code, 'work-source-limit')
+  assert.equal(blocked.report.meta.version, 4)
+  assert.equal(blocked.report.meta.review, 'confirmed')
   assert.deepEqual(await records.read(id), draft)
   assert.equal((await vault.get(report.meta.id, 2)).meta.review, 'confirmed')
   const removed = await json(routes.works, { action: 'draft-source-remove', id, section: sectionId,

@@ -91,15 +91,25 @@ export async function keepReportAsKnowledge(store, ref) {
 export async function keepWorkAsKnowledge(store, ref) {
   const work = await store.get(ref?.id, exactVersion(ref?.version))
   if (work.meta.type !== 'output') throw Object.assign(new Error('Choose a saved work'), { code: 'invalid-body' })
+  if (ref.distillation !== undefined && (typeof ref.distillation !== 'string' || !ref.distillation.trim() || ref.distillation.length > 12000)) {
+    throw Object.assign(new Error('Enter a knowledge distillation of up to 12,000 characters'), { code: 'invalid-body' })
+  }
+  const body = ref.distillation?.trim() ?? work.body
   const key = createHash('sha256').update('grove:work-knowledge:' + work.meta.id + ':' + work.meta.version).digest('hex').slice(0, 32)
   const id = key.replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5')
   try {
-    return await store.create({ type: 'concept', title: work.meta.title, body: work.body,
+    return await store.create({ type: 'concept', title: work.meta.title, body,
       links: [{ kind: 'derived', id: work.meta.id, version: work.meta.version }] }, id)
   } catch (error) {
     if (error.code !== 'EEXIST') throw error
-    const note = await readKnowledge(store, id, 1)
+    const note = await readKnowledge(store, id, Math.max(...await store.versions(id)))
     if (!note.meta.links?.some(link => link.kind === 'derived' && link.id === work.meta.id && link.version === work.meta.version)) throw error
-    return note
+    if (ref.distillation === undefined || note.body === body) return note
+    try {
+      return await store.update(id, note.meta.version, { body, revisionReason: 'Refined knowledge from work v' + work.meta.version })
+    } catch (conflict) {
+      if (!conflict.message.startsWith('Version conflict;')) throw conflict
+      return keepWorkAsKnowledge(store, ref)
+    }
   }
 }

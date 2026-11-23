@@ -154,7 +154,7 @@ export async function browseKnowledge(vault, notes) {
     const paragraph = body.split('\n').map(line => line.trim())
       .find(line => line && !line.startsWith('#') && !line.startsWith('<!--'))
     return { meta, summary: paragraph?.slice(0, 200) ?? '',
-      tags: current && Array.isArray(indexed.tags) ? indexed.tags : [],
+      tags: current && Array.isArray(indexed.tags) ? indexed.tags : selectTags({ meta, body }).tags,
       related: current && Array.isArray(indexed.related) ? indexed.related.map(id => byId.get(id)).filter(Boolean) : [],
     }
   }).sort((a, b) => b.meta.created.localeCompare(a.meta.created) || a.meta.id.localeCompare(b.meta.id))
