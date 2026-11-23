@@ -186,7 +186,7 @@ export async function workDrafts(vault, input, resolveModel, generateImage = asy
         const selected = section?.sources ?? workSources(draft)
         if ((!section || section.sources) && selected.some(ref => sameSource(ref, picked))) return draft
         const refs = selected.filter(ref => ref.id !== picked.id)
-        if (refs.length >= workSourceLimit) invalid('Choose up to five sources')
+        if (refs.length >= workSourceLimit) invalid('Choose up to five sources', 'work-source-limit')
         if (section) section.sources = [...refs, picked]
         else {
           draft.sources = [...refs, picked]

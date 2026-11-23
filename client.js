@@ -246,6 +246,8 @@ window.__ModuleLoader__.load({
       'work.draftSection': '起草本节',
       'work.reviseSection': '修订本节',
       'work.researchSection': '为本节补资料',
+      'work.returnFailed': '报告已确认。返回原小节处理素材后，可以重试加入该版本。',
+      'work.returnFull': '报告已确认。本节已有五篇素材，移除一篇后可重试。',
       'work.confirmReturn': '确认报告并带回小节',
       'work.adoptReturn': '加入报告并返回小节',
       'work.returnSection': '返回原小节',
@@ -627,6 +629,8 @@ window.__ModuleLoader__.load({
       'work.draftSection': 'Draft this section',
       'work.reviseSection': 'Revise this section',
       'work.researchSection': 'Research for this section',
+      'work.returnFailed': 'Report confirmed. Return to the original section to manage materials and retry adding this version.',
+      'work.returnFull': 'Report confirmed. Remove one of the five section materials, then retry.',
       'work.confirmReturn': 'Confirm report and return to section',
       'work.adoptReturn': 'Add report and return to section',
       'work.returnSection': 'Back to the source section',
@@ -1917,8 +1921,12 @@ window.__ModuleLoader__.load({
       }
 
       async function adopt(entry) {
-        var target = await api(REPORTS, { action: 'adopt-work', id: entry.meta.id, version: entry.meta.version })
-        props.onNavigate('compose', { ...target, addedReport: true })
+        try {
+          var target = await api(REPORTS, { action: 'adopt-work', id: entry.meta.id, version: entry.meta.version })
+          props.onNavigate('compose', { ...target, addedReport: true })
+        } catch (problem) {
+          setError(new Error(T(problem.code === 'work-source-limit' ? 'work.returnFull' : 'work.returnFailed') + ' ' + messageOf(problem)))
+        }
       }
 
       function cite(item) {
@@ -1994,7 +2002,7 @@ window.__ModuleLoader__.load({
             h('button', { className: 'gr-btn', disabled: busy, onClick: function () { run(function () { return adopt(report) }) } },
               T('work.adoptReturn')) : null,
           report?.workOrigin && !editing && error ? h('button', { className: 'gr-btn gr-btn-ghost', disabled: busy,
-            onClick: function () { props.onNavigate('compose', report.workOrigin) } }, T('work.returnSection')) : null,
+            onClick: function () { props.onNavigate('compose', { ...report.workOrigin, pendingReport: { id: report.meta.id, version: report.meta.version } }) } }, T('work.returnSection')) : null,
           report && !editing && report.meta.review !== 'draft' ? h(React.Fragment, null,
             h('button', { className: 'gr-btn', disabled: busy || !!kept, onClick: function () {
               run(async function () {
@@ -2261,7 +2269,8 @@ window.__ModuleLoader__.load({
 
     function WorkComposer(props) {
       var [draft, setDraft] = useState(null)
-      var [message, setMessage] = useState('')
+      var [inputs, setInputs] = useState({})
+      var [pendingReport, setPendingReport] = useState(props.seed?.pendingReport)
       var [section, setSection] = useState(0)
       var [editingText, setEditingText] = useState(null)
       var [slot, setSlot] = useState('section')
@@ -2381,6 +2390,32 @@ window.__ModuleLoader__.load({
 
       var part = draft?.sections[section]
       var writing = draft?.stage === 'writing'
+      var inputKey = draft && 'grove:work-input:' + draft.id + ':' + (writing ? part?.id : draft.stage)
+      var message = inputs[inputKey] ?? ''
+      if (inputKey && !(inputKey in inputs)) {
+        try { message = localStorage.getItem(inputKey) || '' } catch {}
+      }
+      function setMessage(value) {
+        setInputs(previous => ({ ...previous, [inputKey]: value }))
+        try {
+          if (value) localStorage.setItem(inputKey, value)
+          else localStorage.removeItem(inputKey)
+        } catch {}
+      }
+
+      async function retryReport() {
+        setBusy(true)
+        setError(null)
+        try {
+          await api(REPORTS, { action: 'adopt-work', ...pendingReport })
+          selectDraft(await load())
+          setPendingReport(null)
+        } catch (problem) {
+          setError(new Error(T(problem.code === 'work-source-limit' ? 'work.returnFull' : 'work.returnFailed') + ' ' + messageOf(problem)))
+        } finally {
+          setBusy(false)
+        }
+      }
       var canFinish = writing && draft.sections.length > 0 && draft.sections.every(function (entry) { return entry.confirmed && entry.body }) && !Object.keys(draft.sectionCandidates ?? {}).length && !draft.summaryCandidate && !draft.imagePlan?.some(function (item) { return !item.accepted && !item.skipped })
       var currentImage = slot.startsWith('plan:') ? null : slot === 'cover' ? draft?.cover : part?.image
       var phase = draft ? T('work.phase.' + draft.stage) : T('loading')
@@ -2462,6 +2497,9 @@ window.__ModuleLoader__.load({
               activity?.message ? h('div', { className: 'gr-conversation-user' },
                 h('p', { className: 'gr-prompt' }, activity.message)) : null,
               !activity ? nextStep() : null,
+              pendingReport && part?.id === props.seed?.sectionId ? h('section', { className: 'gr-card gr-stack' },
+                h('p', { role: 'status' }, T('work.returnFailed'), ' · v', pendingReport.version),
+                h('button', { type: 'button', className: 'gr-btn', disabled: busy, onClick: retryReport }, T('err.retry'))) : null,
               tools === 'sources' ? h(WorkMaterials, { draft: draft, run: run, busy: busy, section: section }, function () { return null }) : null,
               writing && tools === 'images' ? h('div', { className: 'gr-stack' },
                 h('button', { type: 'button', className: 'gr-btn', disabled: busy, onClick: function () {

@@ -692,6 +692,17 @@ test('a confirmed report can be kept once in knowledge and found by a natural-la
   const [first, second] = await Promise.all(results.map(result => result.json()))
   assert.equal(first.meta.id, second.meta.id)
   assert.deepEqual(first.meta.links, [{ kind: 'derived', id: draft.meta.id, version: 2 }])
+  await store.update(draft.meta.id, 2, { body: '更正后的结论', review: 'confirmed' })
+  const updated = await Promise.all([keep(3), keep(3)])
+  assert.deepEqual(updated.map(result => result.status), [200, 200])
+  for (const response of updated) {
+    const note = await response.json()
+    assert.equal(note.meta.id, first.meta.id)
+    assert.equal(note.meta.version, 2)
+    assert.equal(note.meta.links[0].version, 3)
+  }
+  assert.equal((await (await keep(2)).json()).meta.version, 1)
+  assert.equal((await store.get(first.meta.id, 1)).meta.links[0].version, 2)
   const result = await registered.get(routes.inspirations).fetch(request(routes.inspirations, {
     action: 'search', query: '帮我找一下关于智能体 UX 设计的笔记',
   }))
@@ -1139,13 +1150,26 @@ test('a confirmed report returns to its persisted work section and adds only its
   const detail = await json(routes.reports, { action: 'read', id: report.meta.id, version: 2 })
   assert.deepEqual(detail.workOrigin, { draftId: id, sectionId })
   const adopt = { action: 'adopt-work', id: report.meta.id, version: second.meta.version }
+  const materials = Array.from({ length: 5 }, (_, index) => index)
+  const sources = await Promise.all(materials.map(index => vault.create({ type: 'concept', body: '素材 ' + index })))
+  let draft = original
+  for (const { meta } of sources) {
+    draft = await json(routes.works, { action: 'draft-source-add', id, section: sectionId, revision: draft.revision, ref: meta })
+  }
+  const blocked = await json(routes.reports, adopt, 409)
+  assert.equal(blocked.error.code, 'work-source-limit')
+  assert.deepEqual(await records.read(id), draft)
+  assert.equal((await vault.get(report.meta.id, 2)).meta.review, 'confirmed')
+  const removed = await json(routes.works, { action: 'draft-source-remove', id, section: sectionId,
+    revision: draft.revision, ref: sources[0].meta })
   assert.deepEqual(await json(routes.reports, adopt), { draftId: id, sectionId })
+  call = service()
   const adopted = await json(routes.works, { action: 'draft-read', id })
-  assert.equal(adopted.sections[1].sources[0].version, 2)
-  assert.equal(adopted.sections[1].sources[0].id, report.meta.id)
-  assert.deepEqual({ ...adopted, modified: original.modified, revision: 0,
-    sections: [adopted.sections[0], { ...adopted.sections[1], sources: undefined }] },
-  { ...original, sections: [original.sections[0], { ...original.sections[1], sources: undefined }] })
+  assert.deepEqual(adopted.sections[1].sources.slice(0, 4), removed.sections[1].sources)
+  assert.equal(adopted.sections[1].sources[4].version, 2)
+  assert.equal(adopted.sections[1].sources[4].id, report.meta.id)
+  assert.deepEqual({ ...adopted, modified: removed.modified, revision: removed.revision,
+    sections: [adopted.sections[0], { ...adopted.sections[1], sources: removed.sections[1].sources }] }, removed)
   await json(routes.reports, adopt)
   assert.deepEqual(await records.read(id), adopted)
 })
