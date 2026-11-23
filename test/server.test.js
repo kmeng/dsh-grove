@@ -692,6 +692,17 @@ test('a confirmed report can be kept once in knowledge and found by a natural-la
   const [first, second] = await Promise.all(results.map(result => result.json()))
   assert.equal(first.meta.id, second.meta.id)
   assert.deepEqual(first.meta.links, [{ kind: 'derived', id: draft.meta.id, version: 2 }])
+  await store.update(draft.meta.id, 2, { body: '更正后的结论', review: 'confirmed' })
+  const updated = await Promise.all([keep(3), keep(3)])
+  assert.deepEqual(updated.map(result => result.status), [200, 200])
+  for (const response of updated) {
+    const note = await response.json()
+    assert.equal(note.meta.id, first.meta.id)
+    assert.equal(note.meta.version, 2)
+    assert.equal(note.meta.links[0].version, 3)
+  }
+  assert.equal((await (await keep(2)).json()).meta.version, 1)
+  assert.equal((await store.get(first.meta.id, 1)).meta.links[0].version, 2)
   const result = await registered.get(routes.inspirations).fetch(request(routes.inspirations, {
     action: 'search', query: '帮我找一下关于智能体 UX 设计的笔记',
   }))
