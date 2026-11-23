@@ -59,16 +59,31 @@ export async function keepReportAsKnowledge(store, ref) {
   const body = retained.length ? retained.join('\n\n').trim() : report.body
   const key = createHash('sha256').update('grove:report-knowledge:' + report.meta.id).digest('hex').slice(0, 32)
   const id = key.replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5')
+  const links = [{ kind: 'derived', id: report.meta.id, version: report.meta.version }]
   try {
-    return await store.create({
-      type: 'concept', title: report.meta.title, body,
-      links: [{ kind: 'derived', id: report.meta.id, version: report.meta.version }],
-    }, id)
+    return await store.create({ type: 'concept', title: report.meta.title, body, links }, id)
   } catch (error) {
     if (error.code !== 'EEXIST') throw error
-    const existing = await readKnowledge(store, id, Math.max(...await store.versions(id)))
-    if (!existing.meta.links?.some(link => link.kind === 'derived' && link.id === report.meta.id)) throw error
-    return existing
+    const revisions = await store.versions(id)
+    const latest = await readKnowledge(store, id, Math.max(...revisions))
+    const basis = latest.meta.links?.find(link => link.kind === 'derived' && link.id === report.meta.id)
+    if (!basis) throw error
+    if (basis.version === report.meta.version) return latest
+    if (basis.version > report.meta.version) {
+      for (const version of revisions) {
+        const previous = await readKnowledge(store, id, version)
+        if (previous.meta.links?.some(link => link.kind === 'derived' && link.id === report.meta.id && link.version === report.meta.version)) return previous
+      }
+      throw new Error('A newer version of this report has already been collected')
+    }
+    try {
+      return await store.update(id, latest.meta.version, {
+        body, links, revisionReason: 'Collected report v' + report.meta.version,
+      })
+    } catch (conflict) {
+      if (!conflict.message.startsWith('Version conflict;')) throw conflict
+      return keepReportAsKnowledge(store, ref)
+    }
   }
 }
 

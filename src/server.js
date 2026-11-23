@@ -95,6 +95,7 @@ function statusOf(error) {
     case 'model-research-key':
     case 'model-key':
     case 'model-disabled':
+    case 'work-source-limit':
     case 'work-conflict':
     case 'not-configured':
       return 409
